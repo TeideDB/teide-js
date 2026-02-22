@@ -1,0 +1,10 @@
+category,product,price,quantity
+electronics,laptop,999.99,10
+electronics,phone,699.99,25
+electronics,tablet,449.99,15
+clothing,shirt,29.99,100
+clothing,pants,49.99,80
+clothing,jacket,89.99,40
+food,bread,3.99,200
+food,milk,4.99,150
+food,cheese,7.99,120

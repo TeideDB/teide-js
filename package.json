@@ -1,0 +1,43 @@
+{
+  "name": "teidedb",
+  "version": "0.1.1",
+  "description": "Zero-copy Node.js bindings for the Teide columnar dataframe engine",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "install": "cmake-js compile --release",
+    "build:native": "cmake-js compile",
+    "build:native:release": "cmake-js compile --release",
+    "build:ts": "tsc",
+    "build": "npm run build:native && npm run build:ts",
+    "prepublishOnly": "npm run build:ts",
+    "test": "vitest run",
+    "clean": "cmake-js clean && rm -rf dist"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "vendor/teide/src/",
+    "vendor/teide/include/",
+    "CMakeLists.txt"
+  ],
+  "keywords": [
+    "dataframe",
+    "columnar",
+    "analytics",
+    "napi"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "cmake-js": "^7.3.0",
+    "node-addon-api": "^8.3.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
