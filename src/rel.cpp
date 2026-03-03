@@ -99,10 +99,13 @@ Napi::Value NativeRel::FromEdges(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "fromEdges", 0, 1);
 
+    td_retain(tbl);
     thr->dispatch_async(
         [tbl, src_col, dst_col, n_src, n_dst, sort]() -> void* {
-            return (void*)td_rel_from_edges(tbl, src_col.c_str(), dst_col.c_str(),
-                                             n_src, n_dst, sort);
+            auto* r = (void*)td_rel_from_edges(tbl, src_col.c_str(), dst_col.c_str(),
+                                                n_src, n_dst, sort);
+            td_release(tbl);
+            return r;
         },
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {
@@ -167,9 +170,12 @@ Napi::Value NativeRel::Build(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "build", 0, 1);
 
+    td_retain(tbl);
     thr->dispatch_async(
         [tbl, fk_col, n_target, sort]() -> void* {
-            return (void*)td_rel_build(tbl, fk_col.c_str(), n_target, sort);
+            auto* r = (void*)td_rel_build(tbl, fk_col.c_str(), n_target, sort);
+            td_release(tbl);
+            return r;
         },
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {

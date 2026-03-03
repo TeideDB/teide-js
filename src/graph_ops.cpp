@@ -73,6 +73,10 @@ Napi::Value GraphExpand(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphExpand", 0, 1);
 
+    // Prevent GC of NativeRel during async execution (no retain/release for td_rel_t)
+    auto rel_ref = std::make_shared<Napi::ObjectReference>(
+        Napi::Persistent(info[2].As<Napi::Object>()));
+
     td_retain(tbl);
     thr->dispatch_async(
         [tbl, col_name, rel, direction]() -> void* {
@@ -85,7 +89,8 @@ Napi::Value GraphExpand(const Napi::CallbackInfo& info) {
             return r;
         },
         tsfn,
-        [deferred, thr](Napi::Env env, void* data) {
+        [deferred, thr, rel_ref](Napi::Env env, void* data) {
+            rel_ref->Reset();
             td_t* res = (td_t*)data;
             if (!res || TD_IS_ERR(res)) {
                 std::string msg = "graphExpand failed";
@@ -176,6 +181,10 @@ Napi::Value GraphVarExpand(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphVarExpand", 0, 1);
 
+    // Prevent GC of NativeRel during async execution (no retain/release for td_rel_t)
+    auto rel_ref = std::make_shared<Napi::ObjectReference>(
+        Napi::Persistent(info[2].As<Napi::Object>()));
+
     td_retain(tbl);
     thr->dispatch_async(
         [tbl, col_name, rel, direction, min_depth, max_depth, track_path]() -> void* {
@@ -188,7 +197,8 @@ Napi::Value GraphVarExpand(const Napi::CallbackInfo& info) {
             return r;
         },
         tsfn,
-        [deferred, thr](Napi::Env env, void* data) {
+        [deferred, thr, rel_ref](Napi::Env env, void* data) {
+            rel_ref->Reset();
             td_t* res = (td_t*)data;
             if (!res || TD_IS_ERR(res)) {
                 std::string msg = "graphVarExpand failed";
@@ -272,6 +282,10 @@ Napi::Value GraphShortestPath(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphShortestPath", 0, 1);
 
+    // Prevent GC of NativeRel during async execution (no retain/release for td_rel_t)
+    auto rel_ref = std::make_shared<Napi::ObjectReference>(
+        Napi::Persistent(info[3].As<Napi::Object>()));
+
     td_retain(tbl);
     thr->dispatch_async(
         [tbl, src_id, dst_id, rel, max_depth]() -> void* {
@@ -285,7 +299,8 @@ Napi::Value GraphShortestPath(const Napi::CallbackInfo& info) {
             return r;
         },
         tsfn,
-        [deferred, thr](Napi::Env env, void* data) {
+        [deferred, thr, rel_ref](Napi::Env env, void* data) {
+            rel_ref->Reset();
             td_t* res = (td_t*)data;
             if (!res || TD_IS_ERR(res)) {
                 std::string msg = "graphShortestPath failed";
@@ -376,6 +391,13 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphWcoJoin", 0, 1);
 
+    // Prevent GC of NativeRel objects during async execution
+    auto rels_ref = std::make_shared<std::vector<Napi::ObjectReference>>();
+    rels_ref->reserve(n_rels);
+    for (uint8_t i = 0; i < n_rels; i++) {
+        rels_ref->push_back(Napi::Persistent(rel_arr.Get(i).As<Napi::Object>()));
+    }
+
     td_retain(tbl);
     thr->dispatch_async(
         [tbl, rels, n_rels, n_vars]() -> void* {
@@ -386,7 +408,8 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
             return r;
         },
         tsfn,
-        [deferred, thr](Napi::Env env, void* data) {
+        [deferred, thr, rels_ref](Napi::Env env, void* data) {
+            for (auto& ref : *rels_ref) ref.Reset();
             td_t* res = (td_t*)data;
             if (!res || TD_IS_ERR(res)) {
                 std::string msg = "graphWcoJoin failed";
