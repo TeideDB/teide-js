@@ -4,10 +4,6 @@
 #include "atom.h"
 #include "compat.h"
 
-extern "C" {
-#include <teide/td.h>
-}
-
 Napi::FunctionReference NativeList::constructor_;
 Napi::FunctionReference NativeList::vec_ctor_;
 Napi::FunctionReference NativeList::atom_ctor_;

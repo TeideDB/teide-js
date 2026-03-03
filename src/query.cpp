@@ -94,8 +94,20 @@ std::shared_ptr<ExprNode> SerializeExpr(Napi::Object expr) {
     return node;
 }
 
+// Validate that a collection size fits in uint8_t (required by Teide C API).
+// Returns true if valid, throws a JS RangeError and returns false otherwise.
+static bool CheckU8Size(Napi::Env env, size_t sz, const char* what) {
+    if (sz > 255) {
+        std::string msg = std::string("Too many ") + what + " (max 255, got " + std::to_string(sz) + ")";
+        Napi::RangeError::New(env, msg).ThrowAsJavaScriptException();
+        return false;
+    }
+    return true;
+}
+
 std::vector<PlanStep> SerializePlan(Napi::Array ops) {
     std::vector<PlanStep> plan;
+    Napi::Env env = ops.Env();
     uint32_t len = ops.Length();
     plan.reserve(len);
 
@@ -110,12 +122,14 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
         else if (step.type == "group") {
             // keys: string[]
             Napi::Array keys = op.Get("keys").As<Napi::Array>();
+            if (!CheckU8Size(env, keys.Length(), "group keys")) return plan;
             for (uint32_t k = 0; k < keys.Length(); k++) {
                 step.group_keys.push_back(
                     keys.Get(k).As<Napi::String>().Utf8Value());
             }
             // aggs: Expr[]
             Napi::Array aggs = op.Get("aggs").As<Napi::Array>();
+            if (!CheckU8Size(env, aggs.Length(), "aggregations")) return plan;
             for (uint32_t a = 0; a < aggs.Length(); a++) {
                 step.agg_exprs.push_back(
                     SerializeExpr(aggs.Get(a).As<Napi::Object>()));
@@ -124,6 +138,7 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
         else if (step.type == "sort") {
             // cols: string[]
             Napi::Array cols = op.Get("cols").As<Napi::Array>();
+            if (!CheckU8Size(env, cols.Length(), "sort columns")) return plan;
             for (uint32_t c = 0; c < cols.Length(); c++) {
                 step.sort_cols.push_back(
                     cols.Get(c).As<Napi::String>().Utf8Value());
@@ -143,6 +158,7 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
         }
         else if (step.type == "distinct") {
             Napi::Array cols = op.Get("cols").As<Napi::Array>();
+            if (!CheckU8Size(env, cols.Length(), "distinct columns")) return plan;
             for (uint32_t c = 0; c < cols.Length(); c++) {
                 step.distinct_cols.push_back(
                     cols.Get(c).As<Napi::String>().Utf8Value());
@@ -150,6 +166,7 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
         }
         else if (step.type == "select") {
             Napi::Array cols = op.Get("cols").As<Napi::Array>();
+            if (!CheckU8Size(env, cols.Length(), "select columns")) return plan;
             for (uint32_t c = 0; c < cols.Length(); c++) {
                 step.select_cols.push_back(
                     cols.Get(c).As<Napi::String>().Utf8Value());
@@ -157,6 +174,7 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
         }
         else if (step.type == "project") {
             Napi::Array exprs = op.Get("exprs").As<Napi::Array>();
+            if (!CheckU8Size(env, exprs.Length(), "project expressions")) return plan;
             for (uint32_t e = 0; e < exprs.Length(); e++) {
                 step.project_exprs.push_back(
                     SerializeExpr(exprs.Get(e).As<Napi::Object>()));
@@ -169,6 +187,7 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
             td_retain(step.join_right_table);
 
             Napi::Array lkeys = op.Get("leftKeys").As<Napi::Array>();
+            if (!CheckU8Size(env, lkeys.Length(), "join keys")) return plan;
             for (uint32_t k = 0; k < lkeys.Length(); k++) {
                 step.join_left_keys.push_back(
                     lkeys.Get(k).As<Napi::String>().Utf8Value());
@@ -192,6 +211,7 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
             step.wjoin_hi = op.Get("windowHi").As<Napi::Number>().Int64Value();
 
             Napi::Array aggs = op.Get("aggs").As<Napi::Array>();
+            if (!CheckU8Size(env, aggs.Length(), "window join aggregations")) return plan;
             for (uint32_t a = 0; a < aggs.Length(); a++) {
                 step.wjoin_agg_exprs.push_back(
                     SerializeExpr(aggs.Get(a).As<Napi::Object>()));
@@ -200,11 +220,13 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
         else if (step.type == "window") {
             // Partition keys
             Napi::Array pkeys = op.Get("partitionBy").As<Napi::Array>();
+            if (!CheckU8Size(env, pkeys.Length(), "window partition keys")) return plan;
             for (uint32_t j = 0; j < pkeys.Length(); j++)
                 step.win_part_keys.push_back(pkeys.Get(j).As<Napi::String>().Utf8Value());
 
             // Order keys
             Napi::Array okeys = op.Get("orderBy").As<Napi::Array>();
+            if (!CheckU8Size(env, okeys.Length(), "window order keys")) return plan;
             for (uint32_t j = 0; j < okeys.Length(); j++) {
                 Napi::Object o = okeys.Get(j).As<Napi::Object>();
                 step.win_order_keys.push_back(o.Get("col").As<Napi::String>().Utf8Value());
@@ -214,6 +236,7 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
 
             // Functions
             Napi::Array funcs = op.Get("funcs").As<Napi::Array>();
+            if (!CheckU8Size(env, funcs.Length(), "window functions")) return plan;
             for (uint32_t j = 0; j < funcs.Length(); j++) {
                 Napi::Object f = funcs.Get(j).As<Napi::Object>();
                 std::string kind = f.Get("kind").As<Napi::String>().Utf8Value();
@@ -825,6 +848,7 @@ Napi::Value QueryCollectSync(const Napi::CallbackInfo& info) {
     // Serialize the plan on the main (V8) thread
     Napi::Array ops = info[1].As<Napi::Array>();
     std::vector<PlanStep> plan = SerializePlan(ops);
+    if (env.IsExceptionPending()) return env.Undefined();
 
     // Dispatch to Teide thread
     void* result = thread->dispatch_sync(
@@ -862,12 +886,13 @@ Napi::Value QueryCollect(const Napi::CallbackInfo& info) {
     td_t* tbl_ptr = table->ptr();
     TeideThread* thread = table->thread();
 
-    // Retain the source table so it stays alive during async execution
-    td_retain(tbl_ptr);
-
     // Serialize the plan on the main (V8) thread
     Napi::Array ops = info[1].As<Napi::Array>();
     std::vector<PlanStep> plan = SerializePlan(ops);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    // Retain the source table so it stays alive during async execution
+    td_retain(tbl_ptr);
 
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(),

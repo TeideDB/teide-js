@@ -409,6 +409,10 @@ Napi::Value NativeVector::IsNull(const Napi::CallbackInfo& info) {
     }
 
     int64_t idx = info[0].As<Napi::Number>().Int64Value();
+    if (idx < 0 || idx >= td_len(vec_)) {
+        Napi::RangeError::New(env, "Index out of bounds").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     return Napi::Boolean::New(env, td_vec_is_null(vec_, idx));
 }
 

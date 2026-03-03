@@ -75,6 +75,7 @@ export class Expr {
     count(): Expr { return new Expr('agg', { op: OP_COUNT, arg: this }); }
     first(): Expr { return new Expr('agg', { op: OP_FIRST, arg: this }); }
     last(): Expr { return new Expr('agg', { op: OP_LAST, arg: this }); }
+    prod(): Expr { return new Expr('agg', { op: OP_PROD, arg: this }); }
     countDistinct(): Expr { return new Expr('agg', { op: OP_COUNT_DISTINCT, arg: this }); }
     // stddev, stddevPop, variance, variancePop: opcodes defined in td.h
     // but no C core builder functions yet. Uncomment when available.

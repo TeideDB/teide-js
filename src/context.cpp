@@ -80,7 +80,7 @@ static void parse_csv_opts(const Napi::Object& opts, char& delimiter, bool& head
         for (uint32_t i = 0; i < types.Length(); i++) {
             if (!types.Get(i).IsString()) continue;
             std::string t = types.Get(i).As<Napi::String>().Utf8Value();
-            int8_t td_type = TD_F64;
+            int8_t td_type;
             if (t == "bool")           td_type = TD_BOOL;
             else if (t == "u8")        td_type = TD_U8;
             else if (t == "i16")       td_type = TD_I16;
@@ -91,6 +91,11 @@ static void parse_csv_opts(const Napi::Object& opts, char& delimiter, bool& head
             else if (t == "date")      td_type = TD_DATE;
             else if (t == "time")      td_type = TD_TIME;
             else if (t == "timestamp") td_type = TD_TIMESTAMP;
+            else {
+                std::string msg = "Unknown column type: '" + t + "'";
+                Napi::TypeError::New(opts.Env(), msg).ThrowAsJavaScriptException();
+                return;
+            }
             col_types.push_back(td_type);
         }
     }
@@ -114,6 +119,7 @@ Napi::Value NativeContext::ReadCsvSync(const Napi::CallbackInfo& info) {
 
     if (has_opts) {
         parse_csv_opts(info[1].As<Napi::Object>(), delimiter, header, col_types);
+        if (env.IsExceptionPending()) return env.Undefined();
     }
 
     void* result;
@@ -158,6 +164,7 @@ Napi::Value NativeContext::ReadCsv(const Napi::CallbackInfo& info) {
 
     if (has_opts) {
         parse_csv_opts(info[1].As<Napi::Object>(), delimiter, header, col_types);
+        if (env.IsExceptionPending()) return env.Undefined();
     }
 
     auto deferred = Napi::Promise::Deferred::New(env);

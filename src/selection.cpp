@@ -3,10 +3,6 @@
 #include "vector.h"
 #include "compat.h"
 
-extern "C" {
-#include <teide/td.h>
-}
-
 Napi::FunctionReference NativeSelection::constructor_;
 Napi::FunctionReference NativeSelection::vec_ctor_;
 
