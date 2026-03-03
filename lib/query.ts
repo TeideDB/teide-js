@@ -89,6 +89,9 @@ export class Query {
         } else {
             leftKeys = Array.isArray(opts.leftOn!) ? opts.leftOn! : [opts.leftOn!];
             rightKeys = Array.isArray(opts.rightOn!) ? opts.rightOn! : [opts.rightOn!];
+            if (leftKeys.length !== rightKeys.length) {
+                throw new Error(`join leftOn and rightOn must have the same number of keys (got ${leftKeys.length} vs ${rightKeys.length})`);
+            }
         }
         this._ops.push({
             type: 'join',

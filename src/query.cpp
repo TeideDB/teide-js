@@ -105,6 +105,14 @@ static bool CheckU8Size(Napi::Env env, size_t sz, const char* what) {
     return true;
 }
 
+// Release any retained tables in a partially-built plan (used on serialization failure).
+static void ReleasePlanTables(const std::vector<PlanStep>& plan) {
+    for (const auto& s : plan) {
+        if (s.join_right_table) td_release(s.join_right_table);
+        if (s.wjoin_right_table) td_release(s.wjoin_right_table);
+    }
+}
+
 std::vector<PlanStep> SerializePlan(Napi::Array ops) {
     std::vector<PlanStep> plan;
     Napi::Env env = ops.Env();
@@ -184,7 +192,6 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
             NativeTable* right = Napi::ObjectWrap<NativeTable>::Unwrap(
                 op.Get("rightTable").As<Napi::Object>());
             step.join_right_table = right->ptr();
-            td_retain(step.join_right_table);
 
             Napi::Array lkeys = op.Get("leftKeys").As<Napi::Array>();
             if (!CheckU8Size(env, lkeys.Length(), "join keys")) return plan;
@@ -198,12 +205,12 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
                     rkeys.Get(k).As<Napi::String>().Utf8Value());
             }
             step.join_type = (uint8_t)op.Get("joinType").As<Napi::Number>().Uint32Value();
+            td_retain(step.join_right_table);
         }
         else if (step.type == "windowJoin") {
             NativeTable* right = Napi::ObjectWrap<NativeTable>::Unwrap(
                 op.Get("rightTable").As<Napi::Object>());
             step.wjoin_right_table = right->ptr();
-            td_retain(step.wjoin_right_table);
 
             step.wjoin_time_key = op.Get("timeKey").As<Napi::String>().Utf8Value();
             step.wjoin_sym_key = op.Get("symKey").As<Napi::String>().Utf8Value();
@@ -216,6 +223,7 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
                 step.wjoin_agg_exprs.push_back(
                     SerializeExpr(aggs.Get(a).As<Napi::Object>()));
             }
+            td_retain(step.wjoin_right_table);
         }
         else if (step.type == "window") {
             // Partition keys
@@ -305,10 +313,14 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
 // Graph emission: C++ ExprNode trees -> td_op_t* graph nodes (Teide thread)
 // ---------------------------------------------------------------------------
 
-td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
+// Internal: emit expression with optional table binding for col references.
+// When table_id >= 0, col nodes resolve via td_scan_table against that table.
+static td_op_t* EmitExprImpl(td_graph_t* g, const std::shared_ptr<ExprNode>& node, int table_id) {
     if (!node) return nullptr;
 
     if (node->kind == "col") {
+        if (table_id >= 0)
+            return td_scan_table(g, (uint16_t)table_id, node->str_val.c_str());
         return td_scan(g, node->str_val.c_str());
     }
     else if (node->kind == "lit") {
@@ -329,8 +341,8 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
         }
     }
     else if (node->kind == "binop") {
-        td_op_t* left = EmitExpr(g, node->left);
-        td_op_t* right = EmitExpr(g, node->right);
+        td_op_t* left = EmitExprImpl(g, node->left, table_id);
+        td_op_t* right = EmitExprImpl(g, node->right, table_id);
 
         const std::string& op = node->str_val;
         if (op == "add") return td_add(g, left, right);
@@ -353,7 +365,7 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
         return nullptr;
     }
     else if (node->kind == "unop") {
-        td_op_t* arg = EmitExpr(g, node->left);
+        td_op_t* arg = EmitExprImpl(g, node->left, table_id);
 
         const std::string& op = node->str_val;
         if (op == "neg")    return td_neg(g, arg);
@@ -372,7 +384,7 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
         return nullptr;
     }
     else if (node->kind == "agg") {
-        td_op_t* arg = EmitExpr(g, node->left);
+        td_op_t* arg = EmitExprImpl(g, node->left, table_id);
 
         switch (node->agg_opcode) {
             case OP_SUM:   return td_sum(g, arg);
@@ -390,50 +402,54 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
         }
     }
     else if (node->kind == "alias") {
-        td_op_t* arg = EmitExpr(g, node->left);
+        td_op_t* arg = EmitExprImpl(g, node->left, table_id);
         return td_alias(g, arg, node->str_val.c_str());
     }
     else if (node->kind == "naryop") {
         const std::string& op = node->str_val;
         if (op == "substr" && node->args.size() >= 3) {
-            td_op_t* str = EmitExpr(g, node->args[0]);
-            td_op_t* start = EmitExpr(g, node->args[1]);
-            td_op_t* len = EmitExpr(g, node->args[2]);
+            td_op_t* str = EmitExprImpl(g, node->args[0], table_id);
+            td_op_t* start = EmitExprImpl(g, node->args[1], table_id);
+            td_op_t* len = EmitExprImpl(g, node->args[2], table_id);
             return td_substr(g, str, start, len);
         }
         if (op == "replace" && node->args.size() >= 3) {
-            td_op_t* str = EmitExpr(g, node->args[0]);
-            td_op_t* from = EmitExpr(g, node->args[1]);
-            td_op_t* to = EmitExpr(g, node->args[2]);
+            td_op_t* str = EmitExprImpl(g, node->args[0], table_id);
+            td_op_t* from = EmitExprImpl(g, node->args[1], table_id);
+            td_op_t* to = EmitExprImpl(g, node->args[2], table_id);
             return td_replace(g, str, from, to);
         }
         if (op == "concat") {
             int n = (int)node->args.size();
             std::vector<td_op_t*> ops(n);
-            for (int i = 0; i < n; i++) ops[i] = EmitExpr(g, node->args[i]);
+            for (int i = 0; i < n; i++) ops[i] = EmitExprImpl(g, node->args[i], table_id);
             return td_concat(g, ops.data(), n);
         }
         if (op == "if" && node->args.size() >= 3) {
-            td_op_t* cond = EmitExpr(g, node->args[0]);
-            td_op_t* then_val = EmitExpr(g, node->args[1]);
-            td_op_t* else_val = EmitExpr(g, node->args[2]);
+            td_op_t* cond = EmitExprImpl(g, node->args[0], table_id);
+            td_op_t* then_val = EmitExprImpl(g, node->args[1], table_id);
+            td_op_t* else_val = EmitExprImpl(g, node->args[2], table_id);
             return td_if(g, cond, then_val, else_val);
         }
         return nullptr;
     }
     else if (node->kind == "cast") {
         if (node->target_type < 0) return nullptr;  // unknown cast target type
-        td_op_t* arg = EmitExpr(g, node->left);
+        td_op_t* arg = EmitExprImpl(g, node->left, table_id);
         return td_cast(g, arg, node->target_type);
     }
     else if (node->kind == "dateop") {
-        td_op_t* arg = EmitExpr(g, node->left);
+        td_op_t* arg = EmitExprImpl(g, node->left, table_id);
         if (node->str_val == "extract")    return td_extract(g, arg, node->date_field);
         if (node->str_val == "date_trunc") return td_date_trunc(g, arg, node->date_field);
         return nullptr;
     }
 
     return nullptr;
+}
+
+td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
+    return EmitExprImpl(g, node, -1);
 }
 
 // ---------------------------------------------------------------------------
@@ -693,6 +709,12 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
             current = nullptr;
         }
         else if (step.type == "join") {
+            if (step.join_left_keys.size() != step.join_right_keys.size()) {
+                td_graph_free(g);
+                if (owned_tbl) td_release(owned_tbl);
+                return TD_ERR_PTR(TD_ERR_LENGTH);
+            }
+
             td_op_t* left_table_node = current ? current : td_const_table(g, tbl);
             if (filter_pred) {
                 left_table_node = td_filter(g, left_table_node, filter_pred);
@@ -727,22 +749,33 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
             td_op_t* time_key = td_scan(g, step.wjoin_time_key.c_str());
             td_op_t* sym_key = td_scan(g, step.wjoin_sym_key.c_str());
 
-            // Decompose agg expressions into (opcode, input) pairs
+            // Decompose agg expressions into (opcode, input) pairs.
+            // Agg inputs must reference the RIGHT table's columns.
             uint8_t n_aggs = (uint8_t)step.wjoin_agg_exprs.size();
             std::vector<uint16_t> agg_ops(n_aggs);
             std::vector<td_op_t*> agg_ins(n_aggs);
             for (uint8_t a = 0; a < n_aggs; a++) {
-                td_op_t* alias_node = nullptr;
-                DecomposeAgg(g, step.wjoin_agg_exprs[a],
-                           agg_ops[a], agg_ins[a], alias_node);
+                const auto& agg_expr = step.wjoin_agg_exprs[a];
+                const ExprNode* inner = agg_expr.get();
+                if (inner->kind == "alias") inner = inner->left.get();
+
+                if (inner->kind == "agg") {
+                    agg_ops[a] = (uint16_t)inner->agg_opcode;
+                    // Emit agg input against the right table for all expressions
+                    agg_ins[a] = EmitExprImpl(g, inner->left, right_id);
+                } else {
+                    agg_ops[a] = OP_FIRST;
+                    // Emit against the right table for all expressions
+                    const auto& emit_node = agg_expr->kind == "alias"
+                        ? agg_expr->left : agg_expr;
+                    agg_ins[a] = EmitExprImpl(g, emit_node, right_id);
+                }
             }
 
             current = td_window_join(g, left_table_node, right_table_node,
                                      time_key, sym_key,
                                      step.wjoin_lo, step.wjoin_hi,
                                      agg_ops.data(), agg_ins.data(), n_aggs);
-
-            (void)right_id;
         }
         else if (step.type == "window") {
             td_op_t* table_node = current ? current : td_const_table(g, tbl);
@@ -789,6 +822,12 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                     td_t* sym = (td_t*)td_sym_str(col_id);
                     dummy_input = td_scan(g, td_str_ptr(sym));
                 }
+            }
+
+            if (!dummy_input) {
+                td_graph_free(g);
+                if (owned_tbl) td_release(owned_tbl);
+                return TD_ERR_PTR(TD_ERR_RANGE);
             }
 
             for (uint8_t f = 0; f < n_funcs; f++) {
@@ -848,7 +887,10 @@ Napi::Value QueryCollectSync(const Napi::CallbackInfo& info) {
     // Serialize the plan on the main (V8) thread
     Napi::Array ops = info[1].As<Napi::Array>();
     std::vector<PlanStep> plan = SerializePlan(ops);
-    if (env.IsExceptionPending()) return env.Undefined();
+    if (env.IsExceptionPending()) {
+        ReleasePlanTables(plan);
+        return env.Undefined();
+    }
 
     // Dispatch to Teide thread
     void* result = thread->dispatch_sync(
@@ -889,7 +931,10 @@ Napi::Value QueryCollect(const Napi::CallbackInfo& info) {
     // Serialize the plan on the main (V8) thread
     Napi::Array ops = info[1].As<Napi::Array>();
     std::vector<PlanStep> plan = SerializePlan(ops);
-    if (env.IsExceptionPending()) return env.Undefined();
+    if (env.IsExceptionPending()) {
+        ReleasePlanTables(plan);
+        return env.Undefined();
+    }
 
     // Retain the source table so it stays alive during async execution
     td_retain(tbl_ptr);

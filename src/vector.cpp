@@ -157,8 +157,18 @@ Napi::Value NativeVector::FromRawSync(const Napi::CallbackInfo& info) {
     }
 
     // Copy data from the TypedArray into a std::vector for safe transfer to Teide thread
-    int64_t count = (int64_t)ta.ElementLength();
     size_t byte_len = ta.ByteLength();
+    size_t esz = td_elem_size(type);
+    if (esz == 0) {
+        Napi::TypeError::New(env, "Type has zero element size").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    if (byte_len % esz != 0) {
+        Napi::TypeError::New(env, "TypedArray byte length is not a multiple of target type element size")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    int64_t count = (int64_t)(byte_len / esz);
     std::vector<uint8_t> buf(byte_len);
     Napi::ArrayBuffer ab = ta.ArrayBuffer();
     memcpy(buf.data(), (uint8_t*)ab.Data() + ta.ByteOffset(), byte_len);
@@ -199,10 +209,12 @@ Napi::Value NativeVector::Append(const Napi::CallbackInfo& info) {
             val.f64 = info[0].As<Napi::Number>().DoubleValue();
             break;
         case TD_I64:
-        case TD_DATE:
-        case TD_TIME:
         case TD_TIMESTAMP:
             val.i64 = info[0].As<Napi::Number>().Int64Value();
+            break;
+        case TD_DATE:
+        case TD_TIME:
+            val.i32 = info[0].As<Napi::Number>().Int32Value();
             break;
         case TD_I32:
             val.i32 = info[0].As<Napi::Number>().Int32Value();
@@ -211,8 +223,13 @@ Napi::Value NativeVector::Append(const Napi::CallbackInfo& info) {
             val.i16 = (int16_t)info[0].As<Napi::Number>().Int32Value();
             break;
         case TD_U8:
-        case TD_BOOL:
             val.u8 = (uint8_t)info[0].As<Napi::Number>().Uint32Value();
+            break;
+        case TD_BOOL:
+            if (info[0].IsBoolean())
+                val.u8 = info[0].As<Napi::Boolean>().Value() ? 1 : 0;
+            else
+                val.u8 = (uint8_t)info[0].As<Napi::Number>().Uint32Value();
             break;
         default:
             Napi::TypeError::New(env, "Unsupported type for append").ThrowAsJavaScriptException();
@@ -254,13 +271,18 @@ Napi::Value NativeVector::Set(const Napi::CallbackInfo& info) {
     switch (type) {
         case TD_F64:       val.f64 = info[1].As<Napi::Number>().DoubleValue(); break;
         case TD_I64:
-        case TD_DATE:
-        case TD_TIME:
         case TD_TIMESTAMP: val.i64 = info[1].As<Napi::Number>().Int64Value(); break;
+        case TD_DATE:
+        case TD_TIME:      val.i32 = info[1].As<Napi::Number>().Int32Value(); break;
         case TD_I32:       val.i32 = info[1].As<Napi::Number>().Int32Value(); break;
         case TD_I16:       val.i16 = (int16_t)info[1].As<Napi::Number>().Int32Value(); break;
-        case TD_U8:
-        case TD_BOOL:      val.u8 = (uint8_t)info[1].As<Napi::Number>().Uint32Value(); break;
+        case TD_U8:        val.u8 = (uint8_t)info[1].As<Napi::Number>().Uint32Value(); break;
+        case TD_BOOL:
+            if (info[1].IsBoolean())
+                val.u8 = info[1].As<Napi::Boolean>().Value() ? 1 : 0;
+            else
+                val.u8 = (uint8_t)info[1].As<Napi::Number>().Uint32Value();
+            break;
         default:
             Napi::TypeError::New(env, "Unsupported type for set").ThrowAsJavaScriptException();
             return env.Undefined();
@@ -317,9 +339,9 @@ Napi::Value NativeVector::Get(const Napi::CallbackInfo& info) {
     switch (type) {
         case TD_F64:       return Napi::Number::New(env, *(double*)elem);
         case TD_I64:
-        case TD_DATE:
-        case TD_TIME:
         case TD_TIMESTAMP: return Napi::BigInt::New(env, *(int64_t*)elem);
+        case TD_DATE:
+        case TD_TIME:      return Napi::BigInt::New(env, (int64_t)*(int32_t*)elem);
         case TD_I32:       return Napi::Number::New(env, *(int32_t*)elem);
         case TD_I16:       return Napi::Number::New(env, *(int16_t*)elem);
         case TD_U8:        return Napi::Number::New(env, *(uint8_t*)elem);
