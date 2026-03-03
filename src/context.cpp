@@ -61,9 +61,9 @@ Napi::Value NativeContext::ReadCsvSync(const Napi::CallbackInfo& info) {
     });
 
     td_t* tbl = (td_t*)result;
-    if (TD_IS_ERR(tbl)) {
-        std::string msg = "Failed to read CSV: ";
-        msg += td_err_str(TD_ERR_CODE(tbl));
+    if (!tbl || TD_IS_ERR(tbl)) {
+        std::string msg = "Failed to read CSV";
+        if (tbl && TD_IS_ERR(tbl)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(tbl));
         Napi::Error::New(env, msg).ThrowAsJavaScriptException();
         return env.Undefined();
     }
@@ -91,11 +91,12 @@ Napi::Value NativeContext::ReadCsv(const Napi::CallbackInfo& info) {
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {
             td_t* tbl = (td_t*)data;
-            if (TD_IS_ERR(tbl)) {
-                deferred.Reject(Napi::Error::New(env,
-                    std::string("Failed to read CSV: ") + td_err_str(TD_ERR_CODE(tbl))).Value());
+            if (!tbl || TD_IS_ERR(tbl)) {
+                std::string msg = "Failed to read CSV";
+                if (tbl && TD_IS_ERR(tbl)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(tbl));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
-                deferred.Resolve(NativeTable::Create(env, (td_t*)data, thr));
+                deferred.Resolve(NativeTable::Create(env, tbl, thr));
             }
         }
     );
