@@ -52,6 +52,29 @@ std::shared_ptr<ExprNode> SerializeExpr(Napi::Object expr) {
         node->str_val = params.Get("name").As<Napi::String>().Utf8Value();
         node->left = SerializeExpr(params.Get("arg").As<Napi::Object>());
     }
+    else if (node->kind == "naryop") {
+        node->str_val = params.Get("op").As<Napi::String>().Utf8Value();
+        Napi::Array args_arr = params.Get("args").As<Napi::Array>();
+        uint32_t n = args_arr.Length();
+        node->args.reserve(n);
+        for (uint32_t i = 0; i < n; i++) {
+            node->args.push_back(SerializeExpr(args_arr.Get(i).As<Napi::Object>()));
+        }
+    }
+    else if (node->kind == "cast") {
+        node->left = SerializeExpr(params.Get("arg").As<Napi::Object>());
+        std::string type_str = params.Get("targetType").As<Napi::String>().Utf8Value();
+        if (type_str == "bool")           node->target_type = TD_BOOL;
+        else if (type_str == "u8")        node->target_type = TD_U8;
+        else if (type_str == "i16")       node->target_type = TD_I16;
+        else if (type_str == "i32")       node->target_type = TD_I32;
+        else if (type_str == "i64")       node->target_type = TD_I64;
+        else if (type_str == "f64")       node->target_type = TD_F64;
+        else if (type_str == "sym")       node->target_type = TD_SYM;
+        else if (type_str == "date")      node->target_type = TD_DATE;
+        else if (type_str == "time")      node->target_type = TD_TIME;
+        else if (type_str == "timestamp") node->target_type = TD_TIMESTAMP;
+    }
 
     return node;
 }
@@ -198,6 +221,38 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
     else if (node->kind == "alias") {
         td_op_t* arg = EmitExpr(g, node->left);
         return td_alias(g, arg, node->str_val.c_str());
+    }
+    else if (node->kind == "naryop") {
+        const std::string& op = node->str_val;
+        if (op == "substr") {
+            td_op_t* str = EmitExpr(g, node->args[0]);
+            td_op_t* start = EmitExpr(g, node->args[1]);
+            td_op_t* len = EmitExpr(g, node->args[2]);
+            return td_substr(g, str, start, len);
+        }
+        if (op == "replace") {
+            td_op_t* str = EmitExpr(g, node->args[0]);
+            td_op_t* from = EmitExpr(g, node->args[1]);
+            td_op_t* to = EmitExpr(g, node->args[2]);
+            return td_replace(g, str, from, to);
+        }
+        if (op == "concat") {
+            int n = (int)node->args.size();
+            std::vector<td_op_t*> ops(n);
+            for (int i = 0; i < n; i++) ops[i] = EmitExpr(g, node->args[i]);
+            return td_concat(g, ops.data(), n);
+        }
+        if (op == "if") {
+            td_op_t* cond = EmitExpr(g, node->args[0]);
+            td_op_t* then_val = EmitExpr(g, node->args[1]);
+            td_op_t* else_val = EmitExpr(g, node->args[2]);
+            return td_if(g, cond, then_val, else_val);
+        }
+        return nullptr;
+    }
+    else if (node->kind == "cast") {
+        td_op_t* arg = EmitExpr(g, node->left);
+        return td_cast(g, arg, node->target_type);
     }
 
     return nullptr;

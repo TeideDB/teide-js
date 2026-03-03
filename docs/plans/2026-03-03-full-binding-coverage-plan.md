@@ -388,7 +388,7 @@ git commit -m "feat(expr): add like, ilike, min2, max2 binary ops"
 
 ### Task 1.5: Add N-ary ops (substr, replace, concat) and cast
 
-- [ ] Add N-ary ops (substr, replace, concat, if) and cast to Expr and wire through EmitExpr
+- [x] Add N-ary ops (substr, replace, concat, if) and cast to Expr and wire through EmitExpr
 
 **Files:**
 - Modify: `lib/expr.ts` — add `ExprKind 'naryop'` and `'cast'`

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { col, lit, Expr } from '../lib/expr';
+import { col, lit, Expr, type DateField } from '../lib/expr';
 
 describe('Expr tree', () => {
   it('builds column reference', () => {
@@ -128,5 +128,39 @@ describe('Expr tree', () => {
     const e = col('a').max2(col('b'));
     expect(e.kind).toBe('binop');
     expect(e.params.op).toBe('max2');
+  });
+
+  // N-ary ops
+  it('builds substr naryop', () => {
+    const e = col('name').substr(lit(0), lit(3));
+    expect(e.kind).toBe('naryop');
+    expect(e.params.op).toBe('substr');
+    expect((e.params.args as Expr[]).length).toBe(3); // str, start, len
+  });
+
+  it('builds replace naryop', () => {
+    const e = col('name').replace('old', 'new');
+    expect(e.kind).toBe('naryop');
+    expect(e.params.op).toBe('replace');
+  });
+
+  it('builds concat naryop', () => {
+    const e = col('first').concat(lit(' '), col('last'));
+    expect(e.kind).toBe('naryop');
+    expect(e.params.op).toBe('concat');
+    expect((e.params.args as Expr[]).length).toBe(3);
+  });
+
+  it('builds cast', () => {
+    const e = col('x').cast('f64');
+    expect(e.kind).toBe('cast');
+    expect(e.params.targetType).toBe('f64');
+  });
+
+  it('builds Expr.if', () => {
+    const e = Expr.if(col('x').gt(0), col('x'), lit(0));
+    expect(e.kind).toBe('naryop');
+    expect(e.params.op).toBe('if');
+    expect((e.params.args as Expr[]).length).toBe(3);
   });
 });

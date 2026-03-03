@@ -1,4 +1,6 @@
-export type ExprKind = 'col' | 'lit' | 'binop' | 'unop' | 'agg' | 'alias';
+export type ExprKind = 'col' | 'lit' | 'binop' | 'unop' | 'agg' | 'alias' | 'naryop' | 'cast';
+
+export type DateField = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'dow' | 'doy' | 'epoch';
 
 // Agg opcodes (must match C defines in td.h)
 export const OP_SUM = 50;
@@ -79,8 +81,29 @@ export class Expr {
     variance(): Expr { return new Expr('agg', { op: OP_VAR, arg: this }); }
     variancePop(): Expr { return new Expr('agg', { op: OP_VAR_POP, arg: this }); }
 
+    // N-ary ops
+    substr(start: Expr | number, len: Expr | number): Expr {
+        return new Expr('naryop', { op: 'substr', args: [this, wrap(start), wrap(len)] });
+    }
+    replace(from: Expr | string, to: Expr | string): Expr {
+        return new Expr('naryop', { op: 'replace', args: [this, wrap(from), wrap(to)] });
+    }
+    concat(...others: (Expr | string)[]): Expr {
+        return new Expr('naryop', { op: 'concat', args: [this, ...others.map(wrap)] });
+    }
+
+    // Cast
+    cast(targetType: string): Expr {
+        return new Expr('cast', { targetType, arg: this });
+    }
+
     // Rename
     alias(name: string): Expr { return new Expr('alias', { name, arg: this }); }
+
+    // Static: conditional
+    static if(cond: Expr, thenVal: Expr | number | string, elseVal: Expr | number | string): Expr {
+        return new Expr('naryop', { op: 'if', args: [cond, wrap(thenVal), wrap(elseVal)] });
+    }
 }
 
 export function col(name: string): Expr {
