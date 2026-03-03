@@ -214,6 +214,30 @@ describe('Graph - expand', () => {
             ctx.destroy();
         }
     });
+
+    it('expand both from node 1 finds bidirectional neighbors', () => {
+        const ctx = new Context();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-both-'));
+        try {
+            const edges = ctx.readCsvSync(EDGES);
+            const rel = Rel.fromEdgesSync(edges, 'src', 'dst', { nSrc: 5, nDst: 5, sort: true });
+
+            // Node 1: incoming from 0, outgoing to 3
+            const csvPath = path.join(dir, 'node1.csv');
+            fs.writeFileSync(csvPath, 'node\n1\n');
+            const node1 = ctx.readCsvSync(csvPath);
+
+            const g = ctx.graph(node1);
+            const result = g.expandSync('node', rel, 'both');
+
+            // Should find at least 2 results (incoming + outgoing neighbors)
+            expect(result.nRows).toBeGreaterThanOrEqual(2);
+            rel.destroy();
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+            ctx.destroy();
+        }
+    });
 });
 
 describe('Graph - varExpand', () => {

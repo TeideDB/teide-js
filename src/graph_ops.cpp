@@ -424,7 +424,7 @@ Napi::Value GraphWcoJoinSync(const Napi::CallbackInfo& info) {
         return env.Undefined();
     }
     std::vector<td_rel_t*> rels(n_rels);
-    for (uint8_t i = 0; i < n_rels; i++) {
+    for (uint32_t i = 0; i < n_rels; i++) {
         NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());
         if (rw->thread() != thr) {
             Napi::Error::New(env, "All Rels must belong to the same Context as the Table").ThrowAsJavaScriptException();
@@ -482,7 +482,7 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
         return d.Promise();
     }
     std::vector<td_rel_t*> rels(n_rels);
-    for (uint8_t i = 0; i < n_rels; i++) {
+    for (uint32_t i = 0; i < n_rels; i++) {
         NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());
         if (rw->thread() != thr) {
             Napi::Error::New(env, "All Rels must belong to the same Context as the Table").ThrowAsJavaScriptException();
@@ -498,7 +498,7 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
     // Prevent GC of NativeRel objects during async execution
     auto rels_ref = std::make_shared<std::vector<Napi::ObjectReference>>();
     rels_ref->reserve(n_rels);
-    for (uint8_t i = 0; i < n_rels; i++) {
+    for (uint32_t i = 0; i < n_rels; i++) {
         rels_ref->push_back(Napi::Persistent(rel_arr.Get(i).As<Napi::Object>()));
     }
 
