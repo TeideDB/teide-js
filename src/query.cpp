@@ -75,6 +75,20 @@ std::shared_ptr<ExprNode> SerializeExpr(Napi::Object expr) {
         else if (type_str == "time")      node->target_type = TD_TIME;
         else if (type_str == "timestamp") node->target_type = TD_TIMESTAMP;
     }
+    else if (node->kind == "dateop") {
+        node->str_val = params.Get("op").As<Napi::String>().Utf8Value();
+        node->left = SerializeExpr(params.Get("arg").As<Napi::Object>());
+        std::string field = params.Get("field").As<Napi::String>().Utf8Value();
+        if (field == "year")        node->date_field = TD_EXTRACT_YEAR;
+        else if (field == "month")  node->date_field = TD_EXTRACT_MONTH;
+        else if (field == "day")    node->date_field = TD_EXTRACT_DAY;
+        else if (field == "hour")   node->date_field = TD_EXTRACT_HOUR;
+        else if (field == "minute") node->date_field = TD_EXTRACT_MINUTE;
+        else if (field == "second") node->date_field = TD_EXTRACT_SECOND;
+        else if (field == "dow")    node->date_field = TD_EXTRACT_DOW;
+        else if (field == "doy")    node->date_field = TD_EXTRACT_DOY;
+        else if (field == "epoch")  node->date_field = TD_EXTRACT_EPOCH;
+    }
 
     return node;
 }
@@ -253,6 +267,12 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
     else if (node->kind == "cast") {
         td_op_t* arg = EmitExpr(g, node->left);
         return td_cast(g, arg, node->target_type);
+    }
+    else if (node->kind == "dateop") {
+        td_op_t* arg = EmitExpr(g, node->left);
+        if (node->str_val == "extract")    return td_extract(g, arg, node->date_field);
+        if (node->str_val == "date_trunc") return td_date_trunc(g, arg, node->date_field);
+        return nullptr;
     }
 
     return nullptr;

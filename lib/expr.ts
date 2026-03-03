@@ -1,4 +1,4 @@
-export type ExprKind = 'col' | 'lit' | 'binop' | 'unop' | 'agg' | 'alias' | 'naryop' | 'cast';
+export type ExprKind = 'col' | 'lit' | 'binop' | 'unop' | 'agg' | 'alias' | 'naryop' | 'cast' | 'dateop';
 
 export type DateField = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'dow' | 'doy' | 'epoch';
 
@@ -95,6 +95,14 @@ export class Expr {
     // Cast
     cast(targetType: string): Expr {
         return new Expr('cast', { targetType, arg: this });
+    }
+
+    // Date/time ops
+    extract(field: DateField): Expr {
+        return new Expr('dateop', { op: 'extract', field, arg: this });
+    }
+    dateTrunc(field: DateField): Expr {
+        return new Expr('dateop', { op: 'date_trunc', field, arg: this });
     }
 
     // Rename

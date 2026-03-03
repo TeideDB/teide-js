@@ -21,7 +21,7 @@ enum LitType { LIT_NUM = 0, LIT_BOOL = 1, LIT_STR = 2 };
 
 // Serialized expression node (safe to pass across threads)
 struct ExprNode {
-    std::string kind;      // "col", "lit", "binop", "unop", "agg", "alias", "naryop", "cast"
+    std::string kind;      // "col", "lit", "binop", "unop", "agg", "alias", "naryop", "cast", "dateop"
     std::string str_val;   // col name, op name, alias name, string literal
     double num_val = 0;
     bool bool_val = false;
@@ -31,6 +31,7 @@ struct ExprNode {
     std::shared_ptr<ExprNode> right;  // binop right
     std::vector<std::shared_ptr<ExprNode>> args;  // for 'naryop'
     int8_t target_type = 0;                        // for 'cast'
+    int64_t date_field = 0;                        // for 'dateop' — TD_EXTRACT_* constant
 };
 
 // Serialized plan step (safe to pass across threads)

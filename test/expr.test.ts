@@ -163,4 +163,19 @@ describe('Expr tree', () => {
     expect(e.params.op).toBe('if');
     expect((e.params.args as Expr[]).length).toBe(3);
   });
+
+  // Date/time ops
+  it('builds extract dateop', () => {
+    const e = col('ts').extract('year');
+    expect(e.kind).toBe('dateop');
+    expect(e.params.op).toBe('extract');
+    expect(e.params.field).toBe('year');
+  });
+
+  it('builds dateTrunc dateop', () => {
+    const e = col('ts').dateTrunc('month');
+    expect(e.kind).toBe('dateop');
+    expect(e.params.op).toBe('date_trunc');
+    expect(e.params.field).toBe('month');
+  });
 });

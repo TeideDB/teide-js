@@ -575,7 +575,7 @@ git commit -m "feat(expr): add naryop (substr, replace, concat, if), cast"
 
 ### Task 1.6: Add date/time ops (extract, dateTrunc)
 
-- [ ] Add date/time ops (extract, dateTrunc) to Expr and wire through EmitExpr
+- [x] Add date/time ops (extract, dateTrunc) to Expr and wire through EmitExpr
 
 **Files:**
 - Modify: `lib/expr.ts`
