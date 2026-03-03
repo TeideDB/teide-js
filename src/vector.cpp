@@ -22,9 +22,7 @@ static int8_t ParseType(const std::string& s) {
     if (s == "date")      return TD_DATE;
     if (s == "time")      return TD_TIME;
     if (s == "timestamp") return TD_TIMESTAMP;
-    if (s == "guid")      return TD_GUID;
-    if (s == "sym")       return TD_SYM;
-    return -128; // invalid
+    return -128; // invalid (sym and guid require special handling not supported by element ops)
 }
 
 static const char* TypeName(int8_t t) {
@@ -214,7 +212,12 @@ Napi::Value NativeVector::Append(const Napi::CallbackInfo& info) {
             break;
         case TD_I64:
         case TD_TIMESTAMP:
-            val.i64 = info[0].As<Napi::Number>().Int64Value();
+            if (info[0].IsBigInt()) {
+                bool lossless;
+                val.i64 = info[0].As<Napi::BigInt>().Int64Value(&lossless);
+            } else {
+                val.i64 = info[0].As<Napi::Number>().Int64Value();
+            }
             break;
         case TD_DATE:
         case TD_TIME:
@@ -275,7 +278,14 @@ Napi::Value NativeVector::Set(const Napi::CallbackInfo& info) {
     switch (type) {
         case TD_F64:       val.f64 = info[1].As<Napi::Number>().DoubleValue(); break;
         case TD_I64:
-        case TD_TIMESTAMP: val.i64 = info[1].As<Napi::Number>().Int64Value(); break;
+        case TD_TIMESTAMP:
+            if (info[1].IsBigInt()) {
+                bool lossless;
+                val.i64 = info[1].As<Napi::BigInt>().Int64Value(&lossless);
+            } else {
+                val.i64 = info[1].As<Napi::Number>().Int64Value();
+            }
+            break;
         case TD_DATE:
         case TD_TIME:      val.i32 = info[1].As<Napi::Number>().Int32Value(); break;
         case TD_I32:       val.i32 = info[1].As<Napi::Number>().Int32Value(); break;
@@ -387,7 +397,14 @@ Napi::Value NativeVector::Concat(const Napi::CallbackInfo& info) {
         return env.Undefined();
     }
 
-    NativeVector* other = Napi::ObjectWrap<NativeVector>::Unwrap(info[0].As<Napi::Object>());
+    Napi::Object obj = info[0].As<Napi::Object>();
+    if (!obj.InstanceOf(constructor_.Value())) {
+        Napi::TypeError::New(env, "concat: argument must be a NativeVector")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeVector* other = Napi::ObjectWrap<NativeVector>::Unwrap(obj);
     td_t* a = vec_;
     td_t* b = other->vec_;
 
