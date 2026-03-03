@@ -2,6 +2,7 @@
 // <napi.h>, <atomic>, and other C++ headers before the C-atomic shim.
 #include "context.h"
 #include "table.h"
+#include "series.h"
 #include "compat.h"
 
 Napi::Object NativeContext::Init(Napi::Env env, Napi::Object exports) {
@@ -13,6 +14,8 @@ Napi::Object NativeContext::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("writeCsv", &NativeContext::WriteCsv),
         InstanceMethod("saveTableSync", &NativeContext::SaveTableSync),
         InstanceMethod("loadTableSync", &NativeContext::LoadTableSync),
+        InstanceMethod("loadColSync", &NativeContext::LoadColSync),
+        InstanceMethod("mmapColSync", &NativeContext::MmapColSync),
         InstanceAccessor("threadExternal", &NativeContext::GetThreadExternal, nullptr),
     });
     exports.Set("NativeContext", func);
@@ -305,4 +308,62 @@ Napi::Value NativeContext::LoadTableSync(const Napi::CallbackInfo& info) {
     }
 
     return NativeTable::Create(env, tbl, thread_.get());
+}
+
+Napi::Value NativeContext::LoadColSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "loadColSync(path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+
+    void* result = thread_->dispatch_sync([path]() -> void* {
+        return (void*)td_col_load(path.c_str());
+    });
+
+    td_t* vec = (td_t*)result;
+    if (!vec || TD_IS_ERR(vec)) {
+        std::string msg = "Failed to load column";
+        if (vec && TD_IS_ERR(vec)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(vec));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    int8_t dtype = td_type(vec);
+    std::string name = "col";
+    return NativeSeries::Create(env, vec, name, dtype, thread_.get());
+}
+
+Napi::Value NativeContext::MmapColSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "mmapColSync(path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+
+    void* result = thread_->dispatch_sync([path]() -> void* {
+        return (void*)td_col_mmap(path.c_str());
+    });
+
+    td_t* vec = (td_t*)result;
+    if (!vec || TD_IS_ERR(vec)) {
+        std::string msg = "Failed to mmap column";
+        if (vec && TD_IS_ERR(vec)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(vec));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    int8_t dtype = td_type(vec);
+    std::string name = "col";
+    return NativeSeries::Create(env, vec, name, dtype, thread_.get());
 }

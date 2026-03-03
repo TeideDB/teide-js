@@ -23,6 +23,8 @@ private:
     Napi::Value WriteCsv(const Napi::CallbackInfo& info);
     Napi::Value SaveTableSync(const Napi::CallbackInfo& info);
     Napi::Value LoadTableSync(const Napi::CallbackInfo& info);
+    Napi::Value LoadColSync(const Napi::CallbackInfo& info);
+    Napi::Value MmapColSync(const Napi::CallbackInfo& info);
 
     std::unique_ptr<TeideThread> thread_;
     bool destroyed_ = false;

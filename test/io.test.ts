@@ -69,6 +69,40 @@ describe('I/O operations', () => {
     }
   });
 
+  it('save and load column', () => {
+    const ctx = new Context();
+    const colPath = path.join(os.tmpdir(), `teide-col-${Date.now()}.td`);
+    try {
+      const df = ctx.readCsvSync(SMALL);
+      const series = df.col('value');
+      series.saveColSync(colPath);
+      expect(fs.existsSync(colPath)).toBe(true);
+      const loaded = ctx.loadColSync(colPath);
+      expect(loaded.length).toBe(series.length);
+      expect(loaded.dtype).toBe(series.dtype);
+    } finally {
+      ctx.destroy();
+      if (fs.existsSync(colPath)) fs.unlinkSync(colPath);
+    }
+  });
+
+  it('save and mmap column', () => {
+    const ctx = new Context();
+    const colPath = path.join(os.tmpdir(), `teide-col-mmap-${Date.now()}.td`);
+    try {
+      const df = ctx.readCsvSync(SMALL);
+      const series = df.col('value');
+      series.saveColSync(colPath);
+      expect(fs.existsSync(colPath)).toBe(true);
+      const mmapped = ctx.mmapColSync(colPath);
+      expect(mmapped.length).toBe(series.length);
+      expect(mmapped.dtype).toBe(series.dtype);
+    } finally {
+      ctx.destroy();
+      if (fs.existsSync(colPath)) fs.unlinkSync(colPath);
+    }
+  });
+
   it('writeCsv writes async', async () => {
     const ctx = new Context();
     const outPath = path.join(os.tmpdir(), `teide-test-async-${Date.now()}.csv`);

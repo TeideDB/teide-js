@@ -30,4 +30,8 @@ export class Series {
     get nullBitmap(): Uint8Array | null { return this._native.nullBitmap; }
     get indices(): Uint8Array | Uint16Array | Uint32Array { return this._native.indices; }
     get dictionary(): string[] { return this._native.dictionary; }
+
+    saveColSync(filePath: string): void {
+        this._native.saveColSync(filePath);
+    }
 }

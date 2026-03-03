@@ -1857,7 +1857,7 @@ git commit -m "feat(io): add splayed table save/load"
 
 ### Task 3.4: Add column save/load/mmap
 
-- [ ] Add column save/load/mmap methods to Series and Context
+- [x] Add column save/load/mmap methods to Series and Context
 
 **Files:**
 - Modify: `lib/series.ts` — add save methods

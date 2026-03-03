@@ -1,4 +1,5 @@
 import { Table } from './table';
+import { Series } from './series';
 import { Graph } from './graph';
 import path from 'path';
 
@@ -52,6 +53,16 @@ export class Context {
     loadTableSync(dir: string): Table {
         this._checkAlive();
         return new Table(this._native.loadTableSync(dir), this._native);
+    }
+
+    loadColSync(filePath: string): Series {
+        this._checkAlive();
+        return new Series(this._native.loadColSync(filePath));
+    }
+
+    mmapColSync(filePath: string): Series {
+        this._checkAlive();
+        return new Series(this._native.mmapColSync(filePath));
     }
 
     get _threadExternal(): any { return this._native.threadExternal; }
