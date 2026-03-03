@@ -26,6 +26,10 @@ Napi::Object NativeContext::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("saveMeta", &NativeContext::SaveMeta),
         InstanceMethod("loadMetaSync", &NativeContext::LoadMetaSync),
         InstanceMethod("loadMeta", &NativeContext::LoadMeta),
+        InstanceMethod("symIntern", &NativeContext::SymIntern),
+        InstanceMethod("symFind", &NativeContext::SymFind),
+        InstanceMethod("symStr", &NativeContext::SymStr),
+        InstanceMethod("symCount", &NativeContext::SymCount),
         InstanceAccessor("threadExternal", &NativeContext::GetThreadExternal, nullptr),
     });
     exports.Set("NativeContext", func);
@@ -695,4 +699,82 @@ Napi::Value NativeContext::LoadMeta(const Napi::CallbackInfo& info) {
     );
 
     return deferred.Promise();
+}
+
+Napi::Value NativeContext::SymIntern(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "symIntern(str)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string str = info[0].As<Napi::String>().Utf8Value();
+
+    void* result = thread_->dispatch_sync([str]() -> void* {
+        int64_t id = td_sym_intern(str.c_str(), str.size());
+        return (void*)(uintptr_t)id;
+    });
+
+    int64_t id = (int64_t)(uintptr_t)result;
+    return Napi::Number::New(env, (double)id);
+}
+
+Napi::Value NativeContext::SymFind(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "symFind(str)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string str = info[0].As<Napi::String>().Utf8Value();
+
+    void* result = thread_->dispatch_sync([str]() -> void* {
+        int64_t id = td_sym_find(str.c_str(), str.size());
+        return (void*)(uintptr_t)id;
+    });
+
+    int64_t id = (int64_t)(uintptr_t)result;
+    return Napi::Number::New(env, (double)id);
+}
+
+Napi::Value NativeContext::SymStr(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+        Napi::TypeError::New(env, "symStr(id)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    int64_t id = (int64_t)info[0].As<Napi::Number>().Int64Value();
+
+    void* result = thread_->dispatch_sync([id]() -> void* {
+        return (void*)td_sym_str(id);
+    });
+
+    td_t* sym = (td_t*)result;
+    if (!sym) {
+        return env.Null();
+    }
+    return Napi::String::New(env, td_str_ptr(sym), td_str_len(sym));
+}
+
+Napi::Value NativeContext::SymCount(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    void* result = thread_->dispatch_sync([]() -> void* {
+        return (void*)(uintptr_t)td_sym_count();
+    });
+
+    uint32_t count = (uint32_t)(uintptr_t)result;
+    return Napi::Number::New(env, (double)count);
 }

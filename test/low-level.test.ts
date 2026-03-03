@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Context, Vector, Atom, List, Selection } from '../lib';
+import { Context, Vector, Atom, List, Selection, Table } from '../lib';
 
 describe('Vector API', () => {
   it('creates and appends to a vector', () => {
@@ -255,6 +255,129 @@ describe('List API', () => {
       const r2 = list.get(2) as List;
       expect(r2.type).toBe('list');
       expect(r2.length).toBe(1);
+    } finally {
+      ctx.destroy();
+    }
+  });
+});
+
+describe('Symbol Table API', () => {
+  it('symIntern and symStr roundtrip', () => {
+    const ctx = new Context();
+    try {
+      const id = ctx.symIntern('hello');
+      expect(typeof id).toBe('number');
+      expect(ctx.symStr(id)).toBe('hello');
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('symFind returns -1 for unknown symbol', () => {
+    const ctx = new Context();
+    try {
+      const id = ctx.symFind('nonexistent_symbol_xyz_12345');
+      expect(id).toBeLessThan(0);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('symFind returns id for interned symbol', () => {
+    const ctx = new Context();
+    try {
+      const internedId = ctx.symIntern('test_find');
+      const foundId = ctx.symFind('test_find');
+      expect(foundId).toBe(internedId);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('symCount returns current dictionary size', () => {
+    const ctx = new Context();
+    try {
+      const before = ctx.symCount();
+      expect(typeof before).toBe('number');
+      ctx.symIntern('unique_sym_for_count_test');
+      const after = ctx.symCount();
+      expect(after).toBeGreaterThanOrEqual(before);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('symStr returns null for invalid id', () => {
+    const ctx = new Context();
+    try {
+      const result = ctx.symStr(999999);
+      expect(result).toBeNull();
+    } finally {
+      ctx.destroy();
+    }
+  });
+});
+
+describe('Low-level Table Builder', () => {
+  it('creates empty table with newSync', () => {
+    const ctx = new Context();
+    try {
+      const t = Table.newSync(ctx, 1);
+      expect(t.nCols).toBe(0);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('adds column to table', () => {
+    const ctx = new Context();
+    try {
+      const v = Vector.fromRawSync(ctx, 'f64', new Float64Array([10, 20, 30]));
+      const t = Table.newSync(ctx, 1);
+      t.addCol('values', v);
+      expect(t.nRows).toBe(3);
+      expect(t.col('values').data[0]).toBeCloseTo(10);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('getColByIndex retrieves column', () => {
+    const ctx = new Context();
+    try {
+      const v = Vector.fromRawSync(ctx, 'f64', new Float64Array([1, 2, 3]));
+      const t = Table.newSync(ctx, 1);
+      t.addCol('x', v);
+      const col = t.getColByIndex(0);
+      expect(col.data[0]).toBeCloseTo(1);
+      expect(col.data[2]).toBeCloseTo(3);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('setColName renames a column', () => {
+    const ctx = new Context();
+    try {
+      const v = Vector.fromRawSync(ctx, 'f64', new Float64Array([5, 10]));
+      const t = Table.newSync(ctx, 1);
+      t.addCol('old_name', v);
+      expect(t.columns).toContain('old_name');
+      t.setColName(0, 'new_name');
+      expect(t.columns).toContain('new_name');
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('schema returns schema series', () => {
+    const ctx = new Context();
+    try {
+      const v = Vector.fromRawSync(ctx, 'f64', new Float64Array([1, 2]));
+      const t = Table.newSync(ctx, 1);
+      t.addCol('col1', v);
+      const s = t.schema();
+      expect(s).toBeDefined();
     } finally {
       ctx.destroy();
     }

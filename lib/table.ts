@@ -1,6 +1,7 @@
 import { Series } from './series';
 import { Query } from './query';
 import { Expr } from './expr';
+import type { Vector } from './vector';
 import { WindowOpts, WindowJoinOpts } from './types';
 import path from 'path';
 
@@ -23,12 +24,33 @@ export class Table {
         return new Table(result, ctx._native);
     }
 
+    static newSync(ctx: { _native: any }, ncols: number): Table {
+        const result = addon.tableNewSync(ctx._native, ncols);
+        return new Table(result, ctx._native);
+    }
+
     get nRows(): number { return this._native.nRows; }
     get nCols(): number { return this._native.nCols; }
     get columns(): string[] { return this._native.columns; }
 
     col(name: string): Series {
         return new Series(this._native.col(name));
+    }
+
+    addCol(name: string, vec: Vector): void {
+        this._native.addCol(name, vec._native);
+    }
+
+    getColByIndex(index: number): Series {
+        return new Series(this._native.getColByIndex(index));
+    }
+
+    setColName(index: number, name: string): void {
+        this._native.setColName(index, name);
+    }
+
+    schema(): Series {
+        return new Series(this._native.schema());
     }
 
     filter(expr: Expr): Query {

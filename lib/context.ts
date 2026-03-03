@@ -117,6 +117,26 @@ export class Context {
         return new Series(nativeSeries);
     }
 
+    symIntern(str: string): number {
+        this._checkAlive();
+        return this._native.symIntern(str);
+    }
+
+    symFind(str: string): number {
+        this._checkAlive();
+        return this._native.symFind(str);
+    }
+
+    symStr(id: number): string | null {
+        this._checkAlive();
+        return this._native.symStr(id);
+    }
+
+    symCount(): number {
+        this._checkAlive();
+        return this._native.symCount();
+    }
+
     get _threadExternal(): any { return this._native.threadExternal; }
 
     graph(table: Table): Graph {

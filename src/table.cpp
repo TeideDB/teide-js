@@ -3,6 +3,7 @@
 #include "table.h"
 #include "context.h"
 #include "series.h"
+#include "vector.h"
 #include <cstring>
 #include "compat.h"
 
@@ -14,6 +15,10 @@ Napi::Object NativeTable::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor("nCols", &NativeTable::GetNCols, nullptr),
         InstanceAccessor("columns", &NativeTable::GetColumns, nullptr),
         InstanceMethod("col", &NativeTable::Col),
+        InstanceMethod("addCol", &NativeTable::AddCol),
+        InstanceMethod("getColByIndex", &NativeTable::GetColByIndex),
+        InstanceMethod("setColName", &NativeTable::SetColName),
+        InstanceMethod("schema", &NativeTable::Schema),
     });
     constructor_ = Napi::Persistent(func);
     constructor_.SuppressDestruct();
@@ -97,6 +102,110 @@ Napi::Value NativeTable::Col(const Napi::CallbackInfo& info) {
 
     int8_t dtype = td_type(col);
     return NativeSeries::Create(env, col, name, dtype, thread_);
+}
+
+Napi::Value NativeTable::AddCol(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsObject()) {
+        Napi::TypeError::New(env, "addCol(name, vector)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string name = info[0].As<Napi::String>().Utf8Value();
+    NativeVector* vec = Napi::ObjectWrap<NativeVector>::Unwrap(info[1].As<Napi::Object>());
+    td_t* vec_ptr = vec->ptr();
+    td_t* tbl = tbl_;
+
+    void* result = thread_->dispatch_sync([tbl, name, vec_ptr]() -> void* {
+        int64_t name_id = td_sym_intern(name.c_str(), name.size());
+        td_retain(vec_ptr);
+        return (void*)td_table_add_col(tbl, name_id, vec_ptr);
+    });
+
+    tbl_ = (td_t*)result;
+    return env.Undefined();
+}
+
+Napi::Value NativeTable::GetColByIndex(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+        Napi::TypeError::New(env, "getColByIndex(index)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    int64_t idx = (int64_t)info[0].As<Napi::Number>().Int64Value();
+    td_t* col = td_table_get_col_idx(tbl_, idx);
+    if (!col) {
+        Napi::Error::New(env, "Column index out of range").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    int64_t name_id = td_table_col_name(tbl_, idx);
+    td_t* sym = td_sym_str(name_id);
+    std::string name = sym ? std::string(td_str_ptr(sym), td_str_len(sym))
+                           : "V" + std::to_string(idx);
+
+    int8_t dtype = td_type(col);
+    return NativeSeries::Create(env, col, name, dtype, thread_);
+}
+
+Napi::Value NativeTable::SetColName(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsString()) {
+        Napi::TypeError::New(env, "setColName(index, name)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    int64_t idx = (int64_t)info[0].As<Napi::Number>().Int64Value();
+    std::string name = info[1].As<Napi::String>().Utf8Value();
+    td_t* tbl = tbl_;
+
+    thread_->dispatch_sync([tbl, idx, name]() -> void* {
+        int64_t name_id = td_sym_intern(name.c_str(), name.size());
+        td_table_set_col_name(tbl, idx, name_id);
+        return nullptr;
+    });
+
+    return env.Undefined();
+}
+
+Napi::Value NativeTable::Schema(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    td_t* schema = td_table_schema(tbl_);
+    if (!schema || TD_IS_ERR(schema)) {
+        Napi::Error::New(env, "Failed to get table schema").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    int8_t dtype = td_type(schema);
+    return NativeSeries::Create(env, schema, ".d", dtype, thread_);
+}
+
+// ---- Standalone function: TableNewSync ----
+
+Napi::Value TableNewSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsNumber()) {
+        Napi::TypeError::New(env, "Expected (NativeContext, ncols)")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeContext* ctx = Napi::ObjectWrap<NativeContext>::Unwrap(info[0].As<Napi::Object>());
+    TeideThread* thread = &ctx->thread();
+    int64_t ncols = (int64_t)info[1].As<Napi::Number>().Int64Value();
+
+    void* result = thread->dispatch_sync([ncols]() -> void* {
+        return (void*)td_table_new(ncols);
+    });
+
+    td_t* tbl = (td_t*)result;
+    if (TD_IS_ERR(tbl)) {
+        Napi::Error::New(env, std::string("Table creation failed: ") + td_err_str(TD_ERR_CODE(tbl)))
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    return NativeTable::Create(env, tbl, thread);
 }
 
 // ---- Column serialization (shared by sync/async) ----

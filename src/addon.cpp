@@ -35,6 +35,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("graphWcoJoin", Napi::Function::New(env, GraphWcoJoin));
     exports.Set("tableFromArraysSync", Napi::Function::New(env, TableFromArraysSync));
     exports.Set("tableFromArrays", Napi::Function::New(env, TableFromArrays));
+    exports.Set("tableNewSync", Napi::Function::New(env, TableNewSync));
     return exports;
 }
 

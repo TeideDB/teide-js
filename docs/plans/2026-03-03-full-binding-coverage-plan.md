@@ -2354,7 +2354,7 @@ Wrap `td_sel_new`, `td_sel_from_pred`, `td_sel_and`, `td_sel_recompute`.
 
 ### Task 5.5: Add symbol table direct access and low-level table builder
 
-- [ ] Add symbol table direct access (symIntern, symStr) and low-level table builder to Context and Table
+- [x] Add symbol table direct access (symIntern, symStr) and low-level table builder to Context and Table
 
 **Files:**
 - Modify: `lib/context.ts` — add symIntern, symFind, symStr, symCount

@@ -13,6 +13,7 @@ class TeideThread;
 // Standalone functions registered in addon.cpp
 Napi::Value TableFromArraysSync(const Napi::CallbackInfo& info);
 Napi::Value TableFromArrays(const Napi::CallbackInfo& info);
+Napi::Value TableNewSync(const Napi::CallbackInfo& info);
 
 class NativeTable : public Napi::ObjectWrap<NativeTable> {
 public:
@@ -29,6 +30,10 @@ private:
     Napi::Value GetNCols(const Napi::CallbackInfo& info);
     Napi::Value GetColumns(const Napi::CallbackInfo& info);
     Napi::Value Col(const Napi::CallbackInfo& info);
+    Napi::Value AddCol(const Napi::CallbackInfo& info);
+    Napi::Value GetColByIndex(const Napi::CallbackInfo& info);
+    Napi::Value SetColName(const Napi::CallbackInfo& info);
+    Napi::Value Schema(const Napi::CallbackInfo& info);
 
     td_t* tbl_;
     TeideThread* thread_;

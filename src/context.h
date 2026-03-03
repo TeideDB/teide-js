@@ -35,6 +35,10 @@ private:
     Napi::Value SaveMeta(const Napi::CallbackInfo& info);
     Napi::Value LoadMetaSync(const Napi::CallbackInfo& info);
     Napi::Value LoadMeta(const Napi::CallbackInfo& info);
+    Napi::Value SymIntern(const Napi::CallbackInfo& info);
+    Napi::Value SymFind(const Napi::CallbackInfo& info);
+    Napi::Value SymStr(const Napi::CallbackInfo& info);
+    Napi::Value SymCount(const Napi::CallbackInfo& info);
 
     std::unique_ptr<TeideThread> thread_;
     bool destroyed_ = false;
