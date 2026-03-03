@@ -61,6 +61,11 @@ Napi::Value NativeRel::FromEdgesSync(const Napi::CallbackInfo& info) {
     int64_t n_dst = info[4].As<Napi::Number>().Int64Value();
     bool sort = info[5].As<Napi::Boolean>().Value();
 
+    if (n_src <= 0 || n_dst <= 0) {
+        Napi::RangeError::New(env, "nSrc and nDst must be positive").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
     td_t* tbl = table->ptr();
     TeideThread* thr = table->thread();
 
@@ -93,6 +98,11 @@ Napi::Value NativeRel::FromEdges(const Napi::CallbackInfo& info) {
     int64_t n_src = info[3].As<Napi::Number>().Int64Value();
     int64_t n_dst = info[4].As<Napi::Number>().Int64Value();
     bool sort = info[5].As<Napi::Boolean>().Value();
+
+    if (n_src <= 0 || n_dst <= 0) {
+        Napi::RangeError::New(env, "nSrc and nDst must be positive").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     td_t* tbl = table->ptr();
     TeideThread* thr = table->thread();
@@ -135,6 +145,11 @@ Napi::Value NativeRel::BuildSync(const Napi::CallbackInfo& info) {
     int64_t n_target = info[2].As<Napi::Number>().Int64Value();
     bool sort = info[3].As<Napi::Boolean>().Value();
 
+    if (n_target <= 0) {
+        Napi::RangeError::New(env, "nTargetNodes must be positive").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
     td_t* tbl = table->ptr();
     TeideThread* thr = table->thread();
 
@@ -164,6 +179,11 @@ Napi::Value NativeRel::Build(const Napi::CallbackInfo& info) {
     std::string fk_col = info[1].As<Napi::String>().Utf8Value();
     int64_t n_target = info[2].As<Napi::Number>().Int64Value();
     bool sort = info[3].As<Napi::Boolean>().Value();
+
+    if (n_target <= 0) {
+        Napi::RangeError::New(env, "nTargetNodes must be positive").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     td_t* tbl = table->ptr();
     TeideThread* thr = table->thread();
@@ -287,7 +307,8 @@ Napi::Value NativeRel::SaveSync(const Napi::CallbackInfo& info) {
 
     intptr_t err = (intptr_t)result;
     if (err != 0) {
-        Napi::Error::New(env, "Failed to save relationship to: " + dir).ThrowAsJavaScriptException();
+        std::string msg = "Failed to save relationship to: " + dir + ": " + td_err_str((td_err_t)err);
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
     }
     return env.Undefined();
 }
@@ -319,7 +340,8 @@ Napi::Value NativeRel::Save(const Napi::CallbackInfo& info) {
             self_ref->Reset();
             intptr_t err = (intptr_t)data;
             if (err != 0) {
-                deferred.Reject(Napi::Error::New(env, "Failed to save relationship").Value());
+                std::string msg = std::string("Failed to save relationship: ") + td_err_str((td_err_t)err);
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(env.Undefined());
             }
