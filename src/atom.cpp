@@ -381,6 +381,7 @@ Napi::Value NativeAtom::GetValue(const Napi::CallbackInfo& info) {
         case TD_ATOM_GUID: {
             // GUID is stored as obj pointer to a 16-byte block
             // Return as a Uint8Array copy
+            if (!atom_->obj) return env.Null();
             const uint8_t* src = (const uint8_t*)td_data(atom_->obj);
             auto buf = Napi::ArrayBuffer::New(env, 16);
             memcpy(buf.Data(), src, 16);

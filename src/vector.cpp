@@ -388,6 +388,11 @@ void NativeVector::SetNull(const Napi::CallbackInfo& info) {
     int64_t idx = info[0].As<Napi::Number>().Int64Value();
     bool is_null = info[1].As<Napi::Boolean>().Value();
 
+    if (idx < 0 || idx >= td_len(vec_)) {
+        Napi::RangeError::New(env, "Index out of bounds").ThrowAsJavaScriptException();
+        return;
+    }
+
     td_t* vec = vec_;
     thread_->dispatch_sync([vec, idx, is_null]() -> void* {
         td_vec_set_null(vec, idx, is_null);

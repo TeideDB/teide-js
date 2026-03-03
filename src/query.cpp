@@ -74,6 +74,7 @@ std::shared_ptr<ExprNode> SerializeExpr(Napi::Object expr) {
         else if (type_str == "date")      node->target_type = TD_DATE;
         else if (type_str == "time")      node->target_type = TD_TIME;
         else if (type_str == "timestamp") node->target_type = TD_TIMESTAMP;
+        else node->target_type = -1;  // sentinel for unknown type
     }
     else if (node->kind == "dateop") {
         node->str_val = params.Get("op").As<Napi::String>().Utf8Value();
@@ -398,6 +399,7 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
         return nullptr;
     }
     else if (node->kind == "cast") {
+        if (node->target_type < 0) return nullptr;  // unknown cast target type
         td_op_t* arg = EmitExpr(g, node->left);
         return td_cast(g, arg, node->target_type);
     }
