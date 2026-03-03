@@ -978,12 +978,14 @@ git commit -m "feat: add graph operation C++ functions (expand, varExpand, short
 
 ---
 
-### Task 4: TypeScript Rel Class
+### Task 4: TypeScript Rel Class [DONE]
 
 **Files:**
-- Create: `lib/rel.ts`
-- Modify: `lib/context.ts` (expose addon + thread for Rel factory methods)
-- Modify: `lib/index.ts` (export Rel)
+- [x] Create: `lib/rel.ts`
+- [x] Modify: `lib/context.ts` (expose addon + thread for Rel factory methods)
+- [x] Modify: `lib/index.ts` (export Rel)
+- [x] Modify: `src/context.h` (add GetThreadExternal declaration)
+- [x] Modify: `src/context.cpp` (add GetThreadExternal implementation + registration)
 
 **Step 1: Create `lib/rel.ts`**
 

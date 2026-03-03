@@ -22,6 +22,8 @@ export class Context {
         return new Table(nativeTable, this._native);
     }
 
+    get _threadExternal(): any { return this._native.threadExternal; }
+
     destroy(): void {
         if (!this._destroyed) {
             this._native.destroy();

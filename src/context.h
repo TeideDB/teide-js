@@ -13,6 +13,8 @@ public:
     TeideThread& thread() { return *thread_; }
     void check_alive(Napi::Env env);
 
+    Napi::Value GetThreadExternal(const Napi::CallbackInfo& info);
+
 private:
     Napi::Value Destroy(const Napi::CallbackInfo& info);
     Napi::Value ReadCsvSync(const Napi::CallbackInfo& info);

@@ -9,6 +9,7 @@ Napi::Object NativeContext::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("destroy", &NativeContext::Destroy),
         InstanceMethod("readCsvSync", &NativeContext::ReadCsvSync),
         InstanceMethod("readCsv", &NativeContext::ReadCsv),
+        InstanceAccessor("threadExternal", &NativeContext::GetThreadExternal, nullptr),
     });
     exports.Set("NativeContext", func);
     return exports;
@@ -27,6 +28,10 @@ void NativeContext::check_alive(Napi::Env env) {
     if (destroyed_) {
         Napi::Error::New(env, "Context has been destroyed").ThrowAsJavaScriptException();
     }
+}
+
+Napi::Value NativeContext::GetThreadExternal(const Napi::CallbackInfo& info) {
+    return Napi::External<TeideThread>::New(info.Env(), thread_.get());
 }
 
 Napi::Value NativeContext::Destroy(const Napi::CallbackInfo& info) {
