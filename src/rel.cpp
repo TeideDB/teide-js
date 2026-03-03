@@ -75,6 +75,10 @@ Napi::Value NativeRel::FromEdgesSync(const Napi::CallbackInfo& info) {
 
     td_t* tbl = table->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        Napi::Error::New(env, "Context has been shut down").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thr->dispatch_sync([tbl, src_col, dst_col, n_src, n_dst, sort]() -> void* {
         return (void*)td_rel_from_edges(tbl, src_col.c_str(), dst_col.c_str(),
@@ -113,6 +117,11 @@ Napi::Value NativeRel::FromEdges(const Napi::CallbackInfo& info) {
 
     td_t* tbl = table->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Context has been shut down").Value());
+        return d.Promise();
+    }
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "fromEdges", 0, 1);
 
@@ -159,6 +168,10 @@ Napi::Value NativeRel::BuildSync(const Napi::CallbackInfo& info) {
 
     td_t* tbl = table->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        Napi::Error::New(env, "Context has been shut down").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thr->dispatch_sync([tbl, fk_col, n_target, sort]() -> void* {
         return (void*)td_rel_build(tbl, fk_col.c_str(), n_target, sort);
@@ -194,6 +207,11 @@ Napi::Value NativeRel::Build(const Napi::CallbackInfo& info) {
 
     td_t* tbl = table->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Context has been shut down").Value());
+        return d.Promise();
+    }
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "build", 0, 1);
 
@@ -228,6 +246,10 @@ Napi::Value NativeRel::LoadSync(const Napi::CallbackInfo& info) {
     }
     std::string dir = info[0].As<Napi::String>().Utf8Value();
     TeideThread* thr = info[1].As<Napi::External<TeideThread>>().Data();
+    if (!thr->is_running()) {
+        Napi::Error::New(env, "Context has been shut down").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thr->dispatch_sync([dir]() -> void* {
         return (void*)td_rel_load(dir.c_str());
@@ -252,6 +274,11 @@ Napi::Value NativeRel::Load(const Napi::CallbackInfo& info) {
     }
     std::string dir = info[0].As<Napi::String>().Utf8Value();
     TeideThread* thr = info[1].As<Napi::External<TeideThread>>().Data();
+    if (!thr->is_running()) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Context has been shut down").Value());
+        return d.Promise();
+    }
 
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "relLoad", 0, 1);
@@ -282,6 +309,10 @@ Napi::Value NativeRel::MmapSync(const Napi::CallbackInfo& info) {
     }
     std::string dir = info[0].As<Napi::String>().Utf8Value();
     TeideThread* thr = info[1].As<Napi::External<TeideThread>>().Data();
+    if (!thr->is_running()) {
+        Napi::Error::New(env, "Context has been shut down").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thr->dispatch_sync([dir]() -> void* {
         return (void*)td_rel_mmap(dir.c_str());
