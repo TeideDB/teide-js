@@ -55,6 +55,22 @@ describe('Extended query ops', () => {
     }
   });
 
+  it('window with rowNumber', () => {
+    const ctx = new Context();
+    try {
+      const df = ctx.readCsvSync(SALES);
+      const result = df.window({
+        partitionBy: ['category'],
+        orderBy: [{ col: 'price', descending: true }],
+        funcs: [{ kind: 'rowNumber' }],
+      }).collectSync();
+      expect(result.nRows).toBe(9);
+      expect(result.nCols).toBeGreaterThan(4); // original cols + window col
+    } finally {
+      ctx.destroy();
+    }
+  });
+
   it('inner join on shared column', () => {
     const ctx = new Context();
     try {

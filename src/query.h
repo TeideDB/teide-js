@@ -51,6 +51,18 @@ struct PlanStep {
     std::vector<std::string> join_left_keys;               // for 'join'
     std::vector<std::string> join_right_keys;              // for 'join'
     uint8_t join_type = 0;                                 // for 'join': 0=inner, 1=left, 2=full
+    // For 'window'
+    std::vector<std::string> win_part_keys;
+    std::vector<std::string> win_order_keys;
+    std::vector<bool> win_order_descs;
+    std::vector<uint8_t> win_func_kinds;
+    std::vector<std::string> win_func_cols;    // column name per func (empty for rowNumber etc.)
+    std::vector<int64_t> win_func_params;      // ntile(n), lag offset, nth_value(n)
+    uint8_t win_frame_type = 0;               // 0=ROWS, 1=RANGE
+    uint8_t win_frame_start = 0;              // TD_BOUND_UNBOUNDED_PRECEDING
+    uint8_t win_frame_end = 2;                // TD_BOUND_CURRENT_ROW
+    int64_t win_frame_start_n = 0;
+    int64_t win_frame_end_n = 0;
 };
 
 // Static query execution functions exposed to JS

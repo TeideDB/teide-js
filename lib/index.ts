@@ -7,3 +7,4 @@ export { Rel } from './rel';
 export type { RelFromEdgesOpts, RelBuildOpts } from './rel';
 export { Graph } from './graph';
 export type { Direction, VarExpandOpts, ShortestPathOpts, WcoJoinOpts } from './graph';
+export type { WindowFunc, WindowFuncKind, FrameBound, WindowOpts, JoinOpts, WindowJoinOpts } from './types';

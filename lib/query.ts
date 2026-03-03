@@ -1,5 +1,6 @@
 import { Expr } from './expr';
 import { Table, GroupBy } from './table';
+import { WindowOpts } from './types';
 import path from 'path';
 
 const addon = require(path.join(__dirname, '..', 'build', 'Release', 'teidedb_addon.node'));
@@ -64,6 +65,11 @@ export class Query {
 
     project(...exprs: Expr[]): Query {
         this._ops.push({ type: 'project', exprs });
+        return this;
+    }
+
+    window(opts: WindowOpts): Query {
+        this._ops.push({ type: 'window', ...opts });
         return this;
     }
 

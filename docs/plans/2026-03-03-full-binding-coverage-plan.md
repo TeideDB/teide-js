@@ -1163,7 +1163,7 @@ git commit -m "feat(query): add join operation (inner, left, full)"
 
 ### Task 2.4: Add window functions to Query
 
-- [ ] Add window functions with full frame specification to Query and wire through SerializePlan/ExecutePlan
+- [x] Add window functions with full frame specification to Query and wire through SerializePlan/ExecutePlan
 
 **Files:**
 - Modify: `lib/query.ts`

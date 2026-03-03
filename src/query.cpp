@@ -179,6 +179,80 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
             }
             step.join_type = (uint8_t)op.Get("joinType").As<Napi::Number>().Uint32Value();
         }
+        else if (step.type == "window") {
+            // Partition keys
+            Napi::Array pkeys = op.Get("partitionBy").As<Napi::Array>();
+            for (uint32_t j = 0; j < pkeys.Length(); j++)
+                step.win_part_keys.push_back(pkeys.Get(j).As<Napi::String>().Utf8Value());
+
+            // Order keys
+            Napi::Array okeys = op.Get("orderBy").As<Napi::Array>();
+            for (uint32_t j = 0; j < okeys.Length(); j++) {
+                Napi::Object o = okeys.Get(j).As<Napi::Object>();
+                step.win_order_keys.push_back(o.Get("col").As<Napi::String>().Utf8Value());
+                step.win_order_descs.push_back(
+                    o.Has("descending") && o.Get("descending").As<Napi::Boolean>().Value());
+            }
+
+            // Functions
+            Napi::Array funcs = op.Get("funcs").As<Napi::Array>();
+            for (uint32_t j = 0; j < funcs.Length(); j++) {
+                Napi::Object f = funcs.Get(j).As<Napi::Object>();
+                std::string kind = f.Get("kind").As<Napi::String>().Utf8Value();
+
+                uint8_t k = 0;
+                if (kind == "rowNumber")       k = 0;  // TD_WIN_ROW_NUMBER
+                else if (kind == "rank")       k = 1;  // TD_WIN_RANK
+                else if (kind == "denseRank")  k = 2;  // TD_WIN_DENSE_RANK
+                else if (kind == "ntile")      k = 3;  // TD_WIN_NTILE
+                else if (kind == "sum")        k = 4;  // TD_WIN_SUM
+                else if (kind == "avg")        k = 5;  // TD_WIN_AVG
+                else if (kind == "min")        k = 6;  // TD_WIN_MIN
+                else if (kind == "max")        k = 7;  // TD_WIN_MAX
+                else if (kind == "count")      k = 8;  // TD_WIN_COUNT
+                else if (kind == "lag")        k = 9;  // TD_WIN_LAG
+                else if (kind == "lead")       k = 10; // TD_WIN_LEAD
+                else if (kind == "firstValue") k = 11; // TD_WIN_FIRST_VALUE
+                else if (kind == "lastValue")  k = 12; // TD_WIN_LAST_VALUE
+                else if (kind == "nthValue")   k = 13; // TD_WIN_NTH_VALUE
+                step.win_func_kinds.push_back(k);
+
+                std::string col_name = "";
+                if (f.Has("col") && f.Get("col").IsString())
+                    col_name = f.Get("col").As<Napi::String>().Utf8Value();
+                step.win_func_cols.push_back(col_name);
+
+                int64_t param = 0;
+                if (f.Has("n") && f.Get("n").IsNumber())
+                    param = f.Get("n").As<Napi::Number>().Int64Value();
+                else if (f.Has("offset") && f.Get("offset").IsNumber())
+                    param = f.Get("offset").As<Napi::Number>().Int64Value();
+                step.win_func_params.push_back(param);
+            }
+
+            // Frame (optional)
+            if (op.Has("frame") && op.Get("frame").IsObject()) {
+                Napi::Object frame = op.Get("frame").As<Napi::Object>();
+                if (frame.Has("type")) {
+                    std::string ft = frame.Get("type").As<Napi::String>().Utf8Value();
+                    step.win_frame_type = (ft == "range") ? 1 : 0;
+                }
+                auto parseBound = [](Napi::Value v, uint8_t& bound, int64_t& n) {
+                    if (v.IsString()) {
+                        std::string s = v.As<Napi::String>().Utf8Value();
+                        if (s == "unboundedPreceding")       { bound = 0; n = 0; }
+                        else if (s == "currentRow")          { bound = 2; n = 0; }
+                        else if (s == "unboundedFollowing")  { bound = 4; n = 0; }
+                    } else if (v.IsObject()) {
+                        Napi::Object o = v.As<Napi::Object>();
+                        if (o.Has("preceding"))  { bound = 1; n = o.Get("preceding").As<Napi::Number>().Int64Value(); }
+                        else if (o.Has("following")) { bound = 3; n = o.Get("following").As<Napi::Number>().Int64Value(); }
+                    }
+                };
+                if (frame.Has("start")) parseBound(frame.Get("start"), step.win_frame_start, step.win_frame_start_n);
+                if (frame.Has("end")) parseBound(frame.Get("end"), step.win_frame_end, step.win_frame_end_n);
+            }
+        }
 
         plan.push_back(std::move(step));
     }
@@ -567,6 +641,55 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                               n_keys, step.join_type);
 
             td_release(step.join_right_table);
+        }
+        else if (step.type == "window") {
+            td_op_t* table_node = current ? current : td_const_table(g, tbl);
+            if (filter_pred) {
+                table_node = td_filter(g, table_node, filter_pred);
+                filter_pred = nullptr;
+            }
+
+            uint8_t n_part = (uint8_t)step.win_part_keys.size();
+            std::vector<td_op_t*> part_keys(n_part);
+            for (uint8_t p = 0; p < n_part; p++)
+                part_keys[p] = td_scan(g, step.win_part_keys[p].c_str());
+
+            uint8_t n_order = (uint8_t)step.win_order_keys.size();
+            std::vector<td_op_t*> order_keys(n_order);
+            std::vector<uint8_t> order_descs(n_order);
+            for (uint8_t o = 0; o < n_order; o++) {
+                order_keys[o] = td_scan(g, step.win_order_keys[o].c_str());
+                order_descs[o] = step.win_order_descs[o] ? 1 : 0;
+            }
+
+            uint8_t n_funcs = (uint8_t)step.win_func_kinds.size();
+            std::vector<uint8_t> func_kinds(step.win_func_kinds.begin(), step.win_func_kinds.end());
+            std::vector<td_op_t*> func_inputs(n_funcs);
+            std::vector<int64_t> func_params(step.win_func_params.begin(), step.win_func_params.end());
+
+            // For funcs that don't need a column (rowNumber, rank, denseRank, ntile),
+            // the C core still dereferences func_inputs[i]->id, so provide a
+            // dummy scan node (first partition key or first order key).
+            td_op_t* dummy_input = nullptr;
+            if (n_part > 0)
+                dummy_input = td_scan(g, step.win_part_keys[0].c_str());
+            else if (n_order > 0)
+                dummy_input = td_scan(g, step.win_order_keys[0].c_str());
+
+            for (uint8_t f = 0; f < n_funcs; f++) {
+                if (!step.win_func_cols[f].empty())
+                    func_inputs[f] = td_scan(g, step.win_func_cols[f].c_str());
+                else
+                    func_inputs[f] = dummy_input;
+            }
+
+            current = td_window_op(g, table_node,
+                part_keys.data(), n_part,
+                order_keys.data(), order_descs.data(), n_order,
+                func_kinds.data(), func_inputs.data(),
+                func_params.data(), n_funcs,
+                step.win_frame_type, step.win_frame_start, step.win_frame_end,
+                step.win_frame_start_n, step.win_frame_end_n);
         }
     }
 

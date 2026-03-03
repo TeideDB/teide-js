@@ -1,6 +1,7 @@
 import { Series } from './series';
 import { Query } from './query';
 import { Expr } from './expr';
+import { WindowOpts } from './types';
 
 export class Table {
     /** @internal */
@@ -47,6 +48,10 @@ export class Table {
 
     project(...exprs: Expr[]): Query {
         return new Query(this._native, this._ctx).project(...exprs);
+    }
+
+    window(opts: WindowOpts): Query {
+        return new Query(this._native, this._ctx).window(opts);
     }
 
     join(other: Table, opts: {
