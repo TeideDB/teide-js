@@ -545,12 +545,12 @@ git commit -m "feat: add NativeRel C++ class for CSR relationships"
 
 ---
 
-### Task 3: Graph Operation C++ Functions
+### Task 3: Graph Operation C++ Functions [DONE]
 
 **Files:**
-- Create: `src/graph_ops.h`
-- Create: `src/graph_ops.cpp`
-- Modify: `src/addon.cpp` (register graph functions)
+- [x] Create: `src/graph_ops.h`
+- [x] Create: `src/graph_ops.cpp`
+- [x] Modify: `src/addon.cpp` (register graph functions)
 
 **Context:**
 - These are standalone functions (not class methods), exported the same way as `collectSync`/`collect` in `src/query.cpp`.

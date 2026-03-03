@@ -7,6 +7,7 @@
 #include "table.h"
 #include "query.h"
 #include "rel.h"
+#include "graph_ops.h"
 #include "compat.h"
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -16,6 +17,14 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     NativeRel::Init(env, exports);
     exports.Set("collectSync", Napi::Function::New(env, QueryCollectSync));
     exports.Set("collect", Napi::Function::New(env, QueryCollect));
+    exports.Set("graphExpandSync", Napi::Function::New(env, GraphExpandSync));
+    exports.Set("graphExpand", Napi::Function::New(env, GraphExpand));
+    exports.Set("graphVarExpandSync", Napi::Function::New(env, GraphVarExpandSync));
+    exports.Set("graphVarExpand", Napi::Function::New(env, GraphVarExpand));
+    exports.Set("graphShortestPathSync", Napi::Function::New(env, GraphShortestPathSync));
+    exports.Set("graphShortestPath", Napi::Function::New(env, GraphShortestPath));
+    exports.Set("graphWcoJoinSync", Napi::Function::New(env, GraphWcoJoinSync));
+    exports.Set("graphWcoJoin", Napi::Function::New(env, GraphWcoJoin));
     return exports;
 }
 

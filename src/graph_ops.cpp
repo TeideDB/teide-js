@@ -1,0 +1,338 @@
+#include "graph_ops.h"
+#include "table.h"
+#include "rel.h"
+#include "compat.h"
+
+// Helper: execute a graph op that produces a table result
+static td_t* ExecuteGraphOp(td_t* tbl, std::function<td_op_t*(td_graph_t*)> build_op) {
+    td_graph_t* g = td_graph_new(tbl);
+    if (!g) return nullptr;
+
+    td_op_t* root = build_op(g);
+    if (!root) { td_graph_free(g); return nullptr; }
+
+    root = td_optimize(g, root);
+    td_t* result = td_execute(g, root);
+    td_graph_free(g);
+    return result;
+}
+
+// ---- Expand Sync ----
+// Args: nativeTable, colName, nativeRel, direction
+Napi::Value GraphExpandSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 4) {
+        Napi::TypeError::New(env, "graphExpandSync requires 4 arguments").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    std::string col_name = info[1].As<Napi::String>().Utf8Value();
+    NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[2].As<Napi::Object>());
+    uint8_t direction = (uint8_t)info[3].As<Napi::Number>().Uint32Value();
+
+    td_t* tbl = table->ptr();
+    td_rel_t* rel = rel_wrap->ptr();
+    TeideThread* thr = table->thread();
+
+    void* result = thr->dispatch_sync([tbl, col_name, rel, direction]() -> void* {
+        return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+            td_op_t* src = td_scan(g, col_name.c_str());
+            if (!src) return nullptr;
+            return td_expand(g, src, rel, direction);
+        });
+    });
+
+    td_t* res = (td_t*)result;
+    if (!res || TD_IS_ERR(res)) {
+        std::string msg = "graphExpandSync failed";
+        if (res && TD_IS_ERR(res)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    return NativeTable::Create(env, res, thr);
+}
+
+// ---- Expand Async ----
+Napi::Value GraphExpand(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 4) {
+        Napi::TypeError::New(env, "graphExpand requires 4 arguments").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    std::string col_name = info[1].As<Napi::String>().Utf8Value();
+    NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[2].As<Napi::Object>());
+    uint8_t direction = (uint8_t)info[3].As<Napi::Number>().Uint32Value();
+
+    td_t* tbl = table->ptr();
+    td_rel_t* rel = rel_wrap->ptr();
+    TeideThread* thr = table->thread();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphExpand", 0, 1);
+
+    thr->dispatch_async(
+        [tbl, col_name, rel, direction]() -> void* {
+            return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+                td_op_t* src = td_scan(g, col_name.c_str());
+                if (!src) return nullptr;
+                return td_expand(g, src, rel, direction);
+            });
+        },
+        tsfn,
+        [deferred, thr](Napi::Env env, void* data) {
+            td_t* res = (td_t*)data;
+            if (!res || TD_IS_ERR(res)) {
+                deferred.Reject(Napi::Error::New(env, "graphExpand failed").Value());
+            } else {
+                deferred.Resolve(NativeTable::Create(env, res, thr));
+            }
+        }
+    );
+    return deferred.Promise();
+}
+
+// ---- VarExpand Sync ----
+// Args: nativeTable, colName, nativeRel, direction, minDepth, maxDepth, trackPath
+Napi::Value GraphVarExpandSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 7) {
+        Napi::TypeError::New(env, "graphVarExpandSync requires 7 arguments").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    std::string col_name = info[1].As<Napi::String>().Utf8Value();
+    NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[2].As<Napi::Object>());
+    uint8_t direction = (uint8_t)info[3].As<Napi::Number>().Uint32Value();
+    uint8_t min_depth = (uint8_t)info[4].As<Napi::Number>().Uint32Value();
+    uint8_t max_depth = (uint8_t)info[5].As<Napi::Number>().Uint32Value();
+    bool track_path = info[6].As<Napi::Boolean>().Value();
+
+    td_t* tbl = table->ptr();
+    td_rel_t* rel = rel_wrap->ptr();
+    TeideThread* thr = table->thread();
+
+    void* result = thr->dispatch_sync([tbl, col_name, rel, direction, min_depth, max_depth, track_path]() -> void* {
+        return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+            td_op_t* src = td_scan(g, col_name.c_str());
+            if (!src) return nullptr;
+            return td_var_expand(g, src, rel, direction, min_depth, max_depth, track_path);
+        });
+    });
+
+    td_t* res = (td_t*)result;
+    if (!res || TD_IS_ERR(res)) {
+        std::string msg = "graphVarExpandSync failed";
+        if (res && TD_IS_ERR(res)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    return NativeTable::Create(env, res, thr);
+}
+
+// ---- VarExpand Async ----
+Napi::Value GraphVarExpand(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 7) {
+        Napi::TypeError::New(env, "graphVarExpand requires 7 arguments").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    std::string col_name = info[1].As<Napi::String>().Utf8Value();
+    NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[2].As<Napi::Object>());
+    uint8_t direction = (uint8_t)info[3].As<Napi::Number>().Uint32Value();
+    uint8_t min_depth = (uint8_t)info[4].As<Napi::Number>().Uint32Value();
+    uint8_t max_depth = (uint8_t)info[5].As<Napi::Number>().Uint32Value();
+    bool track_path = info[6].As<Napi::Boolean>().Value();
+
+    td_t* tbl = table->ptr();
+    td_rel_t* rel = rel_wrap->ptr();
+    TeideThread* thr = table->thread();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphVarExpand", 0, 1);
+
+    thr->dispatch_async(
+        [tbl, col_name, rel, direction, min_depth, max_depth, track_path]() -> void* {
+            return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+                td_op_t* src = td_scan(g, col_name.c_str());
+                if (!src) return nullptr;
+                return td_var_expand(g, src, rel, direction, min_depth, max_depth, track_path);
+            });
+        },
+        tsfn,
+        [deferred, thr](Napi::Env env, void* data) {
+            td_t* res = (td_t*)data;
+            if (!res || TD_IS_ERR(res)) {
+                deferred.Reject(Napi::Error::New(env, "graphVarExpand failed").Value());
+            } else {
+                deferred.Resolve(NativeTable::Create(env, res, thr));
+            }
+        }
+    );
+    return deferred.Promise();
+}
+
+// ---- ShortestPath Sync ----
+// Args: nativeTable, srcNodeId, dstNodeId, nativeRel, maxDepth
+Napi::Value GraphShortestPathSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 5) {
+        Napi::TypeError::New(env, "graphShortestPathSync requires 5 arguments").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    int64_t src_id = info[1].As<Napi::Number>().Int64Value();
+    int64_t dst_id = info[2].As<Napi::Number>().Int64Value();
+    NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[3].As<Napi::Object>());
+    uint8_t max_depth = (uint8_t)info[4].As<Napi::Number>().Uint32Value();
+
+    td_t* tbl = table->ptr();
+    td_rel_t* rel = rel_wrap->ptr();
+    TeideThread* thr = table->thread();
+
+    void* result = thr->dispatch_sync([tbl, src_id, dst_id, rel, max_depth]() -> void* {
+        return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+            td_op_t* src = td_const_i64(g, src_id);
+            td_op_t* dst = td_const_i64(g, dst_id);
+            if (!src || !dst) return nullptr;
+            return td_shortest_path(g, src, dst, rel, max_depth);
+        });
+    });
+
+    td_t* res = (td_t*)result;
+    if (!res || TD_IS_ERR(res)) {
+        std::string msg = "graphShortestPathSync failed";
+        if (res && TD_IS_ERR(res)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    return NativeTable::Create(env, res, thr);
+}
+
+// ---- ShortestPath Async ----
+Napi::Value GraphShortestPath(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 5) {
+        Napi::TypeError::New(env, "graphShortestPath requires 5 arguments").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    int64_t src_id = info[1].As<Napi::Number>().Int64Value();
+    int64_t dst_id = info[2].As<Napi::Number>().Int64Value();
+    NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[3].As<Napi::Object>());
+    uint8_t max_depth = (uint8_t)info[4].As<Napi::Number>().Uint32Value();
+
+    td_t* tbl = table->ptr();
+    td_rel_t* rel = rel_wrap->ptr();
+    TeideThread* thr = table->thread();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphShortestPath", 0, 1);
+
+    thr->dispatch_async(
+        [tbl, src_id, dst_id, rel, max_depth]() -> void* {
+            return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+                td_op_t* src = td_const_i64(g, src_id);
+                td_op_t* dst = td_const_i64(g, dst_id);
+                if (!src || !dst) return nullptr;
+                return td_shortest_path(g, src, dst, rel, max_depth);
+            });
+        },
+        tsfn,
+        [deferred, thr](Napi::Env env, void* data) {
+            td_t* res = (td_t*)data;
+            if (!res || TD_IS_ERR(res)) {
+                deferred.Reject(Napi::Error::New(env, "graphShortestPath failed").Value());
+            } else {
+                deferred.Resolve(NativeTable::Create(env, res, thr));
+            }
+        }
+    );
+    return deferred.Promise();
+}
+
+// ---- WcoJoin Sync ----
+// Args: nativeTable, nativeRelArray, nVars
+Napi::Value GraphWcoJoinSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 3) {
+        Napi::TypeError::New(env, "graphWcoJoinSync requires 3 arguments").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    Napi::Array rel_arr = info[1].As<Napi::Array>();
+    uint8_t n_vars = (uint8_t)info[2].As<Napi::Number>().Uint32Value();
+
+    uint8_t n_rels = (uint8_t)rel_arr.Length();
+    std::vector<td_rel_t*> rels(n_rels);
+    for (uint8_t i = 0; i < n_rels; i++) {
+        NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());
+        rels[i] = rw->ptr();
+    }
+
+    td_t* tbl = table->ptr();
+    TeideThread* thr = table->thread();
+
+    void* result = thr->dispatch_sync([tbl, rels, n_rels, n_vars]() -> void* {
+        return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+            return td_wco_join(g, const_cast<td_rel_t**>(rels.data()), n_rels, n_vars);
+        });
+    });
+
+    td_t* res = (td_t*)result;
+    if (!res || TD_IS_ERR(res)) {
+        std::string msg = "graphWcoJoinSync failed";
+        if (res && TD_IS_ERR(res)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    return NativeTable::Create(env, res, thr);
+}
+
+// ---- WcoJoin Async ----
+Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 3) {
+        Napi::TypeError::New(env, "graphWcoJoin requires 3 arguments").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    Napi::Array rel_arr = info[1].As<Napi::Array>();
+    uint8_t n_vars = (uint8_t)info[2].As<Napi::Number>().Uint32Value();
+
+    uint8_t n_rels = (uint8_t)rel_arr.Length();
+    std::vector<td_rel_t*> rels(n_rels);
+    for (uint8_t i = 0; i < n_rels; i++) {
+        NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());
+        rels[i] = rw->ptr();
+    }
+
+    td_t* tbl = table->ptr();
+    TeideThread* thr = table->thread();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphWcoJoin", 0, 1);
+
+    thr->dispatch_async(
+        [tbl, rels, n_rels, n_vars]() -> void* {
+            return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+                return td_wco_join(g, const_cast<td_rel_t**>(rels.data()), n_rels, n_vars);
+            });
+        },
+        tsfn,
+        [deferred, thr](Napi::Env env, void* data) {
+            td_t* res = (td_t*)data;
+            if (!res || TD_IS_ERR(res)) {
+                deferred.Reject(Napi::Error::New(env, "graphWcoJoin failed").Value());
+            } else {
+                deferred.Resolve(NativeTable::Create(env, res, thr));
+            }
+        }
+    );
+    return deferred.Promise();
+}
