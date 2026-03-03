@@ -116,6 +116,10 @@ Napi::Value NativeVector::NewSync(const Napi::CallbackInfo& info) {
     TeideThread* thread = &ctx->thread();
     std::string type_str = info[1].As<Napi::String>().Utf8Value();
     int64_t capacity = (int64_t)info[2].As<Napi::Number>().Int64Value();
+    if (capacity < 0) {
+        Napi::RangeError::New(env, "Capacity must be non-negative").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     int8_t type = ParseType(type_str);
     if (type == -128) {

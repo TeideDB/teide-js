@@ -212,6 +212,10 @@ Napi::Value TableNewSync(const Napi::CallbackInfo& info) {
     NativeContext* ctx = Napi::ObjectWrap<NativeContext>::Unwrap(info[0].As<Napi::Object>());
     TeideThread* thread = &ctx->thread();
     int64_t ncols = (int64_t)info[1].As<Napi::Number>().Int64Value();
+    if (ncols < 0) {
+        Napi::RangeError::New(env, "Column count must be non-negative").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thread->dispatch_sync([ncols]() -> void* {
         return (void*)td_table_new(ncols);

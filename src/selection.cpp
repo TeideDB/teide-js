@@ -76,6 +76,10 @@ Napi::Value NativeSelection::NewSync(const Napi::CallbackInfo& info) {
     NativeContext* ctx = Napi::ObjectWrap<NativeContext>::Unwrap(info[0].As<Napi::Object>());
     TeideThread* thread = &ctx->thread();
     int64_t nrows = (int64_t)info[1].As<Napi::Number>().Int64Value();
+    if (nrows < 0) {
+        Napi::RangeError::New(env, "Row count must be non-negative").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thread->dispatch_sync([nrows]() -> void* {
         return (void*)td_sel_new(nrows);

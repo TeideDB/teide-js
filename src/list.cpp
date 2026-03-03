@@ -101,6 +101,10 @@ Napi::Value NativeList::NewSync(const Napi::CallbackInfo& info) {
     NativeContext* ctx = Napi::ObjectWrap<NativeContext>::Unwrap(info[0].As<Napi::Object>());
     TeideThread* thread = &ctx->thread();
     int64_t capacity = (int64_t)info[1].As<Napi::Number>().Int64Value();
+    if (capacity < 0) {
+        Napi::RangeError::New(env, "Capacity must be non-negative").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thread->dispatch_sync([capacity]() -> void* {
         return (void*)td_list_new(capacity);
