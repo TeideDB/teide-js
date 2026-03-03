@@ -2,3 +2,7 @@ node_modules/
 dist/
 build/
 *.node
+vendor/teide/
+
+# ralphex progress logs
+.ralphex/progress/
