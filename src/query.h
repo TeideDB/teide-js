@@ -63,6 +63,13 @@ struct PlanStep {
     uint8_t win_frame_end = 2;                // TD_BOUND_CURRENT_ROW
     int64_t win_frame_start_n = 0;
     int64_t win_frame_end_n = 0;
+    // For 'windowJoin'
+    td_t* wjoin_right_table = nullptr;
+    std::string wjoin_time_key;
+    std::string wjoin_sym_key;
+    int64_t wjoin_lo = 0;
+    int64_t wjoin_hi = 0;
+    std::vector<std::shared_ptr<ExprNode>> wjoin_agg_exprs;
 };
 
 // Static query execution functions exposed to JS

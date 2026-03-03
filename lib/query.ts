@@ -1,6 +1,6 @@
 import { Expr } from './expr';
 import { Table, GroupBy } from './table';
-import { WindowOpts } from './types';
+import { WindowOpts, WindowJoinOpts } from './types';
 import path from 'path';
 
 const addon = require(path.join(__dirname, '..', 'build', 'Release', 'teidedb_addon.node'));
@@ -96,6 +96,19 @@ export class Query {
             leftKeys,
             rightKeys,
             joinType: how === 'inner' ? 0 : how === 'left' ? 1 : 2,
+        });
+        return this;
+    }
+
+    windowJoin(other: Table, opts: WindowJoinOpts): Query {
+        this._ops.push({
+            type: 'windowJoin',
+            rightTable: other._native,
+            timeKey: opts.timeKey,
+            symKey: opts.symKey,
+            windowLo: opts.windowLo,
+            windowHi: opts.windowHi,
+            aggs: opts.aggs,
         });
         return this;
     }

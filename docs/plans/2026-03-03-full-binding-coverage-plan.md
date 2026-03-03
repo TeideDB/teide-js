@@ -1420,7 +1420,7 @@ git commit -m "feat(query): add window functions with full frame specification"
 
 ### Task 2.5: Add windowJoin to Query
 
-- [ ] Add windowJoin (ASOF-style) operation to Query and wire through SerializePlan/ExecutePlan
+- [x] Add windowJoin (ASOF-style) operation to Query and wire through SerializePlan/ExecutePlan
 
 **Files:**
 - Modify: `lib/query.ts`

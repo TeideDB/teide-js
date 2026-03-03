@@ -179,6 +179,23 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
             }
             step.join_type = (uint8_t)op.Get("joinType").As<Napi::Number>().Uint32Value();
         }
+        else if (step.type == "windowJoin") {
+            NativeTable* right = Napi::ObjectWrap<NativeTable>::Unwrap(
+                op.Get("rightTable").As<Napi::Object>());
+            step.wjoin_right_table = right->ptr();
+            td_retain(step.wjoin_right_table);
+
+            step.wjoin_time_key = op.Get("timeKey").As<Napi::String>().Utf8Value();
+            step.wjoin_sym_key = op.Get("symKey").As<Napi::String>().Utf8Value();
+            step.wjoin_lo = op.Get("windowLo").As<Napi::Number>().Int64Value();
+            step.wjoin_hi = op.Get("windowHi").As<Napi::Number>().Int64Value();
+
+            Napi::Array aggs = op.Get("aggs").As<Napi::Array>();
+            for (uint32_t a = 0; a < aggs.Length(); a++) {
+                step.wjoin_agg_exprs.push_back(
+                    SerializeExpr(aggs.Get(a).As<Napi::Object>()));
+            }
+        }
         else if (step.type == "window") {
             // Partition keys
             Napi::Array pkeys = op.Get("partitionBy").As<Napi::Array>();
@@ -641,6 +658,37 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                               n_keys, step.join_type);
 
             td_release(step.join_right_table);
+        }
+        else if (step.type == "windowJoin") {
+            td_op_t* left_table_node = current ? current : td_const_table(g, tbl);
+            if (filter_pred) {
+                left_table_node = td_filter(g, left_table_node, filter_pred);
+                filter_pred = nullptr;
+            }
+
+            uint16_t right_id = td_graph_add_table(g, step.wjoin_right_table);
+            td_op_t* right_table_node = td_const_table(g, step.wjoin_right_table);
+
+            td_op_t* time_key = td_scan(g, step.wjoin_time_key.c_str());
+            td_op_t* sym_key = td_scan(g, step.wjoin_sym_key.c_str());
+
+            // Decompose agg expressions into (opcode, input) pairs
+            uint8_t n_aggs = (uint8_t)step.wjoin_agg_exprs.size();
+            std::vector<uint16_t> agg_ops(n_aggs);
+            std::vector<td_op_t*> agg_ins(n_aggs);
+            for (uint8_t a = 0; a < n_aggs; a++) {
+                td_op_t* alias_node = nullptr;
+                DecomposeAgg(g, step.wjoin_agg_exprs[a],
+                           agg_ops[a], agg_ins[a], alias_node);
+            }
+
+            current = td_window_join(g, left_table_node, right_table_node,
+                                     time_key, sym_key,
+                                     step.wjoin_lo, step.wjoin_hi,
+                                     agg_ops.data(), agg_ins.data(), n_aggs);
+
+            td_release(step.wjoin_right_table);
+            (void)right_id;
         }
         else if (step.type == "window") {
             td_op_t* table_node = current ? current : td_const_table(g, tbl);
