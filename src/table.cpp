@@ -364,8 +364,14 @@ static void* BuildTableFromCols(std::vector<ColSpec>& cols) {
                 memcpy(dst, cols[i].bool_data.data(), (size_t)len);
             }
         }
+        td_t* prev_tbl = tbl;
         tbl = td_table_add_col(tbl, name_id, vec);
         td_release(vec);
+        if (!tbl || TD_IS_ERR(tbl)) {
+            if (prev_tbl != tbl) td_release(prev_tbl);
+            return tbl ? tbl : TD_ERR_PTR(TD_ERR_OOM);
+        }
+        if (tbl != prev_tbl) td_release(prev_tbl);
     }
     return (void*)tbl;
 }

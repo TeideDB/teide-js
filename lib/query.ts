@@ -87,8 +87,11 @@ export class Query {
             leftKeys = keys;
             rightKeys = keys;
         } else {
-            leftKeys = Array.isArray(opts.leftOn!) ? opts.leftOn! : [opts.leftOn!];
-            rightKeys = Array.isArray(opts.rightOn!) ? opts.rightOn! : [opts.rightOn!];
+            if (!opts.leftOn || !opts.rightOn) {
+                throw new Error('join requires either "on" or both "leftOn" and "rightOn"');
+            }
+            leftKeys = Array.isArray(opts.leftOn) ? opts.leftOn : [opts.leftOn];
+            rightKeys = Array.isArray(opts.rightOn) ? opts.rightOn : [opts.rightOn];
             if (leftKeys.length !== rightKeys.length) {
                 throw new Error(`join leftOn and rightOn must have the same number of keys (got ${leftKeys.length} vs ${rightKeys.length})`);
             }
