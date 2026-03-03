@@ -341,7 +341,7 @@ Napi::Value NativeVector::Get(const Napi::CallbackInfo& info) {
         case TD_I64:
         case TD_TIMESTAMP: return Napi::BigInt::New(env, *(int64_t*)elem);
         case TD_DATE:
-        case TD_TIME:      return Napi::BigInt::New(env, (int64_t)*(int32_t*)elem);
+        case TD_TIME:      return Napi::Number::New(env, *(int32_t*)elem);
         case TD_I32:       return Napi::Number::New(env, *(int32_t*)elem);
         case TD_I16:       return Napi::Number::New(env, *(int16_t*)elem);
         case TD_U8:        return Napi::Number::New(env, *(uint8_t*)elem);

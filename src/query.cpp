@@ -670,6 +670,7 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                 td_t* col_result = td_execute(g2, expr_node);
 
                 if (!col_result || TD_IS_ERR(col_result)) {
+                    td_release(result);
                     td_graph_free(g2);
                     td_release(input_result);
                     td_graph_free(g);
@@ -684,14 +685,17 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                     int len = snprintf(buf, sizeof(buf), "_e%u", (unsigned)e);
                     name_id = td_sym_intern(buf, (size_t)len);
                 }
+                td_t* prev_result = result;
                 result = td_table_add_col(result, name_id, col_result);
                 td_release(col_result);
                 if (!result || TD_IS_ERR(result)) {
+                    if (prev_result != result) td_release(prev_result);
                     td_graph_free(g2);
                     td_release(input_result);
                     td_graph_free(g);
                     return result ? result : TD_ERR_PTR(TD_ERR_OOM);
                 }
+                if (result != prev_result) td_release(prev_result);
             }
 
             td_graph_free(g2);
