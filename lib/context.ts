@@ -76,6 +76,47 @@ export class Context {
         return new Table(nativeTable, this._native);
     }
 
+    saveSymbolsSync(filePath: string): void {
+        this._checkAlive();
+        this._native.saveSymbolsSync(filePath);
+    }
+
+    async saveSymbols(filePath: string): Promise<void> {
+        this._checkAlive();
+        await this._native.saveSymbols(filePath);
+    }
+
+    loadSymbolsSync(filePath: string): void {
+        this._checkAlive();
+        this._native.loadSymbolsSync(filePath);
+    }
+
+    async loadSymbols(filePath: string): Promise<void> {
+        this._checkAlive();
+        await this._native.loadSymbols(filePath);
+    }
+
+    saveMetaSync(table: Table, filePath: string): void {
+        this._checkAlive();
+        this._native.saveMetaSync(table._native, filePath);
+    }
+
+    async saveMeta(table: Table, filePath: string): Promise<void> {
+        this._checkAlive();
+        await this._native.saveMeta(table._native, filePath);
+    }
+
+    loadMetaSync(filePath: string): Series {
+        this._checkAlive();
+        return new Series(this._native.loadMetaSync(filePath));
+    }
+
+    async loadMeta(filePath: string): Promise<Series> {
+        this._checkAlive();
+        const nativeSeries = await this._native.loadMeta(filePath);
+        return new Series(nativeSeries);
+    }
+
     get _threadExternal(): any { return this._native.threadExternal; }
 
     graph(table: Table): Graph {

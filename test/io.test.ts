@@ -171,6 +171,84 @@ describe('I/O operations', () => {
     }
   });
 
+  it('saveSymbolsSync and loadSymbolsSync round-trip', () => {
+    const ctx = new Context();
+    const symPath = path.join(os.tmpdir(), `teide-sym-${Date.now()}.sym`);
+    try {
+      // Load a CSV to populate the symbol table
+      ctx.readCsvSync(SMALL);
+      ctx.saveSymbolsSync(symPath);
+      expect(fs.existsSync(symPath)).toBe(true);
+
+      // Create a new context and load the symbols
+      const ctx2 = new Context();
+      try {
+        ctx2.loadSymbolsSync(symPath);
+        // If we get here without error, the load worked
+      } finally {
+        ctx2.destroy();
+      }
+    } finally {
+      ctx.destroy();
+      if (fs.existsSync(symPath)) fs.unlinkSync(symPath);
+    }
+  });
+
+  it('saveSymbols and loadSymbols async round-trip', async () => {
+    const ctx = new Context();
+    const symPath = path.join(os.tmpdir(), `teide-sym-async-${Date.now()}.sym`);
+    try {
+      ctx.readCsvSync(SMALL);
+      await ctx.saveSymbols(symPath);
+      expect(fs.existsSync(symPath)).toBe(true);
+
+      const ctx2 = new Context();
+      try {
+        await ctx2.loadSymbols(symPath);
+      } finally {
+        ctx2.destroy();
+      }
+    } finally {
+      ctx.destroy();
+      if (fs.existsSync(symPath)) fs.unlinkSync(symPath);
+    }
+  });
+
+  it('saveMetaSync and loadMetaSync round-trip', () => {
+    const ctx = new Context();
+    const metaPath = path.join(os.tmpdir(), `teide-meta-${Date.now()}.meta`);
+    try {
+      const df = ctx.readCsvSync(SMALL);
+      ctx.saveMetaSync(df, metaPath);
+      expect(fs.existsSync(metaPath)).toBe(true);
+
+      const schema = ctx.loadMetaSync(metaPath);
+      // Schema is an I64 vector of column name symbol IDs
+      expect(schema.length).toBe(df.nCols);
+      expect(schema.dtype).toBe('i64');
+    } finally {
+      ctx.destroy();
+      if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
+    }
+  });
+
+  it('saveMeta and loadMeta async round-trip', async () => {
+    const ctx = new Context();
+    const metaPath = path.join(os.tmpdir(), `teide-meta-async-${Date.now()}.meta`);
+    try {
+      const df = ctx.readCsvSync(SMALL);
+      await ctx.saveMeta(df, metaPath);
+      expect(fs.existsSync(metaPath)).toBe(true);
+
+      const schema = await ctx.loadMeta(metaPath);
+      expect(schema.length).toBe(df.nCols);
+      expect(schema.dtype).toBe('i64');
+    } finally {
+      ctx.destroy();
+      if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
+    }
+  });
+
   it('writeCsv writes async', async () => {
     const ctx = new Context();
     const outPath = path.join(os.tmpdir(), `teide-test-async-${Date.now()}.csv`);

@@ -27,6 +27,14 @@ private:
     Napi::Value MmapColSync(const Napi::CallbackInfo& info);
     Napi::Value ReadPartedSync(const Napi::CallbackInfo& info);
     Napi::Value ReadParted(const Napi::CallbackInfo& info);
+    Napi::Value SaveSymbolsSync(const Napi::CallbackInfo& info);
+    Napi::Value SaveSymbols(const Napi::CallbackInfo& info);
+    Napi::Value LoadSymbolsSync(const Napi::CallbackInfo& info);
+    Napi::Value LoadSymbols(const Napi::CallbackInfo& info);
+    Napi::Value SaveMetaSync(const Napi::CallbackInfo& info);
+    Napi::Value SaveMeta(const Napi::CallbackInfo& info);
+    Napi::Value LoadMetaSync(const Napi::CallbackInfo& info);
+    Napi::Value LoadMeta(const Napi::CallbackInfo& info);
 
     std::unique_ptr<TeideThread> thread_;
     bool destroyed_ = false;

@@ -18,6 +18,14 @@ Napi::Object NativeContext::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("mmapColSync", &NativeContext::MmapColSync),
         InstanceMethod("readPartedSync", &NativeContext::ReadPartedSync),
         InstanceMethod("readParted", &NativeContext::ReadParted),
+        InstanceMethod("saveSymbolsSync", &NativeContext::SaveSymbolsSync),
+        InstanceMethod("saveSymbols", &NativeContext::SaveSymbols),
+        InstanceMethod("loadSymbolsSync", &NativeContext::LoadSymbolsSync),
+        InstanceMethod("loadSymbols", &NativeContext::LoadSymbols),
+        InstanceMethod("saveMetaSync", &NativeContext::SaveMetaSync),
+        InstanceMethod("saveMeta", &NativeContext::SaveMeta),
+        InstanceMethod("loadMetaSync", &NativeContext::LoadMetaSync),
+        InstanceMethod("loadMeta", &NativeContext::LoadMeta),
         InstanceAccessor("threadExternal", &NativeContext::GetThreadExternal, nullptr),
     });
     exports.Set("NativeContext", func);
@@ -428,6 +436,260 @@ Napi::Value NativeContext::ReadParted(const Napi::CallbackInfo& info) {
                 deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeTable::Create(env, tbl, thr));
+            }
+        }
+    );
+
+    return deferred.Promise();
+}
+
+Napi::Value NativeContext::SaveSymbolsSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "saveSymbolsSync(path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+
+    void* result = thread_->dispatch_sync([path]() -> void* {
+        td_err_t err = td_sym_save(path.c_str());
+        return (void*)(uintptr_t)err;
+    });
+
+    td_err_t err = (td_err_t)(uintptr_t)result;
+    if (err != TD_OK) {
+        Napi::Error::New(env, std::string("Failed to save symbols: ") + td_err_str(err))
+            .ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+}
+
+Napi::Value NativeContext::SaveSymbols(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "saveSymbols(path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "saveSymbols", 0, 1);
+
+    thread_->dispatch_async(
+        [path]() -> void* {
+            td_err_t err = td_sym_save(path.c_str());
+            return (void*)(uintptr_t)err;
+        },
+        tsfn,
+        [deferred](Napi::Env env, void* data) {
+            td_err_t err = (td_err_t)(uintptr_t)data;
+            if (err != TD_OK) {
+                deferred.Reject(Napi::Error::New(env,
+                    std::string("Failed to save symbols: ") + td_err_str(err)).Value());
+            } else {
+                deferred.Resolve(env.Undefined());
+            }
+        }
+    );
+
+    return deferred.Promise();
+}
+
+Napi::Value NativeContext::LoadSymbolsSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "loadSymbolsSync(path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+
+    void* result = thread_->dispatch_sync([path]() -> void* {
+        td_err_t err = td_sym_load(path.c_str());
+        return (void*)(uintptr_t)err;
+    });
+
+    td_err_t err = (td_err_t)(uintptr_t)result;
+    if (err != TD_OK) {
+        Napi::Error::New(env, std::string("Failed to load symbols: ") + td_err_str(err))
+            .ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+}
+
+Napi::Value NativeContext::LoadSymbols(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "loadSymbols(path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "loadSymbols", 0, 1);
+
+    thread_->dispatch_async(
+        [path]() -> void* {
+            td_err_t err = td_sym_load(path.c_str());
+            return (void*)(uintptr_t)err;
+        },
+        tsfn,
+        [deferred](Napi::Env env, void* data) {
+            td_err_t err = (td_err_t)(uintptr_t)data;
+            if (err != TD_OK) {
+                deferred.Reject(Napi::Error::New(env,
+                    std::string("Failed to load symbols: ") + td_err_str(err)).Value());
+            } else {
+                deferred.Resolve(env.Undefined());
+            }
+        }
+    );
+
+    return deferred.Promise();
+}
+
+Napi::Value NativeContext::SaveMetaSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsString()) {
+        Napi::TypeError::New(env, "saveMetaSync(table, path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    std::string path = info[1].As<Napi::String>().Utf8Value();
+    td_t* tbl = table->ptr();
+
+    void* result = thread_->dispatch_sync([tbl, path]() -> void* {
+        td_t* schema = td_table_schema(tbl);
+        if (!schema || TD_IS_ERR(schema)) return (void*)(uintptr_t)TD_ERR_TYPE;
+        td_err_t err = td_meta_save_d(schema, path.c_str());
+        return (void*)(uintptr_t)err;
+    });
+
+    td_err_t err = (td_err_t)(uintptr_t)result;
+    if (err != TD_OK) {
+        Napi::Error::New(env, std::string("Failed to save metadata: ") + td_err_str(err))
+            .ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+}
+
+Napi::Value NativeContext::SaveMeta(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsString()) {
+        Napi::TypeError::New(env, "saveMeta(table, path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    std::string path = info[1].As<Napi::String>().Utf8Value();
+    td_t* tbl = table->ptr();
+
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "saveMeta", 0, 1);
+
+    td_retain(tbl);
+    thread_->dispatch_async(
+        [tbl, path]() -> void* {
+            td_t* schema = td_table_schema(tbl);
+            td_err_t err = (!schema || TD_IS_ERR(schema)) ? TD_ERR_TYPE : td_meta_save_d(schema, path.c_str());
+            td_release(tbl);
+            return (void*)(uintptr_t)err;
+        },
+        tsfn,
+        [deferred](Napi::Env env, void* data) {
+            td_err_t err = (td_err_t)(uintptr_t)data;
+            if (err != TD_OK) {
+                deferred.Reject(Napi::Error::New(env,
+                    std::string("Failed to save metadata: ") + td_err_str(err)).Value());
+            } else {
+                deferred.Resolve(env.Undefined());
+            }
+        }
+    );
+
+    return deferred.Promise();
+}
+
+Napi::Value NativeContext::LoadMetaSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "loadMetaSync(path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+
+    void* result = thread_->dispatch_sync([path]() -> void* {
+        return (void*)td_meta_load_d(path.c_str());
+    });
+
+    td_t* schema = (td_t*)result;
+    if (!schema || TD_IS_ERR(schema)) {
+        std::string msg = "Failed to load metadata";
+        if (schema && TD_IS_ERR(schema)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(schema));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    int8_t dtype = td_type(schema);
+    return NativeSeries::Create(env, schema, ".d", dtype, thread_.get());
+}
+
+Napi::Value NativeContext::LoadMeta(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "loadMeta(path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "loadMeta", 0, 1);
+
+    TeideThread* thr = thread_.get();
+    thread_->dispatch_async(
+        [path]() -> void* {
+            return (void*)td_meta_load_d(path.c_str());
+        },
+        tsfn,
+        [deferred, thr](Napi::Env env, void* data) {
+            td_t* schema = (td_t*)data;
+            if (!schema || TD_IS_ERR(schema)) {
+                std::string msg = "Failed to load metadata";
+                if (schema && TD_IS_ERR(schema)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(schema));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
+            } else {
+                int8_t dtype = td_type(schema);
+                deferred.Resolve(NativeSeries::Create(env, schema, ".d", dtype, thr));
             }
         }
     );

@@ -1889,7 +1889,7 @@ Follow the same dispatch_sync pattern. `NativeSeries` needs a `thread_` accessor
 
 ### Task 3.6: Add symbol table and metadata persistence
 
-- [ ] Add symbol table and metadata save/load methods to Context
+- [x] Add symbol table and metadata save/load methods to Context
 
 **Files:**
 - Modify: `lib/context.ts`
