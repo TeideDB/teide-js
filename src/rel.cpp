@@ -333,7 +333,9 @@ Napi::Value NativeRel::Save(const Napi::CallbackInfo& info) {
 // calling td_release directly). The C free function is safe from any thread.
 Napi::Value NativeRel::Destroy(const Napi::CallbackInfo& info) {
     if (!destroyed_ && rel_) {
-        td_rel_free(rel_);
+        if (heap_alive_ && heap_alive_->load()) {
+            td_rel_free(rel_);
+        }
         rel_ = nullptr;
         destroyed_ = true;
     }

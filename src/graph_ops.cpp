@@ -125,6 +125,10 @@ Napi::Value GraphVarExpandSync(const Napi::CallbackInfo& info) {
         Napi::RangeError::New(env, "minDepth/maxDepth must be 0-255").ThrowAsJavaScriptException();
         return env.Undefined();
     }
+    if (min_depth_raw > max_depth_raw) {
+        Napi::RangeError::New(env, "minDepth must be <= maxDepth").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     uint8_t direction = (uint8_t)direction_raw;
     uint8_t min_depth = (uint8_t)min_depth_raw;
     uint8_t max_depth = (uint8_t)max_depth_raw;
@@ -169,6 +173,10 @@ Napi::Value GraphVarExpand(const Napi::CallbackInfo& info) {
 
     if (min_depth_raw > 255 || max_depth_raw > 255) {
         Napi::RangeError::New(env, "minDepth/maxDepth must be 0-255").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    if (min_depth_raw > max_depth_raw) {
+        Napi::RangeError::New(env, "minDepth must be <= maxDepth").ThrowAsJavaScriptException();
         return env.Undefined();
     }
     uint8_t direction = (uint8_t)direction_raw;
@@ -328,6 +336,10 @@ Napi::Value GraphWcoJoinSync(const Napi::CallbackInfo& info) {
     uint32_t n_vars_raw = info[2].As<Napi::Number>().Uint32Value();
     uint32_t n_rels_raw = rel_arr.Length();
 
+    if (n_vars_raw == 0 || n_rels_raw == 0) {
+        Napi::RangeError::New(env, "nVars and nRels must be >= 1").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     if (n_vars_raw > 255 || n_rels_raw > 255) {
         Napi::RangeError::New(env, "nVars and nRels must be 0-255").ThrowAsJavaScriptException();
         return env.Undefined();
@@ -373,6 +385,10 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
     uint32_t n_vars_raw = info[2].As<Napi::Number>().Uint32Value();
     uint32_t n_rels_raw = rel_arr.Length();
 
+    if (n_vars_raw == 0 || n_rels_raw == 0) {
+        Napi::RangeError::New(env, "nVars and nRels must be >= 1").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     if (n_vars_raw > 255 || n_rels_raw > 255) {
         Napi::RangeError::New(env, "nVars and nRels must be 0-255").ThrowAsJavaScriptException();
         return env.Undefined();
