@@ -23,6 +23,16 @@ export class Context {
         return new Table(nativeTable, this._native);
     }
 
+    writeCsvSync(table: Table, filePath: string): void {
+        this._checkAlive();
+        this._native.writeCsvSync(table._native, filePath);
+    }
+
+    async writeCsv(table: Table, filePath: string): Promise<void> {
+        this._checkAlive();
+        await this._native.writeCsv(table._native, filePath);
+    }
+
     get _threadExternal(): any { return this._native.threadExternal; }
 
     graph(table: Table): Graph {

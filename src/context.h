@@ -19,6 +19,8 @@ private:
     Napi::Value Destroy(const Napi::CallbackInfo& info);
     Napi::Value ReadCsvSync(const Napi::CallbackInfo& info);
     Napi::Value ReadCsv(const Napi::CallbackInfo& info);
+    Napi::Value WriteCsvSync(const Napi::CallbackInfo& info);
+    Napi::Value WriteCsv(const Napi::CallbackInfo& info);
 
     std::unique_ptr<TeideThread> thread_;
     bool destroyed_ = false;

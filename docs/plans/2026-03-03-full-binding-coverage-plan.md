@@ -1515,7 +1515,7 @@ git commit -m "feat(query): add windowJoin (ASOF-style) operation"
 
 ### Task 3.1: Add CSV write
 
-- [ ] Add writeCsvSync and writeCsv methods to Context and NativeContext
+- [x] Add writeCsvSync and writeCsv methods to Context and NativeContext
 
 **Files:**
 - Modify: `lib/context.ts`

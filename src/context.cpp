@@ -9,6 +9,8 @@ Napi::Object NativeContext::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("destroy", &NativeContext::Destroy),
         InstanceMethod("readCsvSync", &NativeContext::ReadCsvSync),
         InstanceMethod("readCsv", &NativeContext::ReadCsv),
+        InstanceMethod("writeCsvSync", &NativeContext::WriteCsvSync),
+        InstanceMethod("writeCsv", &NativeContext::WriteCsv),
         InstanceAccessor("threadExternal", &NativeContext::GetThreadExternal, nullptr),
     });
     exports.Set("NativeContext", func);
@@ -97,6 +99,72 @@ Napi::Value NativeContext::ReadCsv(const Napi::CallbackInfo& info) {
                 deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeTable::Create(env, tbl, thr));
+            }
+        }
+    );
+
+    return deferred.Promise();
+}
+
+Napi::Value NativeContext::WriteCsvSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsString()) {
+        Napi::TypeError::New(env, "writeCsvSync(table, path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    std::string path = info[1].As<Napi::String>().Utf8Value();
+    td_t* tbl = table->ptr();
+
+    void* result = thread_->dispatch_sync([tbl, path]() -> void* {
+        td_err_t err = td_write_csv(tbl, path.c_str());
+        return (void*)(uintptr_t)err;
+    });
+
+    td_err_t err = (td_err_t)(uintptr_t)result;
+    if (err != TD_OK) {
+        Napi::Error::New(env, std::string("Failed to write CSV: ") + td_err_str(err))
+            .ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+}
+
+Napi::Value NativeContext::WriteCsv(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsString()) {
+        Napi::TypeError::New(env, "writeCsv(table, path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    std::string path = info[1].As<Napi::String>().Utf8Value();
+    td_t* tbl = table->ptr();
+
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "writeCsv", 0, 1);
+
+    td_retain(tbl);
+    thread_->dispatch_async(
+        [tbl, path]() -> void* {
+            td_err_t err = td_write_csv(tbl, path.c_str());
+            td_release(tbl);
+            return (void*)(uintptr_t)err;
+        },
+        tsfn,
+        [deferred](Napi::Env env, void* data) {
+            td_err_t err = (td_err_t)(uintptr_t)data;
+            if (err != TD_OK) {
+                deferred.Reject(Napi::Error::New(env,
+                    std::string("Failed to write CSV: ") + td_err_str(err)).Value());
+            } else {
+                deferred.Resolve(env.Undefined());
             }
         }
     );
