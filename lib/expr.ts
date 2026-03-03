@@ -40,6 +40,14 @@ export class Expr {
     and(other: Expr): Expr { return binop('and', this, other); }
     or(other: Expr): Expr { return binop('or', this, other); }
 
+    // String binary
+    like(pattern: Expr | string): Expr { return binop('like', this, wrap(pattern)); }
+    ilike(pattern: Expr | string): Expr { return binop('ilike', this, wrap(pattern)); }
+
+    // Element-wise min/max
+    min2(other: Expr | number): Expr { return binop('min2', this, wrap(other)); }
+    max2(other: Expr | number): Expr { return binop('max2', this, wrap(other)); }
+
     // Unary
     not(): Expr { return new Expr('unop', { op: 'not', arg: this }); }
     neg(): Expr { return new Expr('unop', { op: 'neg', arg: this }); }

@@ -105,4 +105,28 @@ describe('Expr tree', () => {
     expect(e.kind).toBe('unop');
     expect(e.params.op).toBe('trim');
   });
+
+  it('builds like binop', () => {
+    const e = col('name').like('%alpha%');
+    expect(e.kind).toBe('binop');
+    expect(e.params.op).toBe('like');
+  });
+
+  it('builds ilike binop', () => {
+    const e = col('name').ilike('%ALPHA%');
+    expect(e.kind).toBe('binop');
+    expect(e.params.op).toBe('ilike');
+  });
+
+  it('builds min2 binop', () => {
+    const e = col('a').min2(col('b'));
+    expect(e.kind).toBe('binop');
+    expect(e.params.op).toBe('min2');
+  });
+
+  it('builds max2 binop', () => {
+    const e = col('a').max2(col('b'));
+    expect(e.kind).toBe('binop');
+    expect(e.params.op).toBe('max2');
+  });
 });

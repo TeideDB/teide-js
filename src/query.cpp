@@ -152,6 +152,10 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
         if (op == "ge")  return td_ge(g, left, right);
         if (op == "and") return td_and(g, left, right);
         if (op == "or")  return td_or(g, left, right);
+        if (op == "like")  return td_like(g, left, right);
+        if (op == "ilike") return td_ilike(g, left, right);
+        if (op == "min2")  return td_min2(g, left, right);
+        if (op == "max2")  return td_max2(g, left, right);
         return nullptr;
     }
     else if (node->kind == "unop") {

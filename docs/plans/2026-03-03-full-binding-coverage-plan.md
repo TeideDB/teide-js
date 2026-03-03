@@ -303,7 +303,7 @@ git commit -m "feat(expr): add string unary ops (upper, lower, strlen, trim)"
 
 ### Task 1.4: Add string binary ops (like, ilike) to Expr and EmitExpr
 
-- [ ] Add string binary ops (like, ilike, min2, max2) to Expr and wire through EmitExpr
+- [x] Add string binary ops (like, ilike, min2, max2) to Expr and wire through EmitExpr
 
 **Files:**
 - Modify: `lib/expr.ts`
