@@ -1644,7 +1644,7 @@ git commit -m "test: add comprehensive graph layer tests (rel, expand, varExpand
 
 ---
 
-### Task 8: Update CLAUDE.md
+### Task 8: Update CLAUDE.md [DONE]
 
 **Files:**
 - Modify: `CLAUDE.md`

@@ -55,12 +55,16 @@ A dedicated **Teide thread** owns the C heap and runs all Teide operations. The 
 | TS API | `lib/expr.ts` | Expression tree (column refs, literals, ops, aggregations) |
 | TS API | `lib/table.ts` | Table + GroupBy wrappers |
 | TS API | `lib/series.ts` | Column accessor with dtype-aware TypedArray resolution |
+| TS API | `lib/rel.ts` | Rel (CSR relationship) lifecycle: fromEdges, build, save, load, mmap |
+| TS API | `lib/graph.ts` | Graph traversal: expand, varExpand, shortestPath, wcoJoin |
 | NAPI | `src/teide_thread.h` | Background thread + SPSC work queue |
 | NAPI | `src/context.cpp` | NativeContext: CSV I/O dispatch |
 | NAPI | `src/query.cpp` | Expression serialization, plan compilation & execution |
 | NAPI | `src/table.cpp` | NativeTable: column access, retain/release |
 | NAPI | `src/series.cpp` | NativeSeries: zero-copy TypedArray creation |
 | NAPI | `src/compat.h` | C-atomic shim for C++/C17 interop |
+| NAPI | `src/rel.cpp` | NativeRel: CSR relationship wrapper |
+| NAPI | `src/graph_ops.cpp` | Graph operations: expand, var_expand, shortest_path, wco_join |
 | NAPI | `src/addon.cpp` | Module init, exports `collectSync`/`collect` |
 | C Core | `vendor/teide/include/teide/td.h` | Teide public API + type/opcode definitions |
 | Tests | `test/*.test.ts` | Vitest: smoke, table, expr (unit), e2e |
@@ -72,4 +76,6 @@ A dedicated **Teide thread** owns the C heap and runs all Teide operations. The 
 - **Expression opcodes**: Aggregation opcodes in `lib/expr.ts` must match C defines in `vendor/teide/include/teide/td.h` (e.g., `OP_SUM=50`, `OP_AVG=55`).
 - **NAPI classes**: Inherit `Napi::ObjectWrap<T>`, register via `DefineClass()`. Use `Napi::External<T>` for opaque C pointers.
 - **Memory**: `td_retain()`/`td_release()` for C object lifetime; skip release if `heap_alive_` is false.
+- **Graph opcodes**: Graph opcodes in `lib/graph.ts` direction constants must match C defines: `TD_DIR_FWD=0`, `TD_DIR_REV=1`, `TD_DIR_BOTH=2`.
+- **Vendor sync**: `vendor/teide/` is auto-synced from GitHub via `scripts/sync-vendor.sh`. Run `npm run clean` to force re-sync.
 - **Addon path**: Loaded at runtime from `build/Release/teidedb_addon.node` (relative to `dist/`).
