@@ -18,6 +18,7 @@
   "files": [
     "dist/",
     "src/",
+    "scripts/",
     "vendor/teide/src/",
     "vendor/teide/include/",
     "CMakeLists.txt"

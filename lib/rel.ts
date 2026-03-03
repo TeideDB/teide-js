@@ -88,7 +88,8 @@ export class Rel implements Disposable {
         this.destroy();
     }
 
-    private _checkAlive(): void {
+    /** @internal */
+    _checkAlive(): void {
         if (this._destroyed) throw new Error('Rel has been destroyed');
     }
 }

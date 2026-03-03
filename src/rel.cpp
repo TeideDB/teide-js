@@ -305,13 +305,18 @@ Napi::Value NativeRel::Save(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "relSave", 0, 1);
 
+    // Prevent GC of NativeRel during async save (no retain/release for td_rel_t)
+    auto self_ref = std::make_shared<Napi::ObjectReference>(
+        Napi::Persistent(info.This().As<Napi::Object>()));
+
     thread_->dispatch_async(
         [rel, dir]() -> void* {
             td_err_t err = td_rel_save(rel, dir.c_str());
             return (void*)(intptr_t)err;
         },
         tsfn,
-        [deferred](Napi::Env env, void* data) {
+        [deferred, self_ref](Napi::Env env, void* data) {
+            self_ref->Reset();
             intptr_t err = (intptr_t)data;
             if (err != 0) {
                 deferred.Reject(Napi::Error::New(env, "Failed to save relationship").Value());

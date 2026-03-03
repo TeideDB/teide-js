@@ -32,6 +32,7 @@ export class Graph {
     }
 
     expandSync(srcCol: string, rel: Rel, direction: Direction = 'fwd'): Table {
+        rel._checkAlive();
         const native = addon.graphExpandSync(
             this._table._native, srcCol, rel._native, DIR_MAP[direction]
         );
@@ -39,6 +40,7 @@ export class Graph {
     }
 
     async expand(srcCol: string, rel: Rel, direction: Direction = 'fwd'): Promise<Table> {
+        rel._checkAlive();
         const native = await addon.graphExpand(
             this._table._native, srcCol, rel._native, DIR_MAP[direction]
         );
@@ -46,6 +48,7 @@ export class Graph {
     }
 
     varExpandSync(startCol: string, rel: Rel, direction: Direction = 'fwd', opts?: VarExpandOpts): Table {
+        rel._checkAlive();
         const native = addon.graphVarExpandSync(
             this._table._native, startCol, rel._native, DIR_MAP[direction],
             opts?.minDepth ?? 1, opts?.maxDepth ?? 3, opts?.trackPath ?? false
@@ -54,6 +57,7 @@ export class Graph {
     }
 
     async varExpand(startCol: string, rel: Rel, direction: Direction = 'fwd', opts?: VarExpandOpts): Promise<Table> {
+        rel._checkAlive();
         const native = await addon.graphVarExpand(
             this._table._native, startCol, rel._native, DIR_MAP[direction],
             opts?.minDepth ?? 1, opts?.maxDepth ?? 3, opts?.trackPath ?? false
@@ -62,6 +66,7 @@ export class Graph {
     }
 
     shortestPathSync(src: number, dst: number, rel: Rel, opts?: ShortestPathOpts): Table {
+        rel._checkAlive();
         const native = addon.graphShortestPathSync(
             this._table._native, src, dst, rel._native, opts?.maxDepth ?? 10
         );
@@ -69,6 +74,7 @@ export class Graph {
     }
 
     async shortestPath(src: number, dst: number, rel: Rel, opts?: ShortestPathOpts): Promise<Table> {
+        rel._checkAlive();
         const native = await addon.graphShortestPath(
             this._table._native, src, dst, rel._native, opts?.maxDepth ?? 10
         );
@@ -76,6 +82,7 @@ export class Graph {
     }
 
     wcoJoinSync(rels: Rel[], opts: WcoJoinOpts): Table {
+        rels.forEach(r => r._checkAlive());
         const native = addon.graphWcoJoinSync(
             this._table._native, rels.map(r => r._native), opts.nVars
         );
@@ -83,6 +90,7 @@ export class Graph {
     }
 
     async wcoJoin(rels: Rel[], opts: WcoJoinOpts): Promise<Table> {
+        rels.forEach(r => r._checkAlive());
         const native = await addon.graphWcoJoin(
             this._table._native, rels.map(r => r._native), opts.nVars
         );
