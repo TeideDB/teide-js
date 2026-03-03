@@ -1908,7 +1908,7 @@ C calls: `td_sym_save(path)`, `td_sym_load(path)`, `td_meta_save_d(schema, path)
 
 ### Task 4.1: Implement Table.fromArraysSync
 
-- [ ] Implement Table.fromArraysSync for constructing tables from JS arrays and TypedArrays
+- [x] Implement Table.fromArraysSync for constructing tables from JS arrays and TypedArrays
 
 **Files:**
 - Modify: `lib/table.ts` — add static factory
