@@ -2135,7 +2135,7 @@ Follow the same pattern as 4.1 but with `dispatch_async`. Serialize on V8 thread
 
 ### Task 5.1: Add NativeVector class
 
-- [ ] Add NativeVector class wrapping td_vec_* API with Vector TypeScript wrapper
+- [x] Add NativeVector class wrapping td_vec_* API with Vector TypeScript wrapper
 
 **Files:**
 - Create: `src/vector.h`
