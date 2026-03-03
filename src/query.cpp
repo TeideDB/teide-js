@@ -167,6 +167,10 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
         if (op == "ceil")   return td_ceil_op(g, arg);
         if (op == "floor")  return td_floor_op(g, arg);
         if (op == "isnull") return td_isnull(g, arg);
+        if (op == "upper")  return td_upper(g, arg);
+        if (op == "lower")  return td_lower(g, arg);
+        if (op == "strlen") return td_strlen(g, arg);
+        if (op == "trim")   return td_trim_op(g, arg);
         return nullptr;
     }
     else if (node->kind == "agg") {

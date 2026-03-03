@@ -45,3 +45,19 @@ describe('Extended aggregations', () => {
     }
   });
 });
+
+describe('String unary ops', () => {
+  it('strlen filters products by name length', () => {
+    const ctx = new Context();
+    try {
+      const df = ctx.readCsvSync(SALES);
+      // Filter products with name length > 4 (laptop, phone, tablet, shirt, pants, jacket, bread, cheese)
+      const result = df.filter(col('product').strlen().gt(4)).collectSync();
+      expect(result.nRows).toBeGreaterThan(0);
+      // "milk" has length 4 so should be filtered out
+      expect(result.nRows).toBeLessThan(9);
+    } finally {
+      ctx.destroy();
+    }
+  });
+});

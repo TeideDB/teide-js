@@ -51,6 +51,12 @@ export class Expr {
     floor(): Expr { return new Expr('unop', { op: 'floor', arg: this }); }
     isNull(): Expr { return new Expr('unop', { op: 'isnull', arg: this }); }
 
+    // String unary
+    upper(): Expr { return new Expr('unop', { op: 'upper', arg: this }); }
+    lower(): Expr { return new Expr('unop', { op: 'lower', arg: this }); }
+    strlen(): Expr { return new Expr('unop', { op: 'strlen', arg: this }); }
+    trim(): Expr { return new Expr('unop', { op: 'trim', arg: this }); }
+
     // Aggregations
     sum(): Expr { return new Expr('agg', { op: OP_SUM, arg: this }); }
     mean(): Expr { return new Expr('agg', { op: OP_AVG, arg: this }); }

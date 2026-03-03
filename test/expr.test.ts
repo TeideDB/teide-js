@@ -81,4 +81,28 @@ describe('Expr tree', () => {
     expect(e.kind).toBe('agg');
     expect(e.params.op).toBe(75); // OP_VAR_POP
   });
+
+  it('builds upper unary op', () => {
+    const e = col('name').upper();
+    expect(e.kind).toBe('unop');
+    expect(e.params.op).toBe('upper');
+  });
+
+  it('builds lower unary op', () => {
+    const e = col('name').lower();
+    expect(e.kind).toBe('unop');
+    expect(e.params.op).toBe('lower');
+  });
+
+  it('builds strlen unary op', () => {
+    const e = col('name').strlen();
+    expect(e.kind).toBe('unop');
+    expect(e.params.op).toBe('strlen');
+  });
+
+  it('builds trim unary op', () => {
+    const e = col('name').trim();
+    expect(e.kind).toBe('unop');
+    expect(e.params.op).toBe('trim');
+  });
 });

@@ -200,7 +200,7 @@ git commit -m "feat(query): wire countDistinct aggregation through EmitExpr"
 
 ### Task 1.3: Add string unary ops to Expr and EmitExpr
 
-- [ ] Add string unary ops (upper, lower, strlen, trim) to Expr and wire through EmitExpr
+- [x] Add string unary ops (upper, lower, strlen, trim) to Expr and wire through EmitExpr
 
 **Files:**
 - Modify: `lib/expr.ts`
