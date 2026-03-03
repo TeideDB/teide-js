@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "WebFetch(domain:teidedb.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:rs.teidedb.com)",
+      "WebSearch"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
