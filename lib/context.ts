@@ -4,6 +4,12 @@ import path from 'path';
 
 const addon = require(path.join(__dirname, '..', 'build', 'Release', 'teidedb_addon.node'));
 
+export interface CsvReadOpts {
+    delimiter?: string;
+    header?: boolean;
+    columnTypes?: string[];
+}
+
 export class Context {
     private _native: any;
     private _destroyed = false;
@@ -12,14 +18,19 @@ export class Context {
         this._native = new addon.NativeContext();
     }
 
-    readCsvSync(filePath: string): Table {
+    readCsvSync(filePath: string, opts?: CsvReadOpts): Table {
         this._checkAlive();
-        return new Table(this._native.readCsvSync(filePath), this._native);
+        return new Table(
+            opts ? this._native.readCsvSync(filePath, opts) : this._native.readCsvSync(filePath),
+            this._native
+        );
     }
 
-    async readCsv(filePath: string): Promise<Table> {
+    async readCsv(filePath: string, opts?: CsvReadOpts): Promise<Table> {
         this._checkAlive();
-        const nativeTable = await this._native.readCsv(filePath);
+        const nativeTable = opts
+            ? await this._native.readCsv(filePath, opts)
+            : await this._native.readCsv(filePath);
         return new Table(nativeTable, this._native);
     }
 

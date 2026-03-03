@@ -1654,7 +1654,7 @@ git commit -m "feat(io): add writeCsvSync and writeCsv"
 
 ### Task 3.2: Add CSV read with options
 
-- [ ] Add CSV read options (delimiter, header, columnTypes) to readCsvSync and readCsv
+- [x] Add CSV read options (delimiter, header, columnTypes) to readCsvSync and readCsv
 
 **Files:**
 - Modify: `src/context.h`

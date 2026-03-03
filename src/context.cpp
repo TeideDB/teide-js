@@ -47,6 +47,35 @@ Napi::Value NativeContext::Destroy(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
+static void parse_csv_opts(const Napi::Object& opts, char& delimiter, bool& header,
+                           std::vector<int8_t>& col_types) {
+    if (opts.Has("delimiter") && opts.Get("delimiter").IsString()) {
+        std::string d = opts.Get("delimiter").As<Napi::String>().Utf8Value();
+        if (!d.empty()) delimiter = d[0];
+    }
+    if (opts.Has("header") && opts.Get("header").IsBoolean()) {
+        header = opts.Get("header").As<Napi::Boolean>().Value();
+    }
+    if (opts.Has("columnTypes") && opts.Get("columnTypes").IsArray()) {
+        Napi::Array types = opts.Get("columnTypes").As<Napi::Array>();
+        for (uint32_t i = 0; i < types.Length(); i++) {
+            std::string t = types.Get(i).As<Napi::String>().Utf8Value();
+            int8_t td_type = TD_F64;
+            if (t == "bool")           td_type = TD_BOOL;
+            else if (t == "u8")        td_type = TD_U8;
+            else if (t == "i16")       td_type = TD_I16;
+            else if (t == "i32")       td_type = TD_I32;
+            else if (t == "i64")       td_type = TD_I64;
+            else if (t == "f64")       td_type = TD_F64;
+            else if (t == "sym")       td_type = TD_SYM;
+            else if (t == "date")      td_type = TD_DATE;
+            else if (t == "time")      td_type = TD_TIME;
+            else if (t == "timestamp") td_type = TD_TIMESTAMP;
+            col_types.push_back(td_type);
+        }
+    }
+}
+
 Napi::Value NativeContext::ReadCsvSync(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     check_alive(env);
@@ -58,9 +87,27 @@ Napi::Value NativeContext::ReadCsvSync(const Napi::CallbackInfo& info) {
     }
 
     std::string path = info[0].As<Napi::String>().Utf8Value();
-    void* result = thread_->dispatch_sync([path]() -> void* {
-        return (void*)td_read_csv(path.c_str());
-    });
+    bool has_opts = info.Length() >= 2 && info[1].IsObject();
+    char delimiter = ',';
+    bool header = true;
+    std::vector<int8_t> col_types;
+
+    if (has_opts) {
+        parse_csv_opts(info[1].As<Napi::Object>(), delimiter, header, col_types);
+    }
+
+    void* result;
+    if (has_opts) {
+        result = thread_->dispatch_sync([path, delimiter, header, col_types]() -> void* {
+            return (void*)td_read_csv_opts(path.c_str(), delimiter, header,
+                                           col_types.empty() ? nullptr : col_types.data(),
+                                           (int32_t)col_types.size());
+        });
+    } else {
+        result = thread_->dispatch_sync([path]() -> void* {
+            return (void*)td_read_csv(path.c_str());
+        });
+    }
 
     td_t* tbl = (td_t*)result;
     if (!tbl || TD_IS_ERR(tbl)) {
@@ -84,24 +131,54 @@ Napi::Value NativeContext::ReadCsv(const Napi::CallbackInfo& info) {
     }
 
     std::string path = info[0].As<Napi::String>().Utf8Value();
+    bool has_opts = info.Length() >= 2 && info[1].IsObject();
+    char delimiter = ',';
+    bool header = true;
+    std::vector<int8_t> col_types;
+
+    if (has_opts) {
+        parse_csv_opts(info[1].As<Napi::Object>(), delimiter, header, col_types);
+    }
+
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "readCsv", 0, 1);
 
     TeideThread* thr = thread_.get();
-    thread_->dispatch_async(
-        [path]() -> void* { return (void*)td_read_csv(path.c_str()); },
-        tsfn,
-        [deferred, thr](Napi::Env env, void* data) {
-            td_t* tbl = (td_t*)data;
-            if (!tbl || TD_IS_ERR(tbl)) {
-                std::string msg = "Failed to read CSV";
-                if (tbl && TD_IS_ERR(tbl)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(tbl));
-                deferred.Reject(Napi::Error::New(env, msg).Value());
-            } else {
-                deferred.Resolve(NativeTable::Create(env, tbl, thr));
+    if (has_opts) {
+        thread_->dispatch_async(
+            [path, delimiter, header, col_types]() -> void* {
+                return (void*)td_read_csv_opts(path.c_str(), delimiter, header,
+                                               col_types.empty() ? nullptr : col_types.data(),
+                                               (int32_t)col_types.size());
+            },
+            tsfn,
+            [deferred, thr](Napi::Env env, void* data) {
+                td_t* tbl = (td_t*)data;
+                if (!tbl || TD_IS_ERR(tbl)) {
+                    std::string msg = "Failed to read CSV";
+                    if (tbl && TD_IS_ERR(tbl)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(tbl));
+                    deferred.Reject(Napi::Error::New(env, msg).Value());
+                } else {
+                    deferred.Resolve(NativeTable::Create(env, tbl, thr));
+                }
             }
-        }
-    );
+        );
+    } else {
+        thread_->dispatch_async(
+            [path]() -> void* { return (void*)td_read_csv(path.c_str()); },
+            tsfn,
+            [deferred, thr](Napi::Env env, void* data) {
+                td_t* tbl = (td_t*)data;
+                if (!tbl || TD_IS_ERR(tbl)) {
+                    std::string msg = "Failed to read CSV";
+                    if (tbl && TD_IS_ERR(tbl)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(tbl));
+                    deferred.Reject(Napi::Error::New(env, msg).Value());
+                } else {
+                    deferred.Resolve(NativeTable::Create(env, tbl, thr));
+                }
+            }
+        );
+    }
 
     return deferred.Promise();
 }
