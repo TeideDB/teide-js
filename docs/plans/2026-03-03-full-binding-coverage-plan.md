@@ -2337,7 +2337,7 @@ Wrap `td_list_new`, `td_list_append`, `td_list_get`, `td_list_set`.
 
 ### Task 5.4: Add NativeSelection class
 
-- [ ] Add NativeSelection class wrapping td_sel_* API with Selection TypeScript wrapper
+- [x] Add NativeSelection class wrapping td_sel_* API with Selection TypeScript wrapper
 
 **Files:**
 - Create: `src/selection.h`, `src/selection.cpp`

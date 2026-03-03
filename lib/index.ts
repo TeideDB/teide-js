@@ -12,3 +12,4 @@ export type { WindowFunc, WindowFuncKind, FrameBound, WindowOpts, JoinOpts, Wind
 export { Vector } from './vector';
 export { Atom } from './atom';
 export { List } from './list';
+export { Selection } from './selection';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Context, Vector, Atom, List } from '../lib';
+import { Context, Vector, Atom, List, Selection } from '../lib';
 
 describe('Vector API', () => {
   it('creates and appends to a vector', () => {
@@ -255,6 +255,59 @@ describe('List API', () => {
       const r2 = list.get(2) as List;
       expect(r2.type).toBe('list');
       expect(r2.length).toBe(1);
+    } finally {
+      ctx.destroy();
+    }
+  });
+});
+
+describe('Selection API', () => {
+  it('creates an empty selection with newSync', () => {
+    const ctx = new Context();
+    try {
+      const sel = Selection.newSync(ctx, 100);
+      expect(sel.nRows).toBe(100);
+      expect(sel.type).toBe('sel');
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('creates selection from bool predicate vector', () => {
+    const ctx = new Context();
+    try {
+      // Create a bool vector: [true, false, true, false, true]
+      const boolVec = Vector.fromRawSync(ctx, 'bool', new Uint8Array([1, 0, 1, 0, 1]));
+      const sel = Selection.fromPredSync(boolVec);
+      expect(sel.type).toBe('sel');
+      expect(sel.nRows).toBe(5);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('AND combines two selections', () => {
+    const ctx = new Context();
+    try {
+      const v1 = Vector.fromRawSync(ctx, 'bool', new Uint8Array([1, 1, 0, 0, 1]));
+      const v2 = Vector.fromRawSync(ctx, 'bool', new Uint8Array([1, 0, 1, 0, 1]));
+      const s1 = Selection.fromPredSync(v1);
+      const s2 = Selection.fromPredSync(v2);
+      const combined = s1.and(s2);
+      expect(combined.type).toBe('sel');
+      expect(combined.nRows).toBe(5);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('recompute does not crash', () => {
+    const ctx = new Context();
+    try {
+      const boolVec = Vector.fromRawSync(ctx, 'bool', new Uint8Array([1, 0, 1]));
+      const sel = Selection.fromPredSync(boolVec);
+      sel.recompute();
+      expect(sel.nRows).toBe(3);
     } finally {
       ctx.destroy();
     }
