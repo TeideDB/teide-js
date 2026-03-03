@@ -105,6 +105,19 @@ describe('Rel', () => {
         }
     });
 
+    it('buildSync builds CSR from FK column', () => {
+        const ctx = new Context();
+        try {
+            const edges = ctx.readCsvSync(EDGES);
+            // Use 'dst' column as FK referencing target nodes 0-4
+            const rel = Rel.buildSync(edges, 'dst', { nTargetNodes: 5, sort: true });
+            expect(rel).toBeDefined();
+            rel.destroy();
+        } finally {
+            ctx.destroy();
+        }
+    });
+
     it('Symbol.dispose cleans up', () => {
         const ctx = new Context();
         try {
@@ -115,6 +128,29 @@ describe('Rel', () => {
             }
             // Should not crash
         } finally {
+            ctx.destroy();
+        }
+    });
+
+    it('mmap async loads relationship', async () => {
+        const ctx = new Context();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-rel-'));
+        try {
+            const edges = ctx.readCsvSync(EDGES);
+            const rel = Rel.fromEdgesSync(edges, 'src', 'dst', { nSrc: 5, nDst: 5, sort: true });
+            rel.saveSync(dir);
+
+            const rel2 = await Rel.mmap(ctx, dir);
+
+            const nodes = ctx.readCsvSync(NODES);
+            const g = ctx.graph(nodes);
+            const result = g.expandSync('node', rel2, 'fwd');
+            expect(result.nRows).toBe(2);
+
+            rel.destroy();
+            rel2.destroy();
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
             ctx.destroy();
         }
     });
@@ -194,6 +230,27 @@ describe('Graph - varExpand', () => {
             // Node 0 can reach: depth 1 -> {1,2}, depth 2 -> {3}, depth 3 -> {4}
             // 4 distinct (node, depth) pairs
             expect(result.nRows).toBe(4);
+            rel.destroy();
+        } finally {
+            ctx.destroy();
+        }
+    });
+
+    it('varExpand with trackPath returns path column', () => {
+        const ctx = new Context();
+        try {
+            const edges = ctx.readCsvSync(EDGES);
+            const rel = Rel.fromEdgesSync(edges, 'src', 'dst', { nSrc: 5, nDst: 5, sort: true });
+
+            const nodes = ctx.readCsvSync(NODES);
+            const g = ctx.graph(nodes);
+            const result = g.varExpandSync('node', rel, 'fwd', {
+                minDepth: 1, maxDepth: 3, trackPath: true
+            });
+
+            expect(result.nRows).toBeGreaterThan(0);
+            // With trackPath, result should have more columns than without
+            expect(result.nCols).toBeGreaterThanOrEqual(2);
             rel.destroy();
         } finally {
             ctx.destroy();
@@ -281,6 +338,36 @@ describe('Graph - wcoJoin', () => {
             rel.destroy();
         } finally {
             fs.rmSync(dir, { recursive: true, force: true });
+            ctx.destroy();
+        }
+    });
+});
+
+describe('Graph - error handling', () => {
+    it('throws after context is destroyed', () => {
+        const ctx = new Context();
+        const edges = ctx.readCsvSync(EDGES);
+        const rel = Rel.fromEdgesSync(edges, 'src', 'dst', { nSrc: 5, nDst: 5, sort: true });
+        const nodes = ctx.readCsvSync(NODES);
+        const g = ctx.graph(nodes);
+
+        ctx.destroy();
+
+        expect(() => g.expandSync('node', rel, 'fwd')).toThrow();
+    });
+
+    it('throws for invalid column name', () => {
+        const ctx = new Context();
+        try {
+            const edges = ctx.readCsvSync(EDGES);
+            const rel = Rel.fromEdgesSync(edges, 'src', 'dst', { nSrc: 5, nDst: 5, sort: true });
+
+            const nodes = ctx.readCsvSync(NODES);
+            const g = ctx.graph(nodes);
+
+            expect(() => g.expandSync('nonexistent', rel, 'fwd')).toThrow();
+            rel.destroy();
+        } finally {
             ctx.destroy();
         }
     });

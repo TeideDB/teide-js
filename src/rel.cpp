@@ -13,6 +13,7 @@ Napi::Object NativeRel::Init(Napi::Env env, Napi::Object exports) {
         StaticMethod("loadSync", &NativeRel::LoadSync),
         StaticMethod("load", &NativeRel::Load),
         StaticMethod("mmapSync", &NativeRel::MmapSync),
+        StaticMethod("mmap", &NativeRel::Mmap),
         InstanceMethod("saveSync", &NativeRel::SaveSync),
         InstanceMethod("save", &NativeRel::Save),
         InstanceMethod("destroy", &NativeRel::Destroy),
@@ -326,6 +327,41 @@ Napi::Value NativeRel::MmapSync(const Napi::CallbackInfo& info) {
         return env.Undefined();
     }
     return NativeRel::Create(env, rel, thr);
+}
+
+// --- Mmap (async) ---
+Napi::Value NativeRel::Mmap(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 2) {
+        Napi::TypeError::New(env, "mmap requires (dir, threadExternal)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    std::string dir = info[0].As<Napi::String>().Utf8Value();
+    TeideThread* thr = info[1].As<Napi::External<TeideThread>>().Data();
+    if (!thr->is_running()) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Context has been shut down").Value());
+        return d.Promise();
+    }
+
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "relMmap", 0, 1);
+
+    thr->dispatch_async(
+        [dir]() -> void* { return (void*)td_rel_mmap(dir.c_str()); },
+        tsfn,
+        [deferred, thr](Napi::Env env, void* data) {
+            td_rel_t* rel = (td_rel_t*)data;
+            if (!rel || TD_IS_ERR(rel)) {
+                std::string msg = "Failed to mmap relationship";
+                if (rel && TD_IS_ERR(rel)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(rel));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
+            } else {
+                deferred.Resolve(NativeRel::Create(env, rel, thr));
+            }
+        }
+    );
+    return deferred.Promise();
 }
 
 // --- SaveSync(dir) ---

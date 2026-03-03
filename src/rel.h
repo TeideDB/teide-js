@@ -29,6 +29,7 @@ private:
     static Napi::Value LoadSync(const Napi::CallbackInfo& info);
     static Napi::Value Load(const Napi::CallbackInfo& info);
     static Napi::Value MmapSync(const Napi::CallbackInfo& info);
+    static Napi::Value Mmap(const Napi::CallbackInfo& info);
 
     // Instance methods
     Napi::Value SaveSync(const Napi::CallbackInfo& info);

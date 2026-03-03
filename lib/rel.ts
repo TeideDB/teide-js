@@ -67,6 +67,11 @@ export class Rel implements Disposable {
         return new Rel(native);
     }
 
+    static async mmap(ctx: { _threadExternal: any }, dir: string): Promise<Rel> {
+        const native = await addon.NativeRel.mmap(dir, ctx._threadExternal);
+        return new Rel(native);
+    }
+
     saveSync(dir: string): void {
         this._checkAlive();
         this._native.saveSync(dir);

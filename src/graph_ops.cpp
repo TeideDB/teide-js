@@ -435,9 +435,9 @@ Napi::Value GraphWcoJoinSync(const Napi::CallbackInfo& info) {
 
     td_t* tbl = table->ptr();
 
-    void* result = thr->dispatch_sync([tbl, rels, n_rels, n_vars]() -> void* {
+    void* result = thr->dispatch_sync([tbl, rels, n_rels, n_vars]() mutable -> void* {
         return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
-            return td_wco_join(g, const_cast<td_rel_t**>(rels.data()), n_rels, n_vars);
+            return td_wco_join(g, rels.data(), n_rels, n_vars);
         });
     });
 
@@ -504,9 +504,9 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
 
     td_retain(tbl);
     thr->dispatch_async(
-        [tbl, rels, n_rels, n_vars]() -> void* {
+        [tbl, rels, n_rels, n_vars]() mutable -> void* {
             void* r = (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
-                return td_wco_join(g, const_cast<td_rel_t**>(rels.data()), n_rels, n_vars);
+                return td_wco_join(g, rels.data(), n_rels, n_vars);
             });
             td_release(tbl);
             return r;
