@@ -86,15 +86,12 @@ describe('Extended query ops', () => {
     }
   });
 
-  it('windowJoin (ASOF-style) between trades and quotes', () => {
+  it('windowJoin (ASOF-style) throws not-yet-implemented error', () => {
     const ctx = new Context();
     try {
       const trades = ctx.readCsvSync(TRADES);
       const quotes = ctx.readCsvSync(QUOTES);
 
-      // Verify the API exists and plumbing works.
-      // The C core's td_window_join currently returns "not yet implemented",
-      // so we verify the call reaches the C layer and throws the expected error.
       expect(typeof trades.windowJoin).toBe('function');
 
       const query = trades.windowJoin(quotes, {
@@ -106,16 +103,8 @@ describe('Extended query ops', () => {
       });
 
       // The C core has td_window_join declared but not yet implemented.
-      // Once implemented, this test should be updated to check results.
-      try {
-        const result = query.collectSync();
-        // If the C core implements it, verify the result
-        expect(result.nRows).toBeGreaterThan(0);
-        expect(result.columns).toContain('avg_bid');
-      } catch (err: any) {
-        // Expected: C core returns "not yet implemented"
-        expect(err.message).toContain('not yet implemented');
-      }
+      // Once implemented, this test should be updated to check actual results.
+      expect(() => query.collectSync()).toThrow(/not yet implemented/);
     } finally {
       ctx.destroy();
     }

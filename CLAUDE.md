@@ -56,6 +56,17 @@ CSR relationships (`Rel`) must be built first from an edge table or loaded from 
 
 `NativeSeries` exposes C heap memory directly as JS TypedArrays via `napi_create_external_typed_array`. No data is copied. The `heap_alive_` atomic flag prevents use-after-free when GC runs Series destructors after heap teardown.
 
+### Low-Level Data API
+
+Vector, Atom, List, and Selection classes provide direct access to Teide C data structures without the lazy Query builder:
+
+1. **Create** (TypeScript): User calls a static factory like `Vector.newSync(ctx, 'f64', 10)`.
+2. **Dispatch** (V8 thread): The call routes through `dispatch_sync()` to the Teide thread.
+3. **Execute** (Teide thread): Calls the corresponding `td_vec_*`, `td_list_*`, or `td_sel_*` C function.
+4. **Return**: Result wrapped in `NativeVector`/`NativeAtom`/`NativeList`/`NativeSelection` with `heap_alive_` guard.
+
+These classes own their `td_t*` pointers and follow the same `td_retain()`/`td_release()` lifecycle as NativeTable and NativeSeries.
+
 ### C++ Header Inclusion Order (Critical)
 
 `src/compat.h` provides a C-atomic shim (`_Atomic(T)` → `volatile T` + GCC builtins) so C17 Teide headers compile in C++ mode. **NAPI and C++ standard headers must be included before `compat.h`** to avoid `<atomic>` / `<stdatomic.h>` conflicts.
@@ -64,26 +75,35 @@ CSR relationships (`Rel`) must be built first from an edge table or loaded from 
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| TS API | `lib/context.ts` | Entry point; loads `.node` addon, wraps `NativeContext`, `graph()` factory |
-| TS API | `lib/query.ts` | Lazy query builder with operation stack |
+| TS API | `lib/context.ts` | Entry point; CSV/binary I/O, splayed/parted table persistence, symbol table access, `graph()` factory |
+| TS API | `lib/query.ts` | Lazy query builder: filter, sort, head, tail, distinct, select, project, join, window, windowJoin |
 | TS API | `lib/expr.ts` | Expression tree (column refs, literals, ops, aggregations) |
-| TS API | `lib/table.ts` | Table + GroupBy wrappers |
+| TS API | `lib/table.ts` | Table + GroupBy wrappers, static fromArrays factories, low-level table builder |
 | TS API | `lib/series.ts` | Column accessor with dtype-aware TypedArray resolution |
+| TS API | `lib/types.ts` | Window function, join, and windowJoin type definitions |
+| TS API | `lib/vector.ts` | Vector wrapper: low-level td_vec_* operations |
+| TS API | `lib/atom.ts` | Atom wrapper: scalar type constructors (bool, i64, f64, sym, etc.) |
+| TS API | `lib/list.ts` | List wrapper: heterogeneous td_list_* container |
+| TS API | `lib/selection.ts` | Selection wrapper: td_sel_* boolean mask operations |
 | TS API | `lib/rel.ts` | Rel (CSR relationship) lifecycle: fromEdges, build, save, load, mmap |
 | TS API | `lib/graph.ts` | Graph traversal: expand, varExpand, shortestPath, wcoJoin |
 | NAPI | `src/teide_thread.h` | Background thread + SPSC work queue |
-| NAPI | `src/context.cpp` | NativeContext: CSV I/O dispatch |
-| NAPI | `src/query.cpp` | Expression serialization, plan compilation & execution |
-| NAPI | `src/table.cpp` | NativeTable: column access, retain/release |
+| NAPI | `src/context.cpp` | NativeContext: CSV, splayed, partitioned, column, symbol, and metadata I/O dispatch |
+| NAPI | `src/query.cpp` | Expression serialization (binop, unop, agg, naryop, cast, dateop), plan compilation & execution |
+| NAPI | `src/table.cpp` | NativeTable: column access, retain/release, fromArrays, low-level builder |
 | NAPI | `src/series.cpp` | NativeSeries: zero-copy TypedArray creation |
+| NAPI | `src/vector.cpp` | NativeVector: vector create, append, set, get, slice, concat |
+| NAPI | `src/atom.cpp` | NativeAtom: scalar atom constructors |
+| NAPI | `src/list.cpp` | NativeList: heterogeneous list container |
+| NAPI | `src/selection.cpp` | NativeSelection: boolean mask / selection set |
 | NAPI | `src/compat.h` | C-atomic shim for C++/C17 interop |
 | NAPI | `src/rel.cpp` | NativeRel: CSR relationship wrapper |
 | NAPI | `src/graph_ops.cpp` | Graph operations: expand, var_expand, shortest_path, wco_join |
 | NAPI | `src/addon.cpp` | Module init, exports `collectSync`/`collect` |
 | Scripts | `scripts/sync-vendor.sh` | Vendor auto-sync: shallow-clone Teide C core from GitHub |
 | C Core | `vendor/teide/include/teide/td.h` | Teide public API + type/opcode definitions |
-| Tests | `test/*.test.ts` | Vitest: smoke, table, expr (unit), e2e |
-| Fixtures | `test/fixtures/` | CSV test data (`small.csv`, `sales.csv`, `nodes.csv`, `edges.csv`) |
+| Tests | `test/*.test.ts` | Vitest: smoke, table, expr, e2e, io, low-level, query-extended, table-builder |
+| Fixtures | `test/fixtures/` | CSV test data (`small.csv`, `sales.csv`, `nodes.csv`, `edges.csv`, `orders.csv`, `trades.csv`, `quotes.csv`) |
 
 ## Conventions
 
@@ -92,5 +112,8 @@ CSR relationships (`Rel`) must be built first from an edge table or loaded from 
 - **NAPI classes**: Inherit `Napi::ObjectWrap<T>`, register via `DefineClass()`. Use `Napi::External<T>` for opaque C pointers.
 - **Memory**: `td_retain()`/`td_release()` for table/column lifetime; `td_rel_free()` for CSR relationships. Both skip cleanup if `heap_alive_` is false.
 - **Graph opcodes**: Graph opcodes in `lib/graph.ts` direction constants must match C defines: `TD_DIR_FWD=0`, `TD_DIR_REV=1`, `TD_DIR_BOTH=2`.
+- **Expression kinds**: `ExprKind` union covers `col | lit | binop | unop | agg | alias | naryop | cast | dateop`. N-ary ops serialize an `args` vector; cast serializes a `target_type`; dateop serializes a `date_field`.
+- **Window function kinds**: Integer mapping in `src/query.cpp` (rowNumber=0 through nthValue=13) must stay in sync with `WindowFuncKind` in `lib/types.ts`.
+- **Join type codes**: 0=inner, 1=left, 2=full — used in both `lib/query.ts` and `src/query.cpp`.
 - **Vendor sync**: `vendor/teide/` is auto-synced from GitHub via `scripts/sync-vendor.sh`. Run `npm run clean` to force re-sync.
 - **Addon path**: Loaded at runtime from `build/Release/teidedb_addon.node` (relative to `dist/`).

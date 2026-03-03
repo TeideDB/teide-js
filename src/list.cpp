@@ -207,10 +207,10 @@ void NativeList::Set(const Napi::CallbackInfo& info) {
         return;
     }
 
-    // If COW happened, td_cow released one ref from old list.
-    // Release our remaining reference and take over the new list.
-    if (new_list != list_) {
-        td_release(list_);
+    // If COW happened, update the internal pointer with proper ref counting.
+    if (new_list && new_list != list_) {
+        td_retain(new_list);
+        if (heap_alive_ && heap_alive_->load()) td_release(list_);
         list_ = new_list;
     }
 }

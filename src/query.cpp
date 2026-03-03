@@ -788,7 +788,7 @@ Napi::Value QueryCollectSync(const Napi::CallbackInfo& info) {
         });
 
     td_t* res = (td_t*)result;
-    if (TD_IS_ERR(res)) {
+    if (!res || TD_IS_ERR(res)) {
         std::string msg = "Query execution failed: ";
         msg += td_err_str(TD_ERR_CODE(res));
         Napi::Error::New(env, msg).ThrowAsJavaScriptException();
@@ -837,10 +837,10 @@ Napi::Value QueryCollect(const Napi::CallbackInfo& info) {
         tsfn,
         [deferred, thread](Napi::Env env, void* data) {
             td_t* res = (td_t*)data;
-            if (TD_IS_ERR(res)) {
-                deferred.Reject(Napi::Error::New(env,
-                    std::string("Query execution failed: ") +
-                    td_err_str(TD_ERR_CODE(res))).Value());
+            if (!res || TD_IS_ERR(res)) {
+                std::string msg = "Query execution failed";
+                if (res) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeTable::Create(env, res, thread));
             }

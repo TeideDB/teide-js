@@ -122,7 +122,12 @@ Napi::Value NativeTable::AddCol(const Napi::CallbackInfo& info) {
         return (void*)td_table_add_col(tbl, name_id, vec_ptr);
     });
 
-    tbl_ = (td_t*)result;
+    td_t* new_tbl = (td_t*)result;
+    if (new_tbl && new_tbl != tbl_) {
+        td_retain(new_tbl);
+        if (heap_alive_ && heap_alive_->load()) td_release(tbl_);
+    }
+    tbl_ = new_tbl;
     return env.Undefined();
 }
 
@@ -339,6 +344,7 @@ static void* BuildTableFromCols(std::vector<ColSpec>& cols) {
             }
         }
         tbl = td_table_add_col(tbl, name_id, vec);
+        td_release(vec);
     }
     return (void*)tbl;
 }

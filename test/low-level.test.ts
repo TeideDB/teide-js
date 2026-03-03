@@ -301,7 +301,7 @@ describe('Symbol Table API', () => {
       expect(typeof before).toBe('number');
       ctx.symIntern('unique_sym_for_count_test');
       const after = ctx.symCount();
-      expect(after).toBeGreaterThanOrEqual(before);
+      expect(after).toBeGreaterThan(before);
     } finally {
       ctx.destroy();
     }

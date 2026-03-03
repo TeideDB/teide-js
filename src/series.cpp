@@ -59,6 +59,10 @@ NativeSeries::NativeSeries(const Napi::CallbackInfo& info)
     td_retain(vec_);
 }
 
+NativeSeries::~NativeSeries() {
+    if (vec_ && heap_alive_ && heap_alive_->load()) td_release(vec_);
+}
+
 // ---------------------------------------------------------------------------
 // Accessors
 // ---------------------------------------------------------------------------

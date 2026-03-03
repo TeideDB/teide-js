@@ -278,6 +278,7 @@ Napi::Value NativeVector::Set(const Napi::CallbackInfo& info) {
     td_t* new_vec = (td_t*)result;
     if (!new_vec || TD_IS_ERR(new_vec)) {
         Napi::Error::New(env, "Failed to set vector element").ThrowAsJavaScriptException();
+        return env.Undefined();
     }
     // td_vec_set may return the same or a new pointer (COW). Update internal pointer.
     // Since we retain on construction, we need to handle the swap carefully.

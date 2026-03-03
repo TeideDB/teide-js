@@ -17,6 +17,7 @@ public:
     static Napi::Object Create(Napi::Env env, td_t* vec, const std::string& name,
                                int8_t dtype, TeideThread* thread);
     NativeSeries(const Napi::CallbackInfo& info);
+    ~NativeSeries();
 
     td_t* ptr() const { return vec_; }
     TeideThread* thread() const { return thread_; }

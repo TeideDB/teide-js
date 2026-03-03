@@ -63,6 +63,11 @@ describe('I/O operations', () => {
       const loaded = ctx.loadTableSync(dir);
       expect(loaded.nRows).toBe(3);
       expect(loaded.columns).toContain('name');
+      // Verify actual column data round-trips correctly
+      const values = loaded.col('value');
+      expect(values.data[0]).toBeCloseTo(10.5);
+      expect(values.data[1]).toBeCloseTo(20.3);
+      expect(values.data[2]).toBeCloseTo(30.1);
     } finally {
       ctx.destroy();
       fs.rmSync(dir, { recursive: true, force: true });
