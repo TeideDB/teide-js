@@ -65,6 +65,17 @@ export class Context {
         return new Series(this._native.mmapColSync(filePath));
     }
 
+    readPartedSync(dbRoot: string, tableName: string): Table {
+        this._checkAlive();
+        return new Table(this._native.readPartedSync(dbRoot, tableName), this._native);
+    }
+
+    async readParted(dbRoot: string, tableName: string): Promise<Table> {
+        this._checkAlive();
+        const nativeTable = await this._native.readParted(dbRoot, tableName);
+        return new Table(nativeTable, this._native);
+    }
+
     get _threadExternal(): any { return this._native.threadExternal; }
 
     graph(table: Table): Graph {

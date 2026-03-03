@@ -1874,7 +1874,7 @@ Follow the same dispatch_sync pattern. `NativeSeries` needs a `thread_` accessor
 
 ### Task 3.5: Add partitioned table load
 
-- [ ] Add partitioned table load via td_read_parted
+- [x] Add partitioned table load via td_read_parted
 
 **Files:**
 - Modify: `lib/context.ts`

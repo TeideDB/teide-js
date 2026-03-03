@@ -16,6 +16,8 @@ Napi::Object NativeContext::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("loadTableSync", &NativeContext::LoadTableSync),
         InstanceMethod("loadColSync", &NativeContext::LoadColSync),
         InstanceMethod("mmapColSync", &NativeContext::MmapColSync),
+        InstanceMethod("readPartedSync", &NativeContext::ReadPartedSync),
+        InstanceMethod("readParted", &NativeContext::ReadParted),
         InstanceAccessor("threadExternal", &NativeContext::GetThreadExternal, nullptr),
     });
     exports.Set("NativeContext", func);
@@ -366,4 +368,69 @@ Napi::Value NativeContext::MmapColSync(const Napi::CallbackInfo& info) {
     int8_t dtype = td_type(vec);
     std::string name = "col";
     return NativeSeries::Create(env, vec, name, dtype, thread_.get());
+}
+
+Napi::Value NativeContext::ReadPartedSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsString()) {
+        Napi::TypeError::New(env, "readPartedSync(dbRoot, tableName)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string db_root = info[0].As<Napi::String>().Utf8Value();
+    std::string table_name = info[1].As<Napi::String>().Utf8Value();
+
+    void* result = thread_->dispatch_sync([db_root, table_name]() -> void* {
+        return (void*)td_read_parted(db_root.c_str(), table_name.c_str());
+    });
+
+    td_t* tbl = (td_t*)result;
+    if (!tbl || TD_IS_ERR(tbl)) {
+        std::string msg = "Failed to load partitioned table";
+        if (tbl && TD_IS_ERR(tbl)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(tbl));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    return NativeTable::Create(env, tbl, thread_.get());
+}
+
+Napi::Value NativeContext::ReadParted(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsString()) {
+        Napi::TypeError::New(env, "readParted(dbRoot, tableName)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string db_root = info[0].As<Napi::String>().Utf8Value();
+    std::string table_name = info[1].As<Napi::String>().Utf8Value();
+
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "readParted", 0, 1);
+
+    TeideThread* thr = thread_.get();
+    thread_->dispatch_async(
+        [db_root, table_name]() -> void* {
+            return (void*)td_read_parted(db_root.c_str(), table_name.c_str());
+        },
+        tsfn,
+        [deferred, thr](Napi::Env env, void* data) {
+            td_t* tbl = (td_t*)data;
+            if (!tbl || TD_IS_ERR(tbl)) {
+                std::string msg = "Failed to load partitioned table";
+                if (tbl && TD_IS_ERR(tbl)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(tbl));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
+            } else {
+                deferred.Resolve(NativeTable::Create(env, tbl, thr));
+            }
+        }
+    );
+
+    return deferred.Promise();
 }

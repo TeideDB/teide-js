@@ -25,6 +25,8 @@ private:
     Napi::Value LoadTableSync(const Napi::CallbackInfo& info);
     Napi::Value LoadColSync(const Napi::CallbackInfo& info);
     Napi::Value MmapColSync(const Napi::CallbackInfo& info);
+    Napi::Value ReadPartedSync(const Napi::CallbackInfo& info);
+    Napi::Value ReadParted(const Napi::CallbackInfo& info);
 
     std::unique_ptr<TeideThread> thread_;
     bool destroyed_ = false;

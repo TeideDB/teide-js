@@ -103,6 +103,74 @@ describe('I/O operations', () => {
     }
   });
 
+  it('readPartedSync loads a partitioned table', () => {
+    const ctx = new Context();
+    const dbRoot = path.join(os.tmpdir(), `teide-parted-${Date.now()}`);
+    const splayTmp = path.join(os.tmpdir(), `teide-splay-tmp-${Date.now()}`);
+    fs.mkdirSync(splayTmp, { recursive: true });
+    try {
+      // Save a splayed table to get column files and sym
+      const df = ctx.readCsvSync(SMALL);
+      ctx.saveTableSync(df, splayTmp);
+
+      // Create partitioned structure: dbRoot/2024.01.01/data/
+      const partDir = path.join(dbRoot, '2024.01.01', 'data');
+      fs.mkdirSync(partDir, { recursive: true });
+
+      // Move column files into partition dir, sym to dbRoot/sym
+      const files = fs.readdirSync(splayTmp);
+      for (const f of files) {
+        if (f === '.sym') {
+          fs.copyFileSync(path.join(splayTmp, f), path.join(dbRoot, 'sym'));
+        } else {
+          fs.copyFileSync(path.join(splayTmp, f), path.join(partDir, f));
+        }
+      }
+
+      // Load as partitioned table
+      const loaded = ctx.readPartedSync(dbRoot, 'data');
+      expect(loaded.nRows).toBe(3);
+      expect(loaded.columns).toContain('id');
+      expect(loaded.columns).toContain('name');
+      expect(loaded.columns).toContain('value');
+    } finally {
+      ctx.destroy();
+      fs.rmSync(dbRoot, { recursive: true, force: true });
+      fs.rmSync(splayTmp, { recursive: true, force: true });
+    }
+  });
+
+  it('readParted loads a partitioned table async', async () => {
+    const ctx = new Context();
+    const dbRoot = path.join(os.tmpdir(), `teide-parted-async-${Date.now()}`);
+    const splayTmp = path.join(os.tmpdir(), `teide-splay-tmp-async-${Date.now()}`);
+    fs.mkdirSync(splayTmp, { recursive: true });
+    try {
+      const df = ctx.readCsvSync(SMALL);
+      ctx.saveTableSync(df, splayTmp);
+
+      const partDir = path.join(dbRoot, '2024.01.01', 'data');
+      fs.mkdirSync(partDir, { recursive: true });
+
+      const files = fs.readdirSync(splayTmp);
+      for (const f of files) {
+        if (f === '.sym') {
+          fs.copyFileSync(path.join(splayTmp, f), path.join(dbRoot, 'sym'));
+        } else {
+          fs.copyFileSync(path.join(splayTmp, f), path.join(partDir, f));
+        }
+      }
+
+      const loaded = await ctx.readParted(dbRoot, 'data');
+      expect(loaded.nRows).toBe(3);
+      expect(loaded.columns).toContain('id');
+    } finally {
+      ctx.destroy();
+      fs.rmSync(dbRoot, { recursive: true, force: true });
+      fs.rmSync(splayTmp, { recursive: true, force: true });
+    }
+  });
+
   it('writeCsv writes async', async () => {
     const ctx = new Context();
     const outPath = path.join(os.tmpdir(), `teide-test-async-${Date.now()}.csv`);
