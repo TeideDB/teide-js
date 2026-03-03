@@ -31,7 +31,10 @@ void NativeContext::check_alive(Napi::Env env) {
 }
 
 Napi::Value NativeContext::GetThreadExternal(const Napi::CallbackInfo& info) {
-    return Napi::External<TeideThread>::New(info.Env(), thread_.get());
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+    return Napi::External<TeideThread>::New(env, thread_.get());
 }
 
 Napi::Value NativeContext::Destroy(const Napi::CallbackInfo& info) {

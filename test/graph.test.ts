@@ -192,8 +192,8 @@ describe('Graph - varExpand', () => {
             const result = g.varExpandSync('node', rel, 'fwd', { minDepth: 1, maxDepth: 3 });
 
             // Node 0 can reach: depth 1 -> {1,2}, depth 2 -> {3}, depth 3 -> {4}
-            // At minimum 4 distinct destinations reachable (possibly more rows if paths counted)
-            expect(result.nRows).toBeGreaterThanOrEqual(4);
+            // 4 distinct (node, depth) pairs
+            expect(result.nRows).toBe(4);
             rel.destroy();
         } finally {
             ctx.destroy();
@@ -210,7 +210,7 @@ describe('Graph - varExpand', () => {
             const g = ctx.graph(nodes);
             const result = await g.varExpand('node', rel, 'fwd', { minDepth: 1, maxDepth: 3 });
 
-            expect(result.nRows).toBeGreaterThanOrEqual(4);
+            expect(result.nRows).toBe(4);
             rel.destroy();
         } finally {
             ctx.destroy();
@@ -229,8 +229,8 @@ describe('Graph - shortestPath', () => {
             const g = ctx.graph(nodes);
             const result = g.shortestPathSync(0, 4, rel, { maxDepth: 10 });
 
-            // Path: 0->1->3->4 or 0->2->3->4 = 3 hops
-            expect(result.nRows).toBeGreaterThan(0);
+            // Path has 4 nodes (e.g. 0->1->3->4), result table has _node and _depth columns
+            expect(result.nRows).toBe(4);
             rel.destroy();
         } finally {
             ctx.destroy();
@@ -247,7 +247,7 @@ describe('Graph - shortestPath', () => {
             const g = ctx.graph(nodes);
             const result = await g.shortestPath(0, 4, rel, { maxDepth: 10 });
 
-            expect(result.nRows).toBeGreaterThan(0);
+            expect(result.nRows).toBe(4);
             rel.destroy();
         } finally {
             ctx.destroy();
@@ -276,8 +276,8 @@ describe('Graph - wcoJoin', () => {
             const g = ctx.graph(triNodes);
             const result = g.wcoJoinSync([rel, rel, rel], { nVars: 3 });
 
-            // Should find at least one triangle pattern (0->1->2 with 0->2)
-            expect(result.nRows).toBeGreaterThan(0);
+            // Exactly one triangle: (0, 1, 2)
+            expect(result.nRows).toBe(1);
             rel.destroy();
         } finally {
             fs.rmSync(dir, { recursive: true, force: true });

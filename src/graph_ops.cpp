@@ -30,7 +30,17 @@ Napi::Value GraphExpandSync(const Napi::CallbackInfo& info) {
     NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
     std::string col_name = info[1].As<Napi::String>().Utf8Value();
     NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[2].As<Napi::Object>());
-    uint8_t direction = (uint8_t)info[3].As<Napi::Number>().Uint32Value();
+    uint32_t direction_raw = info[3].As<Napi::Number>().Uint32Value();
+
+    if (table->thread() != rel_wrap->thread()) {
+        Napi::Error::New(env, "Table and Rel must belong to the same Context").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    if (direction_raw > 2) {
+        Napi::RangeError::New(env, "direction must be 0 (fwd), 1 (rev), or 2 (both)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    uint8_t direction = (uint8_t)direction_raw;
 
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
@@ -65,7 +75,17 @@ Napi::Value GraphExpand(const Napi::CallbackInfo& info) {
     NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
     std::string col_name = info[1].As<Napi::String>().Utf8Value();
     NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[2].As<Napi::Object>());
-    uint8_t direction = (uint8_t)info[3].As<Napi::Number>().Uint32Value();
+    uint32_t direction_raw = info[3].As<Napi::Number>().Uint32Value();
+
+    if (table->thread() != rel_wrap->thread()) {
+        Napi::Error::New(env, "Table and Rel must belong to the same Context").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    if (direction_raw > 2) {
+        Napi::RangeError::New(env, "direction must be 0 (fwd), 1 (rev), or 2 (both)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    uint8_t direction = (uint8_t)direction_raw;
 
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
@@ -121,6 +141,14 @@ Napi::Value GraphVarExpandSync(const Napi::CallbackInfo& info) {
     uint32_t max_depth_raw = info[5].As<Napi::Number>().Uint32Value();
     bool track_path = info[6].As<Napi::Boolean>().Value();
 
+    if (table->thread() != rel_wrap->thread()) {
+        Napi::Error::New(env, "Table and Rel must belong to the same Context").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    if (direction_raw > 2) {
+        Napi::RangeError::New(env, "direction must be 0 (fwd), 1 (rev), or 2 (both)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     if (min_depth_raw > 255 || max_depth_raw > 255) {
         Napi::RangeError::New(env, "minDepth/maxDepth must be 0-255").ThrowAsJavaScriptException();
         return env.Undefined();
@@ -171,6 +199,14 @@ Napi::Value GraphVarExpand(const Napi::CallbackInfo& info) {
     uint32_t max_depth_raw = info[5].As<Napi::Number>().Uint32Value();
     bool track_path = info[6].As<Napi::Boolean>().Value();
 
+    if (table->thread() != rel_wrap->thread()) {
+        Napi::Error::New(env, "Table and Rel must belong to the same Context").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    if (direction_raw > 2) {
+        Napi::RangeError::New(env, "direction must be 0 (fwd), 1 (rev), or 2 (both)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     if (min_depth_raw > 255 || max_depth_raw > 255) {
         Napi::RangeError::New(env, "minDepth/maxDepth must be 0-255").ThrowAsJavaScriptException();
         return env.Undefined();
@@ -235,6 +271,10 @@ Napi::Value GraphShortestPathSync(const Napi::CallbackInfo& info) {
     NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[3].As<Napi::Object>());
     uint32_t max_depth_raw = info[4].As<Napi::Number>().Uint32Value();
 
+    if (table->thread() != rel_wrap->thread()) {
+        Napi::Error::New(env, "Table and Rel must belong to the same Context").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     if (max_depth_raw > 255) {
         Napi::RangeError::New(env, "maxDepth must be 0-255").ThrowAsJavaScriptException();
         return env.Undefined();
@@ -278,6 +318,10 @@ Napi::Value GraphShortestPath(const Napi::CallbackInfo& info) {
     NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[3].As<Napi::Object>());
     uint32_t max_depth_raw = info[4].As<Napi::Number>().Uint32Value();
 
+    if (table->thread() != rel_wrap->thread()) {
+        Napi::Error::New(env, "Table and Rel must belong to the same Context").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     if (max_depth_raw > 255) {
         Napi::RangeError::New(env, "maxDepth must be 0-255").ThrowAsJavaScriptException();
         return env.Undefined();
@@ -347,14 +391,18 @@ Napi::Value GraphWcoJoinSync(const Napi::CallbackInfo& info) {
     uint8_t n_vars = (uint8_t)n_vars_raw;
     uint8_t n_rels = (uint8_t)n_rels_raw;
 
+    TeideThread* thr = table->thread();
     std::vector<td_rel_t*> rels(n_rels);
     for (uint8_t i = 0; i < n_rels; i++) {
         NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());
+        if (rw->thread() != thr) {
+            Napi::Error::New(env, "All Rels must belong to the same Context as the Table").ThrowAsJavaScriptException();
+            return env.Undefined();
+        }
         rels[i] = rw->ptr();
     }
 
     td_t* tbl = table->ptr();
-    TeideThread* thr = table->thread();
 
     void* result = thr->dispatch_sync([tbl, rels, n_rels, n_vars]() -> void* {
         return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
@@ -396,14 +444,18 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
     uint8_t n_vars = (uint8_t)n_vars_raw;
     uint8_t n_rels = (uint8_t)n_rels_raw;
 
+    TeideThread* thr = table->thread();
     std::vector<td_rel_t*> rels(n_rels);
     for (uint8_t i = 0; i < n_rels; i++) {
         NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());
+        if (rw->thread() != thr) {
+            Napi::Error::New(env, "All Rels must belong to the same Context as the Table").ThrowAsJavaScriptException();
+            return env.Undefined();
+        }
         rels[i] = rw->ptr();
     }
 
     td_t* tbl = table->ptr();
-    TeideThread* thr = table->thread();
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphWcoJoin", 0, 1);
 

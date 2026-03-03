@@ -297,6 +297,10 @@ Napi::Value NativeRel::SaveSync(const Napi::CallbackInfo& info) {
         Napi::TypeError::New(env, "saveSync requires a directory path").ThrowAsJavaScriptException();
         return env.Undefined();
     }
+    if (!thread_ || !thread_->is_running()) {
+        Napi::Error::New(env, "Cannot save: context has been shut down").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     std::string dir = info[0].As<Napi::String>().Utf8Value();
     td_rel_t* rel = rel_;
 
@@ -319,6 +323,11 @@ Napi::Value NativeRel::Save(const Napi::CallbackInfo& info) {
     if (info.Length() < 1 || !info[0].IsString()) {
         Napi::TypeError::New(env, "save requires a directory path").ThrowAsJavaScriptException();
         return env.Undefined();
+    }
+    if (!thread_ || !thread_->is_running()) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Cannot save: context has been shut down").Value());
+        return d.Promise();
     }
     std::string dir = info[0].As<Napi::String>().Utf8Value();
     td_rel_t* rel = rel_;
@@ -351,15 +360,19 @@ Napi::Value NativeRel::Save(const Napi::CallbackInfo& info) {
 }
 
 // --- Destroy ---
-// Note: td_rel_free is called directly (same pattern as NativeTable destructor
-// calling td_release directly). The C free function is safe from any thread.
+// Dispatches td_rel_free through the Teide thread so it serializes behind
+// any in-flight async ops that captured the raw td_rel_t* pointer.
 Napi::Value NativeRel::Destroy(const Napi::CallbackInfo& info) {
     if (!destroyed_ && rel_) {
-        if (heap_alive_ && heap_alive_->load()) {
-            td_rel_free(rel_);
-        }
-        rel_ = nullptr;
         destroyed_ = true;
+        td_rel_t* r = rel_;
+        rel_ = nullptr;
+        if (heap_alive_ && heap_alive_->load() && thread_ && thread_->is_running()) {
+            thread_->dispatch_sync([r]() -> void* {
+                td_rel_free(r);
+                return nullptr;
+            });
+        }
     }
     return info.Env().Undefined();
 }
