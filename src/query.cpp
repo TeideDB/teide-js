@@ -395,13 +395,13 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
     }
     else if (node->kind == "naryop") {
         const std::string& op = node->str_val;
-        if (op == "substr") {
+        if (op == "substr" && node->args.size() >= 3) {
             td_op_t* str = EmitExpr(g, node->args[0]);
             td_op_t* start = EmitExpr(g, node->args[1]);
             td_op_t* len = EmitExpr(g, node->args[2]);
             return td_substr(g, str, start, len);
         }
-        if (op == "replace") {
+        if (op == "replace" && node->args.size() >= 3) {
             td_op_t* str = EmitExpr(g, node->args[0]);
             td_op_t* from = EmitExpr(g, node->args[1]);
             td_op_t* to = EmitExpr(g, node->args[2]);
@@ -413,7 +413,7 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
             for (int i = 0; i < n; i++) ops[i] = EmitExpr(g, node->args[i]);
             return td_concat(g, ops.data(), n);
         }
-        if (op == "if") {
+        if (op == "if" && node->args.size() >= 3) {
             td_op_t* cond = EmitExpr(g, node->args[0]);
             td_op_t* then_val = EmitExpr(g, node->args[1]);
             td_op_t* else_val = EmitExpr(g, node->args[2]);

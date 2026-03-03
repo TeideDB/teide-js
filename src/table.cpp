@@ -167,6 +167,12 @@ Napi::Value NativeTable::SetColName(const Napi::CallbackInfo& info) {
     int64_t idx = (int64_t)info[0].As<Napi::Number>().Int64Value();
     std::string name = info[1].As<Napi::String>().Utf8Value();
     td_t* tbl = tbl_;
+    int64_t ncols = td_table_ncols(tbl);
+
+    if (idx < 0 || idx >= ncols) {
+        Napi::RangeError::New(env, "Column index out of range").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     thread_->dispatch_sync([tbl, idx, name]() -> void* {
         int64_t name_id = td_sym_intern(name.c_str(), name.size());
@@ -272,13 +278,16 @@ static bool SerializeColumns(Napi::Env env, Napi::Object data,
                 cols[i].f64_data.resize((size_t)cols[i].length);
                 for (int64_t j = 0; j < cols[i].length; j++)
                     cols[i].f64_data[(size_t)j] = (double)buf[j];
-            } else {
+            } else if (taType == napi_uint8_array) {
                 cols[i].type = TD_F64;
+                auto buf = val.As<Napi::Uint8Array>();
                 cols[i].f64_data.resize((size_t)cols[i].length);
-                Napi::ArrayBuffer ab = ta.ArrayBuffer();
-                uint8_t* raw = static_cast<uint8_t*>(ab.Data()) + ta.ByteOffset();
                 for (int64_t j = 0; j < cols[i].length; j++)
-                    cols[i].f64_data[(size_t)j] = (double)raw[j];
+                    cols[i].f64_data[(size_t)j] = (double)buf[j];
+            } else {
+                Napi::TypeError::New(env, "Unsupported TypedArray type for column '" + cols[i].name + "'")
+                    .ThrowAsJavaScriptException();
+                return false;
             }
         } else if (val.IsArray()) {
             Napi::Array arr = val.As<Napi::Array>();
@@ -327,7 +336,7 @@ static void* BuildTableFromCols(std::vector<ColSpec>& cols) {
         if (cols[i].type == TD_SYM) {
             uint8_t width = td_sym_dict_width(td_sym_count() + (uint32_t)len);
             vec = td_sym_vec_new(width, len);
-            if (TD_IS_ERR(vec)) return vec;
+            if (TD_IS_ERR(vec)) { td_release(tbl); return vec; }
             vec->len = len;
             for (int64_t j = 0; j < len; j++) {
                 int64_t sid = td_sym_intern(cols[i].str_data[(size_t)j].c_str(),
@@ -336,7 +345,7 @@ static void* BuildTableFromCols(std::vector<ColSpec>& cols) {
             }
         } else {
             vec = td_vec_new(cols[i].type, len);
-            if (TD_IS_ERR(vec)) return vec;
+            if (TD_IS_ERR(vec)) { td_release(tbl); return vec; }
             vec->len = len;
             void* dst = td_data(vec);
             if (cols[i].type == TD_F64) {
