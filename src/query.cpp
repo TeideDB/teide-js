@@ -147,6 +147,20 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
                     cols.Get(c).As<Napi::String>().Utf8Value());
             }
         }
+        else if (step.type == "select") {
+            Napi::Array cols = op.Get("cols").As<Napi::Array>();
+            for (uint32_t c = 0; c < cols.Length(); c++) {
+                step.select_cols.push_back(
+                    cols.Get(c).As<Napi::String>().Utf8Value());
+            }
+        }
+        else if (step.type == "project") {
+            Napi::Array exprs = op.Get("exprs").As<Napi::Array>();
+            for (uint32_t e = 0; e < exprs.Length(); e++) {
+                step.project_exprs.push_back(
+                    SerializeExpr(exprs.Get(e).As<Napi::Object>()));
+            }
+        }
 
         plan.push_back(std::move(step));
     }
@@ -437,6 +451,80 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                 key_nodes[k] = td_scan(g, step.distinct_cols[k].c_str());
             }
             current = td_distinct(g, key_nodes.data(), n_keys);
+        }
+        else if (step.type == "select") {
+            td_op_t* table_node = current ? current : td_const_table(g, tbl);
+            if (filter_pred) {
+                table_node = td_filter(g, table_node, filter_pred);
+                filter_pred = nullptr;
+            }
+            uint8_t n = (uint8_t)step.select_cols.size();
+            std::vector<td_op_t*> col_nodes(n);
+            for (uint8_t c = 0; c < n; c++) {
+                col_nodes[c] = td_scan(g, step.select_cols[c].c_str());
+            }
+            current = td_select(g, table_node, col_nodes.data(), n);
+        }
+        else if (step.type == "project") {
+            td_op_t* table_node = current ? current : td_const_table(g, tbl);
+            if (filter_pred) {
+                table_node = td_filter(g, table_node, filter_pred);
+                filter_pred = nullptr;
+            }
+
+            // The C core's OP_SELECT executor uses synthetic names (_e0)
+            // for computed expression columns. To preserve alias names,
+            // we execute the input, evaluate each expression in a fresh
+            // graph, and build the result table with correct column names.
+
+            td_t* input_result = td_execute(g, table_node);
+            if (!input_result || TD_IS_ERR(input_result)) {
+                td_graph_free(g);
+                return input_result ? input_result : TD_ERR_PTR(TD_ERR_OOM);
+            }
+
+            td_graph_t* g2 = td_graph_new(input_result);
+            if (!g2) {
+                td_release(input_result);
+                td_graph_free(g);
+                return TD_ERR_PTR(TD_ERR_OOM);
+            }
+
+            uint8_t n = (uint8_t)step.project_exprs.size();
+            td_t* result = td_table_new(n);
+
+            for (uint8_t e = 0; e < n; e++) {
+                const auto& proj_expr = step.project_exprs[e];
+
+                // Extract alias name if present, emit inner expression
+                std::string alias_name;
+                std::shared_ptr<ExprNode> emit_expr = proj_expr;
+                if (proj_expr->kind == "alias") {
+                    alias_name = proj_expr->str_val;
+                    emit_expr = proj_expr->left;
+                }
+
+                td_op_t* expr_node = EmitExpr(g2, emit_expr);
+                td_t* col_result = td_execute(g2, expr_node);
+
+                if (col_result && !TD_IS_ERR(col_result)) {
+                    int64_t name_id;
+                    if (!alias_name.empty()) {
+                        name_id = td_sym_intern(alias_name.c_str(), alias_name.size());
+                    } else {
+                        char buf[16];
+                        int len = snprintf(buf, sizeof(buf), "_e%u", (unsigned)e);
+                        name_id = td_sym_intern(buf, (size_t)len);
+                    }
+                    result = td_table_add_col(result, name_id, col_result);
+                    td_release(col_result);
+                }
+            }
+
+            td_graph_free(g2);
+            td_release(input_result);
+            td_graph_free(g);
+            return result;
         }
     }
 

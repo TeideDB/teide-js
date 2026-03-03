@@ -40,6 +40,14 @@ export class Table {
     distinct(...cols: string[]): Query {
         return new Query(this._native, this._ctx).distinct(...cols);
     }
+
+    select(...cols: string[]): Query {
+        return new Query(this._native, this._ctx).select(...cols);
+    }
+
+    project(...exprs: Expr[]): Query {
+        return new Query(this._native, this._ctx).project(...exprs);
+    }
 }
 
 export class GroupBy {

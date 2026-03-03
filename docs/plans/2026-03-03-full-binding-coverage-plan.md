@@ -844,7 +844,7 @@ git commit -m "feat(query): add tail and distinct operations"
 
 ### Task 2.2: Add select and project to Query
 
-- [ ] Add select and project operations to Query and wire through SerializePlan/ExecutePlan
+- [x] Add select and project operations to Query and wire through SerializePlan/ExecutePlan
 
 **Files:**
 - Modify: `lib/query.ts`

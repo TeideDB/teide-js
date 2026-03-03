@@ -57,6 +57,16 @@ export class Query {
         return this;
     }
 
+    select(...cols: string[]): Query {
+        this._ops.push({ type: 'select', cols });
+        return this;
+    }
+
+    project(...exprs: Expr[]): Query {
+        this._ops.push({ type: 'project', exprs });
+        return this;
+    }
+
     collectSync(): Table {
         const result = addon.collectSync(this._nativeTable, this._ops);
         return new Table(result, this._ctx);

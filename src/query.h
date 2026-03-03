@@ -45,6 +45,8 @@ struct PlanStep {
     int64_t head_n = 0;                               // for 'head'
     int64_t tail_n = 0;                               // for 'tail'
     std::vector<std::string> distinct_cols;            // for 'distinct'
+    std::vector<std::string> select_cols;              // for 'select'
+    std::vector<std::shared_ptr<ExprNode>> project_exprs; // for 'project'
 };
 
 // Static query execution functions exposed to JS

@@ -26,4 +26,31 @@ describe('Extended query ops', () => {
       ctx.destroy();
     }
   });
+
+  it('select picks specific columns', () => {
+    const ctx = new Context();
+    try {
+      const df = ctx.readCsvSync(SALES);
+      const result = df.select('category', 'price').collectSync();
+      expect(result.nCols).toBe(2);
+      expect(result.columns).toContain('category');
+      expect(result.columns).toContain('price');
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('project computes expressions', () => {
+    const ctx = new Context();
+    try {
+      const df = ctx.readCsvSync(SALES);
+      const result = df.project(
+        col('price').mul(col('quantity')).alias('revenue')
+      ).collectSync();
+      expect(result.columns).toContain('revenue');
+      expect(result.nRows).toBe(9);
+    } finally {
+      ctx.destroy();
+    }
+  });
 });
