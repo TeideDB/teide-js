@@ -42,7 +42,14 @@ NativeRel::NativeRel(const Napi::CallbackInfo& info)
 
 NativeRel::~NativeRel() {
     if (rel_ && !destroyed_ && heap_alive_ && heap_alive_->load()) {
-        td_rel_free(rel_);
+        if (thread_ && thread_->is_running()) {
+            td_rel_t* r = rel_;
+            thread_->dispatch_sync([r]() -> void* {
+                td_rel_free(r);
+                return nullptr;
+            });
+        }
+        // else: thread shut down, heap being torn down — accept leak
     }
 }
 
@@ -297,6 +304,10 @@ Napi::Value NativeRel::SaveSync(const Napi::CallbackInfo& info) {
         Napi::TypeError::New(env, "saveSync requires a directory path").ThrowAsJavaScriptException();
         return env.Undefined();
     }
+    if (destroyed_ || !rel_) {
+        Napi::Error::New(env, "Cannot save: Rel has been destroyed").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     if (!thread_ || !thread_->is_running()) {
         Napi::Error::New(env, "Cannot save: context has been shut down").ThrowAsJavaScriptException();
         return env.Undefined();
@@ -323,6 +334,11 @@ Napi::Value NativeRel::Save(const Napi::CallbackInfo& info) {
     if (info.Length() < 1 || !info[0].IsString()) {
         Napi::TypeError::New(env, "save requires a directory path").ThrowAsJavaScriptException();
         return env.Undefined();
+    }
+    if (destroyed_ || !rel_) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Cannot save: Rel has been destroyed").Value());
+        return d.Promise();
     }
     if (!thread_ || !thread_->is_running()) {
         auto d = Napi::Promise::Deferred::New(env);

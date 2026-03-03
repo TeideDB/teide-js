@@ -45,6 +45,10 @@ Napi::Value GraphExpandSync(const Napi::CallbackInfo& info) {
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        Napi::Error::New(env, "Context has been shut down").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thr->dispatch_sync([tbl, col_name, rel, direction]() -> void* {
         return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
@@ -90,6 +94,11 @@ Napi::Value GraphExpand(const Napi::CallbackInfo& info) {
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Context has been shut down").Value());
+        return d.Promise();
+    }
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphExpand", 0, 1);
 
@@ -164,6 +173,10 @@ Napi::Value GraphVarExpandSync(const Napi::CallbackInfo& info) {
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        Napi::Error::New(env, "Context has been shut down").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thr->dispatch_sync([tbl, col_name, rel, direction, min_depth, max_depth, track_path]() -> void* {
         return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
@@ -222,6 +235,11 @@ Napi::Value GraphVarExpand(const Napi::CallbackInfo& info) {
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Context has been shut down").Value());
+        return d.Promise();
+    }
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphVarExpand", 0, 1);
 
@@ -284,6 +302,10 @@ Napi::Value GraphShortestPathSync(const Napi::CallbackInfo& info) {
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        Napi::Error::New(env, "Context has been shut down").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
 
     void* result = thr->dispatch_sync([tbl, src_id, dst_id, rel, max_depth]() -> void* {
         return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
@@ -331,6 +353,11 @@ Napi::Value GraphShortestPath(const Napi::CallbackInfo& info) {
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Context has been shut down").Value());
+        return d.Promise();
+    }
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphShortestPath", 0, 1);
 
@@ -385,13 +412,17 @@ Napi::Value GraphWcoJoinSync(const Napi::CallbackInfo& info) {
         return env.Undefined();
     }
     if (n_vars_raw > 255 || n_rels_raw > 255) {
-        Napi::RangeError::New(env, "nVars and nRels must be 0-255").ThrowAsJavaScriptException();
+        Napi::RangeError::New(env, "nVars and nRels must be 1-255").ThrowAsJavaScriptException();
         return env.Undefined();
     }
     uint8_t n_vars = (uint8_t)n_vars_raw;
     uint8_t n_rels = (uint8_t)n_rels_raw;
 
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        Napi::Error::New(env, "Context has been shut down").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
     std::vector<td_rel_t*> rels(n_rels);
     for (uint8_t i = 0; i < n_rels; i++) {
         NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());
@@ -438,13 +469,18 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
         return env.Undefined();
     }
     if (n_vars_raw > 255 || n_rels_raw > 255) {
-        Napi::RangeError::New(env, "nVars and nRels must be 0-255").ThrowAsJavaScriptException();
+        Napi::RangeError::New(env, "nVars and nRels must be 1-255").ThrowAsJavaScriptException();
         return env.Undefined();
     }
     uint8_t n_vars = (uint8_t)n_vars_raw;
     uint8_t n_rels = (uint8_t)n_rels_raw;
 
     TeideThread* thr = table->thread();
+    if (!thr->is_running()) {
+        auto d = Napi::Promise::Deferred::New(env);
+        d.Reject(Napi::Error::New(env, "Context has been shut down").Value());
+        return d.Promise();
+    }
     std::vector<td_rel_t*> rels(n_rels);
     for (uint8_t i = 0; i < n_rels; i++) {
         NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());

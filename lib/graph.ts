@@ -22,6 +22,12 @@ export interface WcoJoinOpts {
 
 const DIR_MAP: Record<Direction, number> = { fwd: 0, rev: 1, both: 2 };
 
+function resolveDir(direction: Direction): number {
+    const d = DIR_MAP[direction];
+    if (d === undefined) throw new Error(`Invalid direction: ${direction}`);
+    return d;
+}
+
 export class Graph {
     private readonly _table: Table;
     private readonly _ctx: any;
@@ -34,7 +40,7 @@ export class Graph {
     expandSync(srcCol: string, rel: Rel, direction: Direction = 'fwd'): Table {
         rel._checkAlive();
         const native = addon.graphExpandSync(
-            this._table._native, srcCol, rel._native, DIR_MAP[direction]
+            this._table._native, srcCol, rel._native, resolveDir(direction)
         );
         return new Table(native, this._ctx);
     }
@@ -42,7 +48,7 @@ export class Graph {
     async expand(srcCol: string, rel: Rel, direction: Direction = 'fwd'): Promise<Table> {
         rel._checkAlive();
         const native = await addon.graphExpand(
-            this._table._native, srcCol, rel._native, DIR_MAP[direction]
+            this._table._native, srcCol, rel._native, resolveDir(direction)
         );
         return new Table(native, this._ctx);
     }
@@ -50,7 +56,7 @@ export class Graph {
     varExpandSync(startCol: string, rel: Rel, direction: Direction = 'fwd', opts?: VarExpandOpts): Table {
         rel._checkAlive();
         const native = addon.graphVarExpandSync(
-            this._table._native, startCol, rel._native, DIR_MAP[direction],
+            this._table._native, startCol, rel._native, resolveDir(direction),
             opts?.minDepth ?? 1, opts?.maxDepth ?? 3, opts?.trackPath ?? false
         );
         return new Table(native, this._ctx);
@@ -59,7 +65,7 @@ export class Graph {
     async varExpand(startCol: string, rel: Rel, direction: Direction = 'fwd', opts?: VarExpandOpts): Promise<Table> {
         rel._checkAlive();
         const native = await addon.graphVarExpand(
-            this._table._native, startCol, rel._native, DIR_MAP[direction],
+            this._table._native, startCol, rel._native, resolveDir(direction),
             opts?.minDepth ?? 1, opts?.maxDepth ?? 3, opts?.trackPath ?? false
         );
         return new Table(native, this._ctx);
