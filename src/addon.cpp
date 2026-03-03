@@ -6,12 +6,14 @@
 #include "series.h"
 #include "table.h"
 #include "query.h"
+#include "rel.h"
 #include "compat.h"
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     NativeContext::Init(env, exports);
     NativeSeries::Init(env, exports);
     NativeTable::Init(env, exports);
+    NativeRel::Init(env, exports);
     exports.Set("collectSync", Napi::Function::New(env, QueryCollectSync));
     exports.Set("collect", Napi::Function::New(env, QueryCollect));
     return exports;

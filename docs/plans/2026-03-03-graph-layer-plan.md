@@ -122,12 +122,12 @@ git commit -m "feat: auto-sync vendor/teide from GitHub on build"
 
 ---
 
-### Task 2: NativeRel C++ Class
+### Task 2: NativeRel C++ Class [DONE]
 
 **Files:**
-- Create: `src/rel.h`
-- Create: `src/rel.cpp`
-- Modify: `src/addon.cpp` (register NativeRel)
+- [x] Create: `src/rel.h`
+- [x] Create: `src/rel.cpp`
+- [x] Modify: `src/addon.cpp` (register NativeRel)
 
 **Context:**
 - Follow the same patterns as `NativeTable` (`src/table.h`, `src/table.cpp`): `Napi::ObjectWrap`, static `constructor_` FunctionReference, `Create()` factory, `heap_alive_` guard.
