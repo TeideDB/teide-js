@@ -455,6 +455,7 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
 
     td_op_t* current = nullptr;
     td_op_t* filter_pred = nullptr;
+    td_t* owned_tbl = nullptr;  // intermediate table we must release
 
     for (const auto& step : plan) {
         if (step.type == "filter") {
@@ -616,24 +617,38 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                 td_op_t* expr_node = EmitExpr(g2, emit_expr);
                 td_t* col_result = td_execute(g2, expr_node);
 
-                if (col_result && !TD_IS_ERR(col_result)) {
-                    int64_t name_id;
-                    if (!alias_name.empty()) {
-                        name_id = td_sym_intern(alias_name.c_str(), alias_name.size());
-                    } else {
-                        char buf[16];
-                        int len = snprintf(buf, sizeof(buf), "_e%u", (unsigned)e);
-                        name_id = td_sym_intern(buf, (size_t)len);
-                    }
-                    result = td_table_add_col(result, name_id, col_result);
-                    td_release(col_result);
+                if (!col_result || TD_IS_ERR(col_result)) {
+                    td_graph_free(g2);
+                    td_release(input_result);
+                    td_graph_free(g);
+                    return col_result ? col_result : TD_ERR_PTR(TD_ERR_OOM);
                 }
+
+                int64_t name_id;
+                if (!alias_name.empty()) {
+                    name_id = td_sym_intern(alias_name.c_str(), alias_name.size());
+                } else {
+                    char buf[16];
+                    int len = snprintf(buf, sizeof(buf), "_e%u", (unsigned)e);
+                    name_id = td_sym_intern(buf, (size_t)len);
+                }
+                result = td_table_add_col(result, name_id, col_result);
+                td_release(col_result);
             }
 
             td_graph_free(g2);
             td_release(input_result);
+
+            // Replace the input table and graph so subsequent steps
+            // (head, sort, etc.) operate on the projected result.
             td_graph_free(g);
-            return result;
+            td_retain(result);
+            if (owned_tbl) td_release(owned_tbl);
+            owned_tbl = result;
+            tbl = result;
+            g = td_graph_new(result);
+            if (!g) { td_release(result); owned_tbl = nullptr; return TD_ERR_PTR(TD_ERR_OOM); }
+            current = nullptr;
         }
         else if (step.type == "join") {
             td_op_t* left_table_node = current ? current : td_const_table(g, tbl);
@@ -717,12 +732,25 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
 
             // For funcs that don't need a column (rowNumber, rank, denseRank, ntile),
             // the C core still dereferences func_inputs[i]->id, so provide a
-            // dummy scan node (first partition key or first order key).
+            // dummy scan node (first partition key, first order key, or first
+            // func col, or first table column as last resort).
             td_op_t* dummy_input = nullptr;
             if (n_part > 0)
                 dummy_input = td_scan(g, step.win_part_keys[0].c_str());
             else if (n_order > 0)
                 dummy_input = td_scan(g, step.win_order_keys[0].c_str());
+            else {
+                // Find first non-empty func col, or fall back to first table column
+                for (uint8_t f = 0; f < n_funcs && !dummy_input; f++) {
+                    if (!step.win_func_cols[f].empty())
+                        dummy_input = td_scan(g, step.win_func_cols[f].c_str());
+                }
+                if (!dummy_input && td_table_ncols(tbl) > 0) {
+                    int64_t col_id = td_table_col_name(tbl, 0);
+                    td_t* sym = (td_t*)td_sym_str(col_id);
+                    dummy_input = td_scan(g, td_str_ptr(sym));
+                }
+            }
 
             for (uint8_t f = 0; f < n_funcs; f++) {
                 if (!step.win_func_cols[f].empty())
@@ -755,6 +783,7 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
     td_op_t* root = td_optimize(g, current);
     td_t* result = td_execute(g, root);
     td_graph_free(g);
+    if (owned_tbl) td_release(owned_tbl);
     return result;
 }
 
@@ -789,8 +818,8 @@ Napi::Value QueryCollectSync(const Napi::CallbackInfo& info) {
 
     td_t* res = (td_t*)result;
     if (!res || TD_IS_ERR(res)) {
-        std::string msg = "Query execution failed: ";
-        msg += td_err_str(TD_ERR_CODE(res));
+        std::string msg = "Query execution failed";
+        if (res) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
         Napi::Error::New(env, msg).ThrowAsJavaScriptException();
         return env.Undefined();
     }

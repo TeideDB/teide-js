@@ -78,6 +78,7 @@ static void parse_csv_opts(const Napi::Object& opts, char& delimiter, bool& head
     if (opts.Has("columnTypes") && opts.Get("columnTypes").IsArray()) {
         Napi::Array types = opts.Get("columnTypes").As<Napi::Array>();
         for (uint32_t i = 0; i < types.Length(); i++) {
+            if (!types.Get(i).IsString()) continue;
             std::string t = types.Get(i).As<Napi::String>().Utf8Value();
             int8_t td_type = TD_F64;
             if (t == "bool")           td_type = TD_BOOL;

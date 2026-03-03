@@ -123,7 +123,11 @@ Napi::Value NativeTable::AddCol(const Napi::CallbackInfo& info) {
     });
 
     td_t* new_tbl = (td_t*)result;
-    if (new_tbl && new_tbl != tbl_) {
+    if (!new_tbl || TD_IS_ERR(new_tbl)) {
+        Napi::Error::New(env, "Failed to add column to table").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    if (new_tbl != tbl_) {
         td_retain(new_tbl);
         if (heap_alive_ && heap_alive_->load()) td_release(tbl_);
     }

@@ -58,29 +58,6 @@ describe('Expr tree', () => {
     expect(e.params.op).toBe(58); // OP_COUNT_DISTINCT
   });
 
-  it('builds stddev aggregation', () => {
-    const e = col('x').stddev();
-    expect(e.kind).toBe('agg');
-    expect(e.params.op).toBe(59); // OP_STDDEV
-  });
-
-  it('builds stddevPop aggregation', () => {
-    const e = col('x').stddevPop();
-    expect(e.kind).toBe('agg');
-    expect(e.params.op).toBe(73); // OP_STDDEV_POP
-  });
-
-  it('builds variance aggregation', () => {
-    const e = col('x').variance();
-    expect(e.kind).toBe('agg');
-    expect(e.params.op).toBe(74); // OP_VAR
-  });
-
-  it('builds variancePop aggregation', () => {
-    const e = col('x').variancePop();
-    expect(e.kind).toBe('agg');
-    expect(e.params.op).toBe(75); // OP_VAR_POP
-  });
 
   it('builds upper unary op', () => {
     const e = col('name').upper();

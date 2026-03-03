@@ -76,10 +76,8 @@ export class Expr {
     first(): Expr { return new Expr('agg', { op: OP_FIRST, arg: this }); }
     last(): Expr { return new Expr('agg', { op: OP_LAST, arg: this }); }
     countDistinct(): Expr { return new Expr('agg', { op: OP_COUNT_DISTINCT, arg: this }); }
-    stddev(): Expr { return new Expr('agg', { op: OP_STDDEV, arg: this }); }
-    stddevPop(): Expr { return new Expr('agg', { op: OP_STDDEV_POP, arg: this }); }
-    variance(): Expr { return new Expr('agg', { op: OP_VAR, arg: this }); }
-    variancePop(): Expr { return new Expr('agg', { op: OP_VAR_POP, arg: this }); }
+    // stddev, stddevPop, variance, variancePop: opcodes defined in td.h
+    // but no C core builder functions yet. Uncomment when available.
 
     // N-ary ops
     substr(start: Expr | number, len: Expr | number): Expr {
