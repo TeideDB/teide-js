@@ -73,13 +73,16 @@ Napi::Value GraphExpand(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphExpand", 0, 1);
 
+    td_retain(tbl);
     thr->dispatch_async(
         [tbl, col_name, rel, direction]() -> void* {
-            return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+            void* r = (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
                 td_op_t* src = td_scan(g, col_name.c_str());
                 if (!src) return nullptr;
                 return td_expand(g, src, rel, direction);
             });
+            td_release(tbl);
+            return r;
         },
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {
@@ -173,13 +176,16 @@ Napi::Value GraphVarExpand(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphVarExpand", 0, 1);
 
+    td_retain(tbl);
     thr->dispatch_async(
         [tbl, col_name, rel, direction, min_depth, max_depth, track_path]() -> void* {
-            return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+            void* r = (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
                 td_op_t* src = td_scan(g, col_name.c_str());
                 if (!src) return nullptr;
                 return td_var_expand(g, src, rel, direction, min_depth, max_depth, track_path);
             });
+            td_release(tbl);
+            return r;
         },
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {
@@ -266,14 +272,17 @@ Napi::Value GraphShortestPath(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphShortestPath", 0, 1);
 
+    td_retain(tbl);
     thr->dispatch_async(
         [tbl, src_id, dst_id, rel, max_depth]() -> void* {
-            return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+            void* r = (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
                 td_op_t* src = td_const_i64(g, src_id);
                 td_op_t* dst = td_const_i64(g, dst_id);
                 if (!src || !dst) return nullptr;
                 return td_shortest_path(g, src, dst, rel, max_depth);
             });
+            td_release(tbl);
+            return r;
         },
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {
@@ -367,11 +376,14 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
     auto deferred = Napi::Promise::Deferred::New(env);
     auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "graphWcoJoin", 0, 1);
 
+    td_retain(tbl);
     thr->dispatch_async(
         [tbl, rels, n_rels, n_vars]() -> void* {
-            return (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
+            void* r = (void*)ExecuteGraphOp(tbl, [&](td_graph_t* g) -> td_op_t* {
                 return td_wco_join(g, const_cast<td_rel_t**>(rels.data()), n_rels, n_vars);
             });
+            td_release(tbl);
+            return r;
         },
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {

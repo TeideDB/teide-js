@@ -70,8 +70,10 @@ Napi::Value NativeRel::FromEdgesSync(const Napi::CallbackInfo& info) {
     });
 
     td_rel_t* rel = (td_rel_t*)result;
-    if (!rel) {
-        Napi::Error::New(env, "Failed to build relationship from edges").ThrowAsJavaScriptException();
+    if (!rel || TD_IS_ERR(rel)) {
+        std::string msg = "Failed to build relationship from edges";
+        if (rel && TD_IS_ERR(rel)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(rel));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
         return env.Undefined();
     }
     return NativeRel::Create(env, rel, thr);
@@ -105,8 +107,10 @@ Napi::Value NativeRel::FromEdges(const Napi::CallbackInfo& info) {
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {
             td_rel_t* rel = (td_rel_t*)data;
-            if (!rel) {
-                deferred.Reject(Napi::Error::New(env, "Failed to build relationship from edges").Value());
+            if (!rel || TD_IS_ERR(rel)) {
+                std::string msg = "Failed to build relationship from edges";
+                if (rel && TD_IS_ERR(rel)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(rel));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeRel::Create(env, rel, thr));
             }
@@ -136,8 +140,10 @@ Napi::Value NativeRel::BuildSync(const Napi::CallbackInfo& info) {
     });
 
     td_rel_t* rel = (td_rel_t*)result;
-    if (!rel) {
-        Napi::Error::New(env, "Failed to build relationship").ThrowAsJavaScriptException();
+    if (!rel || TD_IS_ERR(rel)) {
+        std::string msg = "Failed to build relationship";
+        if (rel && TD_IS_ERR(rel)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(rel));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
         return env.Undefined();
     }
     return NativeRel::Create(env, rel, thr);
@@ -168,8 +174,10 @@ Napi::Value NativeRel::Build(const Napi::CallbackInfo& info) {
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {
             td_rel_t* rel = (td_rel_t*)data;
-            if (!rel) {
-                deferred.Reject(Napi::Error::New(env, "Failed to build relationship").Value());
+            if (!rel || TD_IS_ERR(rel)) {
+                std::string msg = "Failed to build relationship";
+                if (rel && TD_IS_ERR(rel)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(rel));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeRel::Create(env, rel, thr));
             }
@@ -193,8 +201,10 @@ Napi::Value NativeRel::LoadSync(const Napi::CallbackInfo& info) {
     });
 
     td_rel_t* rel = (td_rel_t*)result;
-    if (!rel) {
-        Napi::Error::New(env, "Failed to load relationship from: " + dir).ThrowAsJavaScriptException();
+    if (!rel || TD_IS_ERR(rel)) {
+        std::string msg = "Failed to load relationship from: " + dir;
+        if (rel && TD_IS_ERR(rel)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(rel));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
         return env.Undefined();
     }
     return NativeRel::Create(env, rel, thr);
@@ -218,8 +228,10 @@ Napi::Value NativeRel::Load(const Napi::CallbackInfo& info) {
         tsfn,
         [deferred, thr](Napi::Env env, void* data) {
             td_rel_t* rel = (td_rel_t*)data;
-            if (!rel) {
-                deferred.Reject(Napi::Error::New(env, "Failed to load relationship").Value());
+            if (!rel || TD_IS_ERR(rel)) {
+                std::string msg = "Failed to load relationship";
+                if (rel && TD_IS_ERR(rel)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(rel));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeRel::Create(env, rel, thr));
             }
@@ -243,8 +255,10 @@ Napi::Value NativeRel::MmapSync(const Napi::CallbackInfo& info) {
     });
 
     td_rel_t* rel = (td_rel_t*)result;
-    if (!rel) {
-        Napi::Error::New(env, "Failed to mmap relationship from: " + dir).ThrowAsJavaScriptException();
+    if (!rel || TD_IS_ERR(rel)) {
+        std::string msg = "Failed to mmap relationship from: " + dir;
+        if (rel && TD_IS_ERR(rel)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(rel));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
         return env.Undefined();
     }
     return NativeRel::Create(env, rel, thr);
