@@ -10,8 +10,9 @@ extern "C" { typedef union td_t td_t; }
 
 class TeideThread;
 
-// Standalone function registered in addon.cpp
+// Standalone functions registered in addon.cpp
 Napi::Value TableFromArraysSync(const Napi::CallbackInfo& info);
+Napi::Value TableFromArrays(const Napi::CallbackInfo& info);
 
 class NativeTable : public Napi::ObjectWrap<NativeTable> {
 public:

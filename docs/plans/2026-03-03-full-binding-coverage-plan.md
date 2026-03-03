@@ -2123,7 +2123,7 @@ git commit -m "feat(table): add Table.fromArraysSync for constructing tables fro
 
 ### Task 4.2: Add Table.fromArrays (async variant)
 
-- [ ] Add Table.fromArrays async variant using dispatch_async
+- [x] Add Table.fromArrays async variant using dispatch_async
 
 Follow the same pattern as 4.1 but with `dispatch_async`. Serialize on V8 thread, dispatch, resolve Promise with NativeTable.
 

@@ -99,34 +99,25 @@ Napi::Value NativeTable::Col(const Napi::CallbackInfo& info) {
     return NativeSeries::Create(env, col, name, dtype, thread_);
 }
 
-// ---- Standalone function: TableFromArraysSync ----
+// ---- Column serialization (shared by sync/async) ----
 
-Napi::Value TableFromArraysSync(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
+struct ColSpec {
+    std::string name;
+    int8_t type;
+    std::vector<double> f64_data;
+    std::vector<int64_t> i64_data;
+    std::vector<uint8_t> bool_data;
+    std::vector<std::string> str_data;
+    int64_t length;
+};
 
-    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsObject()) {
-        Napi::TypeError::New(env, "Expected (NativeContext, object)")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-    }
-
-    NativeContext* ctx = Napi::ObjectWrap<NativeContext>::Unwrap(info[0].As<Napi::Object>());
-    TeideThread* thread = &ctx->thread();
-    Napi::Object data = info[1].As<Napi::Object>();
+// Serialize JS column data into ColSpec vector on V8 thread.
+// Returns true on success, false if an exception was thrown.
+static bool SerializeColumns(Napi::Env env, Napi::Object data,
+                             std::vector<ColSpec>& cols) {
     Napi::Array keys = data.GetPropertyNames();
     uint32_t ncols = keys.Length();
-
-    // Serialize column data on V8 thread
-    struct ColSpec {
-        std::string name;
-        int8_t type;
-        std::vector<double> f64_data;
-        std::vector<int64_t> i64_data;
-        std::vector<uint8_t> bool_data;
-        std::vector<std::string> str_data;
-        int64_t length;
-    };
-    std::vector<ColSpec> cols(ncols);
+    cols.resize(ncols);
 
     for (uint32_t i = 0; i < ncols; i++) {
         cols[i].name = keys.Get(i).As<Napi::String>().Utf8Value();
@@ -149,19 +140,17 @@ Napi::Value TableFromArraysSync(const Napi::CallbackInfo& info) {
                     cols[i].i64_data[(size_t)j] = buf[j];
             } else if (taType == napi_bigint64_array) {
                 cols[i].type = TD_I64;
-                // BigInt64Array - read via raw buffer
                 Napi::ArrayBuffer ab = ta.ArrayBuffer();
                 int64_t* src = reinterpret_cast<int64_t*>(
                     static_cast<uint8_t*>(ab.Data()) + ta.ByteOffset());
                 cols[i].i64_data.assign(src, src + cols[i].length);
             } else if (taType == napi_float32_array) {
-                cols[i].type = TD_F64; // upcast to f64
+                cols[i].type = TD_F64;
                 auto buf = val.As<Napi::Float32Array>();
                 cols[i].f64_data.resize((size_t)cols[i].length);
                 for (int64_t j = 0; j < cols[i].length; j++)
                     cols[i].f64_data[(size_t)j] = (double)buf[j];
             } else {
-                // Default: treat as f64
                 cols[i].type = TD_F64;
                 cols[i].f64_data.resize((size_t)cols[i].length);
                 Napi::ArrayBuffer ab = ta.ArrayBuffer();
@@ -188,7 +177,6 @@ Napi::Value TableFromArraysSync(const Napi::CallbackInfo& info) {
                 for (uint32_t j = 0; j < arr.Length(); j++)
                     cols[i].str_data[j] = arr.Get(j).As<Napi::String>().Utf8Value();
             } else {
-                // number
                 cols[i].type = TD_F64;
                 cols[i].f64_data.resize((size_t)cols[i].length);
                 for (uint32_t j = 0; j < arr.Length(); j++)
@@ -197,51 +185,75 @@ Napi::Value TableFromArraysSync(const Napi::CallbackInfo& info) {
         } else {
             Napi::TypeError::New(env, "Column value must be an Array or TypedArray")
                 .ThrowAsJavaScriptException();
-            return env.Undefined();
+            return false;
         }
     }
+    return true;
+}
 
-    // Execute on Teide thread
-    void* result = thread->dispatch_sync([&cols, ncols]() -> void* {
-        td_t* tbl = td_table_new((int64_t)ncols);
-        if (TD_IS_ERR(tbl)) return tbl;
+// Build a table from serialized column specs on Teide thread.
+static void* BuildTableFromCols(std::vector<ColSpec>& cols) {
+    uint32_t ncols = (uint32_t)cols.size();
+    td_t* tbl = td_table_new((int64_t)ncols);
+    if (TD_IS_ERR(tbl)) return tbl;
 
-        for (uint32_t i = 0; i < ncols; i++) {
-            int64_t name_id = td_sym_intern(cols[i].name.c_str(), cols[i].name.size());
-            int64_t len = cols[i].length;
-            td_t* vec = nullptr;
+    for (uint32_t i = 0; i < ncols; i++) {
+        int64_t name_id = td_sym_intern(cols[i].name.c_str(), cols[i].name.size());
+        int64_t len = cols[i].length;
+        td_t* vec = nullptr;
 
-            if (cols[i].type == TD_SYM) {
-                uint8_t width = td_sym_dict_width(td_sym_count() + (uint32_t)len);
-                vec = td_sym_vec_new(width, len);
-                if (TD_IS_ERR(vec)) return vec;
-                vec->len = len;
-                for (int64_t j = 0; j < len; j++) {
-                    int64_t sid = td_sym_intern(cols[i].str_data[(size_t)j].c_str(),
-                                                 cols[i].str_data[(size_t)j].size());
-                    td_write_sym(td_data(vec), j, (uint64_t)sid, TD_SYM, vec->attrs);
-                }
-            } else {
-                vec = td_vec_new(cols[i].type, len);
-                if (TD_IS_ERR(vec)) return vec;
-                vec->len = len;
-                void* dst = td_data(vec);
-                if (cols[i].type == TD_F64) {
-                    memcpy(dst, cols[i].f64_data.data(), (size_t)len * sizeof(double));
-                } else if (cols[i].type == TD_I64) {
-                    memcpy(dst, cols[i].i64_data.data(), (size_t)len * sizeof(int64_t));
-                } else if (cols[i].type == TD_I32) {
-                    // I32 was read from Int32Array and stored as i64 - write as i32
-                    int32_t* dst32 = (int32_t*)dst;
-                    for (int64_t j = 0; j < len; j++)
-                        dst32[j] = (int32_t)cols[i].i64_data[(size_t)j];
-                } else if (cols[i].type == TD_BOOL) {
-                    memcpy(dst, cols[i].bool_data.data(), (size_t)len);
-                }
+        if (cols[i].type == TD_SYM) {
+            uint8_t width = td_sym_dict_width(td_sym_count() + (uint32_t)len);
+            vec = td_sym_vec_new(width, len);
+            if (TD_IS_ERR(vec)) return vec;
+            vec->len = len;
+            for (int64_t j = 0; j < len; j++) {
+                int64_t sid = td_sym_intern(cols[i].str_data[(size_t)j].c_str(),
+                                             cols[i].str_data[(size_t)j].size());
+                td_write_sym(td_data(vec), j, (uint64_t)sid, TD_SYM, vec->attrs);
             }
-            tbl = td_table_add_col(tbl, name_id, vec);
+        } else {
+            vec = td_vec_new(cols[i].type, len);
+            if (TD_IS_ERR(vec)) return vec;
+            vec->len = len;
+            void* dst = td_data(vec);
+            if (cols[i].type == TD_F64) {
+                memcpy(dst, cols[i].f64_data.data(), (size_t)len * sizeof(double));
+            } else if (cols[i].type == TD_I64) {
+                memcpy(dst, cols[i].i64_data.data(), (size_t)len * sizeof(int64_t));
+            } else if (cols[i].type == TD_I32) {
+                int32_t* dst32 = (int32_t*)dst;
+                for (int64_t j = 0; j < len; j++)
+                    dst32[j] = (int32_t)cols[i].i64_data[(size_t)j];
+            } else if (cols[i].type == TD_BOOL) {
+                memcpy(dst, cols[i].bool_data.data(), (size_t)len);
+            }
         }
-        return (void*)tbl;
+        tbl = td_table_add_col(tbl, name_id, vec);
+    }
+    return (void*)tbl;
+}
+
+// ---- Standalone function: TableFromArraysSync ----
+
+Napi::Value TableFromArraysSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsObject()) {
+        Napi::TypeError::New(env, "Expected (NativeContext, object)")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeContext* ctx = Napi::ObjectWrap<NativeContext>::Unwrap(info[0].As<Napi::Object>());
+    TeideThread* thread = &ctx->thread();
+    Napi::Object data = info[1].As<Napi::Object>();
+
+    std::vector<ColSpec> cols;
+    if (!SerializeColumns(env, data, cols)) return env.Undefined();
+
+    void* result = thread->dispatch_sync([&cols]() -> void* {
+        return BuildTableFromCols(cols);
     });
 
     td_t* tbl = (td_t*)result;
@@ -251,4 +263,47 @@ Napi::Value TableFromArraysSync(const Napi::CallbackInfo& info) {
         return env.Undefined();
     }
     return NativeTable::Create(env, tbl, thread);
+}
+
+// ---- Standalone function: TableFromArrays (async) ----
+
+Napi::Value TableFromArrays(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsObject()) {
+        Napi::TypeError::New(env, "Expected (NativeContext, object)")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeContext* ctx = Napi::ObjectWrap<NativeContext>::Unwrap(info[0].As<Napi::Object>());
+    TeideThread* thread = &ctx->thread();
+    Napi::Object data = info[1].As<Napi::Object>();
+
+    // Serialize on V8 thread into a shared_ptr so the lambda owns the data
+    auto cols = std::make_shared<std::vector<ColSpec>>();
+    if (!SerializeColumns(env, data, *cols)) return env.Undefined();
+
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto tsfn = Napi::ThreadSafeFunction::New(env, Napi::Function(), "tableFromArrays", 0, 1);
+
+    thread->dispatch_async(
+        [cols]() -> void* {
+            return BuildTableFromCols(*cols);
+        },
+        tsfn,
+        [deferred, thread](Napi::Env env, void* data) {
+            td_t* tbl = (td_t*)data;
+            if (!tbl || TD_IS_ERR(tbl)) {
+                std::string msg = "Table creation failed";
+                if (tbl && TD_IS_ERR(tbl))
+                    msg += std::string(": ") + td_err_str(TD_ERR_CODE(tbl));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
+            } else {
+                deferred.Resolve(NativeTable::Create(env, tbl, thread));
+            }
+        }
+    );
+
+    return deferred.Promise();
 }

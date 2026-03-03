@@ -18,6 +18,11 @@ export class Table {
         return new Table(result, ctx._native);
     }
 
+    static async fromArrays(ctx: { _native: any }, data: Record<string, ArrayLike<any>>): Promise<Table> {
+        const result = await addon.tableFromArrays(ctx._native, data);
+        return new Table(result, ctx._native);
+    }
+
     get nRows(): number { return this._native.nRows; }
     get nCols(): number { return this._native.nCols; }
     get columns(): string[] { return this._native.columns; }

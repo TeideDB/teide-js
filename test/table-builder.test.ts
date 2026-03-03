@@ -57,4 +57,60 @@ describe('Table construction', () => {
       ctx.destroy();
     }
   });
+
+  it('fromArrays async with number arrays', async () => {
+    const ctx = new Context();
+    try {
+      const t = await Table.fromArrays(ctx, {
+        x: [1, 2, 3],
+        y: [4.0, 5.0, 6.0],
+      });
+      expect(t.nRows).toBe(3);
+      expect(t.nCols).toBe(2);
+      expect(t.columns).toContain('x');
+      expect(t.columns).toContain('y');
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('fromArrays async with TypedArrays', async () => {
+    const ctx = new Context();
+    try {
+      const t = await Table.fromArrays(ctx, {
+        vals: new Float64Array([1.1, 2.2, 3.3]),
+      });
+      expect(t.nRows).toBe(3);
+      const data = t.col('vals').data;
+      expect(data[0]).toBeCloseTo(1.1);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('fromArrays async with string arrays', async () => {
+    const ctx = new Context();
+    try {
+      const t = await Table.fromArrays(ctx, {
+        names: ['alice', 'bob', 'charlie'],
+      });
+      expect(t.nRows).toBe(3);
+      expect(t.col('names').dtype).toBe('sym');
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('fromArrays async with boolean arrays', async () => {
+    const ctx = new Context();
+    try {
+      const t = await Table.fromArrays(ctx, {
+        flags: [true, false, true],
+      });
+      expect(t.nRows).toBe(3);
+      expect(t.col('flags').dtype).toBe('bool');
+    } finally {
+      ctx.destroy();
+    }
+  });
 });
