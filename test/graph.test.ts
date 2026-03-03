@@ -34,11 +34,11 @@ describe('Rel', () => {
 
     it('save/load roundtrip', () => {
         const ctx = new Context();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-rel-'));
         try {
             const edges = ctx.readCsvSync(EDGES);
             const rel = Rel.fromEdgesSync(edges, 'src', 'dst', { nSrc: 5, nDst: 5, sort: true });
 
-            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-rel-'));
             rel.saveSync(dir);
 
             const rel2 = Rel.loadSync(ctx, dir);
@@ -51,19 +51,19 @@ describe('Rel', () => {
 
             rel.destroy();
             rel2.destroy();
-            fs.rmSync(dir, { recursive: true });
         } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
             ctx.destroy();
         }
     });
 
     it('save/load async roundtrip', async () => {
         const ctx = new Context();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-rel-'));
         try {
             const edges = ctx.readCsvSync(EDGES);
             const rel = await Rel.fromEdges(edges, 'src', 'dst', { nSrc: 5, nDst: 5, sort: true });
 
-            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-rel-'));
             await rel.save(dir);
 
             const rel2 = await Rel.load(ctx, dir);
@@ -75,19 +75,19 @@ describe('Rel', () => {
 
             rel.destroy();
             rel2.destroy();
-            fs.rmSync(dir, { recursive: true });
         } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
             ctx.destroy();
         }
     });
 
     it('mmap loads relationship', () => {
         const ctx = new Context();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-rel-'));
         try {
             const edges = ctx.readCsvSync(EDGES);
             const rel = Rel.fromEdgesSync(edges, 'src', 'dst', { nSrc: 5, nDst: 5, sort: true });
 
-            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-rel-'));
             rel.saveSync(dir);
 
             const rel2 = Rel.mmapSync(ctx, dir);
@@ -99,8 +99,8 @@ describe('Rel', () => {
 
             rel.destroy();
             rel2.destroy();
-            fs.rmSync(dir, { recursive: true });
         } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
             ctx.destroy();
         }
     });
@@ -158,12 +158,12 @@ describe('Graph - expand', () => {
 
     it('expand reverse from node 3 finds 2 sources', () => {
         const ctx = new Context();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-node3-'));
         try {
             const edges = ctx.readCsvSync(EDGES);
             const rel = Rel.fromEdgesSync(edges, 'src', 'dst', { nSrc: 5, nDst: 5, sort: true });
 
             // Node 3 has incoming edges from 1 and 2
-            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-node3-'));
             const csvPath = path.join(dir, 'node3.csv');
             fs.writeFileSync(csvPath, 'node\n3\n');
             const node3 = ctx.readCsvSync(csvPath);
@@ -173,8 +173,8 @@ describe('Graph - expand', () => {
 
             expect(result.nRows).toBe(2);
             rel.destroy();
-            fs.rmSync(dir, { recursive: true });
         } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
             ctx.destroy();
         }
     });
@@ -192,7 +192,8 @@ describe('Graph - varExpand', () => {
             const result = g.varExpandSync('node', rel, 'fwd', { minDepth: 1, maxDepth: 3 });
 
             // Node 0 can reach: depth 1 -> {1,2}, depth 2 -> {3}, depth 3 -> {4}
-            expect(result.nRows).toBeGreaterThan(0);
+            // At minimum 4 distinct destinations reachable (possibly more rows if paths counted)
+            expect(result.nRows).toBeGreaterThanOrEqual(4);
             rel.destroy();
         } finally {
             ctx.destroy();
@@ -209,7 +210,7 @@ describe('Graph - varExpand', () => {
             const g = ctx.graph(nodes);
             const result = await g.varExpand('node', rel, 'fwd', { minDepth: 1, maxDepth: 3 });
 
-            expect(result.nRows).toBeGreaterThan(0);
+            expect(result.nRows).toBeGreaterThanOrEqual(4);
             rel.destroy();
         } finally {
             ctx.destroy();
@@ -257,26 +258,29 @@ describe('Graph - shortestPath', () => {
 describe('Graph - wcoJoin', () => {
     it('triangle detection with sorted rels', () => {
         const ctx = new Context();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-tri-'));
         try {
             // For WCO join, we need a graph with triangles and sorted adjacency lists
             // Triangle: 0->1, 1->2, 0->2
-            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teide-tri-'));
             const triPath = path.join(dir, 'tri.csv');
             fs.writeFileSync(triPath, 'src,dst\n0,1\n0,2\n1,2\n');
             const triEdges = ctx.readCsvSync(triPath);
 
             const rel = Rel.fromEdgesSync(triEdges, 'src', 'dst', { nSrc: 3, nDst: 3, sort: true });
 
-            // WCO join with 3 vars and the same rel used for all edges
-            const nodes = ctx.readCsvSync(NODES);
-            const g = ctx.graph(nodes);
+            // Use a node table that covers all 3 triangle vertices
+            const nodesPath = path.join(dir, 'tri_nodes.csv');
+            fs.writeFileSync(nodesPath, 'node\n0\n1\n2\n');
+            const triNodes = ctx.readCsvSync(nodesPath);
+
+            const g = ctx.graph(triNodes);
             const result = g.wcoJoinSync([rel, rel, rel], { nVars: 3 });
 
-            // Should find triangle patterns
-            expect(result.nRows).toBeGreaterThanOrEqual(0);
+            // Should find at least one triangle pattern (0->1->2 with 0->2)
+            expect(result.nRows).toBeGreaterThan(0);
             rel.destroy();
-            fs.rmSync(dir, { recursive: true });
         } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
             ctx.destroy();
         }
     });

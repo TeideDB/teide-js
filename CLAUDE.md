@@ -15,10 +15,13 @@ npm run build:native:release  # Native addon with -O3 optimizations
 npm run build:ts           # TypeScript compilation only
 npm test                   # Run all tests (vitest run)
 npx vitest run test/smoke.test.ts  # Run a single test file
-npm run clean              # Remove build/ and dist/
+npm run clean              # Remove build/, dist/, and vendor/teide/
+npm run sync-vendor        # Clone vendor/teide from GitHub (skips if present)
 ```
 
-Requires: CMake ≥ 3.15, a C17/C++17 compiler, Node.js ≥ 18.
+The `install` script runs `sync-vendor` + native compile automatically on `npm install`.
+
+Requires: CMake ≥ 3.15, a C17/C++17 compiler, Node.js ≥ 18, git (for vendor sync).
 
 ## Architecture
 
@@ -38,6 +41,17 @@ A dedicated **Teide thread** owns the C heap and runs all Teide operations. The 
 4. **Execute** (Teide thread): `ExecutePlan()` runs against the table.
 5. **Return**: Result wrapped in `NativeTable` → TypeScript `Table`, with zero-copy `Series` accessors.
 
+### Graph Execution Pipeline
+
+Graph operations bypass the lazy Query builder and execute directly:
+
+1. **Build** (TypeScript): User calls `Graph.expand()`, `Graph.varExpand()`, etc. with a `Rel` and parameters.
+2. **Dispatch** (V8 thread): The call is routed through `dispatch_sync()`/`dispatch_async()` to the Teide thread.
+3. **Execute** (Teide thread): `ExecuteGraphOp()` creates a `td_graph_t`, builds an op tree (e.g., `td_scan` → `td_expand`), runs `td_optimize` + `td_execute`, frees the graph.
+4. **Return**: Result wrapped in `NativeTable` → TypeScript `Table`.
+
+CSR relationships (`Rel`) must be built first from an edge table or loaded from disk. `Rel` objects are reusable across multiple graph operations.
+
 ### Zero-Copy Data Access
 
 `NativeSeries` exposes C heap memory directly as JS TypedArrays via `napi_create_external_typed_array`. No data is copied. The `heap_alive_` atomic flag prevents use-after-free when GC runs Series destructors after heap teardown.
@@ -50,7 +64,7 @@ A dedicated **Teide thread** owns the C heap and runs all Teide operations. The 
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| TS API | `lib/context.ts` | Entry point; loads `.node` addon, wraps `NativeContext` |
+| TS API | `lib/context.ts` | Entry point; loads `.node` addon, wraps `NativeContext`, `graph()` factory |
 | TS API | `lib/query.ts` | Lazy query builder with operation stack |
 | TS API | `lib/expr.ts` | Expression tree (column refs, literals, ops, aggregations) |
 | TS API | `lib/table.ts` | Table + GroupBy wrappers |
@@ -66,16 +80,17 @@ A dedicated **Teide thread** owns the C heap and runs all Teide operations. The 
 | NAPI | `src/rel.cpp` | NativeRel: CSR relationship wrapper |
 | NAPI | `src/graph_ops.cpp` | Graph operations: expand, var_expand, shortest_path, wco_join |
 | NAPI | `src/addon.cpp` | Module init, exports `collectSync`/`collect` |
+| Scripts | `scripts/sync-vendor.sh` | Vendor auto-sync: shallow-clone Teide C core from GitHub |
 | C Core | `vendor/teide/include/teide/td.h` | Teide public API + type/opcode definitions |
 | Tests | `test/*.test.ts` | Vitest: smoke, table, expr (unit), e2e |
-| Fixtures | `test/fixtures/` | CSV test data (`small.csv`, `sales.csv`) |
+| Fixtures | `test/fixtures/` | CSV test data (`small.csv`, `sales.csv`, `nodes.csv`, `edges.csv`) |
 
 ## Conventions
 
 - **TypeScript**: camelCase methods, fluent/chainable Query API, options objects (`{ descending?: boolean }`), `Symbol.dispose` for Context cleanup.
 - **Expression opcodes**: Aggregation opcodes in `lib/expr.ts` must match C defines in `vendor/teide/include/teide/td.h` (e.g., `OP_SUM=50`, `OP_AVG=55`).
 - **NAPI classes**: Inherit `Napi::ObjectWrap<T>`, register via `DefineClass()`. Use `Napi::External<T>` for opaque C pointers.
-- **Memory**: `td_retain()`/`td_release()` for C object lifetime; skip release if `heap_alive_` is false.
+- **Memory**: `td_retain()`/`td_release()` for table/column lifetime; `td_rel_free()` for CSR relationships. Both skip cleanup if `heap_alive_` is false.
 - **Graph opcodes**: Graph opcodes in `lib/graph.ts` direction constants must match C defines: `TD_DIR_FWD=0`, `TD_DIR_REV=1`, `TD_DIR_BOTH=2`.
 - **Vendor sync**: `vendor/teide/` is auto-synced from GitHub via `scripts/sync-vendor.sh`. Run `npm run clean` to force re-sync.
 - **Addon path**: Loaded at runtime from `build/Release/teidedb_addon.node` (relative to `dist/`).

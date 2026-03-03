@@ -304,6 +304,8 @@ Napi::Value NativeRel::Save(const Napi::CallbackInfo& info) {
 }
 
 // --- Destroy ---
+// Note: td_rel_free is called directly (same pattern as NativeTable destructor
+// calling td_release directly). The C free function is safe from any thread.
 Napi::Value NativeRel::Destroy(const Napi::CallbackInfo& info) {
     if (!destroyed_ && rel_) {
         td_rel_free(rel_);

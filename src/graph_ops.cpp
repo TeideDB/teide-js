@@ -12,6 +12,7 @@ static td_t* ExecuteGraphOp(td_t* tbl, std::function<td_op_t*(td_graph_t*)> buil
     if (!root) { td_graph_free(g); return nullptr; }
 
     root = td_optimize(g, root);
+    if (!root) { td_graph_free(g); return nullptr; }
     td_t* result = td_execute(g, root);
     td_graph_free(g);
     return result;
@@ -84,7 +85,9 @@ Napi::Value GraphExpand(const Napi::CallbackInfo& info) {
         [deferred, thr](Napi::Env env, void* data) {
             td_t* res = (td_t*)data;
             if (!res || TD_IS_ERR(res)) {
-                deferred.Reject(Napi::Error::New(env, "graphExpand failed").Value());
+                std::string msg = "graphExpand failed";
+                if (res && TD_IS_ERR(res)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeTable::Create(env, res, thr));
             }
@@ -105,10 +108,18 @@ Napi::Value GraphVarExpandSync(const Napi::CallbackInfo& info) {
     NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
     std::string col_name = info[1].As<Napi::String>().Utf8Value();
     NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[2].As<Napi::Object>());
-    uint8_t direction = (uint8_t)info[3].As<Napi::Number>().Uint32Value();
-    uint8_t min_depth = (uint8_t)info[4].As<Napi::Number>().Uint32Value();
-    uint8_t max_depth = (uint8_t)info[5].As<Napi::Number>().Uint32Value();
+    uint32_t direction_raw = info[3].As<Napi::Number>().Uint32Value();
+    uint32_t min_depth_raw = info[4].As<Napi::Number>().Uint32Value();
+    uint32_t max_depth_raw = info[5].As<Napi::Number>().Uint32Value();
     bool track_path = info[6].As<Napi::Boolean>().Value();
+
+    if (min_depth_raw > 255 || max_depth_raw > 255) {
+        Napi::RangeError::New(env, "minDepth/maxDepth must be 0-255").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    uint8_t direction = (uint8_t)direction_raw;
+    uint8_t min_depth = (uint8_t)min_depth_raw;
+    uint8_t max_depth = (uint8_t)max_depth_raw;
 
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
@@ -143,10 +154,18 @@ Napi::Value GraphVarExpand(const Napi::CallbackInfo& info) {
     NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
     std::string col_name = info[1].As<Napi::String>().Utf8Value();
     NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[2].As<Napi::Object>());
-    uint8_t direction = (uint8_t)info[3].As<Napi::Number>().Uint32Value();
-    uint8_t min_depth = (uint8_t)info[4].As<Napi::Number>().Uint32Value();
-    uint8_t max_depth = (uint8_t)info[5].As<Napi::Number>().Uint32Value();
+    uint32_t direction_raw = info[3].As<Napi::Number>().Uint32Value();
+    uint32_t min_depth_raw = info[4].As<Napi::Number>().Uint32Value();
+    uint32_t max_depth_raw = info[5].As<Napi::Number>().Uint32Value();
     bool track_path = info[6].As<Napi::Boolean>().Value();
+
+    if (min_depth_raw > 255 || max_depth_raw > 255) {
+        Napi::RangeError::New(env, "minDepth/maxDepth must be 0-255").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    uint8_t direction = (uint8_t)direction_raw;
+    uint8_t min_depth = (uint8_t)min_depth_raw;
+    uint8_t max_depth = (uint8_t)max_depth_raw;
 
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
@@ -166,7 +185,9 @@ Napi::Value GraphVarExpand(const Napi::CallbackInfo& info) {
         [deferred, thr](Napi::Env env, void* data) {
             td_t* res = (td_t*)data;
             if (!res || TD_IS_ERR(res)) {
-                deferred.Reject(Napi::Error::New(env, "graphVarExpand failed").Value());
+                std::string msg = "graphVarExpand failed";
+                if (res && TD_IS_ERR(res)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeTable::Create(env, res, thr));
             }
@@ -188,7 +209,13 @@ Napi::Value GraphShortestPathSync(const Napi::CallbackInfo& info) {
     int64_t src_id = info[1].As<Napi::Number>().Int64Value();
     int64_t dst_id = info[2].As<Napi::Number>().Int64Value();
     NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[3].As<Napi::Object>());
-    uint8_t max_depth = (uint8_t)info[4].As<Napi::Number>().Uint32Value();
+    uint32_t max_depth_raw = info[4].As<Napi::Number>().Uint32Value();
+
+    if (max_depth_raw > 255) {
+        Napi::RangeError::New(env, "maxDepth must be 0-255").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    uint8_t max_depth = (uint8_t)max_depth_raw;
 
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
@@ -225,7 +252,13 @@ Napi::Value GraphShortestPath(const Napi::CallbackInfo& info) {
     int64_t src_id = info[1].As<Napi::Number>().Int64Value();
     int64_t dst_id = info[2].As<Napi::Number>().Int64Value();
     NativeRel* rel_wrap = Napi::ObjectWrap<NativeRel>::Unwrap(info[3].As<Napi::Object>());
-    uint8_t max_depth = (uint8_t)info[4].As<Napi::Number>().Uint32Value();
+    uint32_t max_depth_raw = info[4].As<Napi::Number>().Uint32Value();
+
+    if (max_depth_raw > 255) {
+        Napi::RangeError::New(env, "maxDepth must be 0-255").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    uint8_t max_depth = (uint8_t)max_depth_raw;
 
     td_t* tbl = table->ptr();
     td_rel_t* rel = rel_wrap->ptr();
@@ -246,7 +279,9 @@ Napi::Value GraphShortestPath(const Napi::CallbackInfo& info) {
         [deferred, thr](Napi::Env env, void* data) {
             td_t* res = (td_t*)data;
             if (!res || TD_IS_ERR(res)) {
-                deferred.Reject(Napi::Error::New(env, "graphShortestPath failed").Value());
+                std::string msg = "graphShortestPath failed";
+                if (res && TD_IS_ERR(res)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeTable::Create(env, res, thr));
             }
@@ -266,9 +301,16 @@ Napi::Value GraphWcoJoinSync(const Napi::CallbackInfo& info) {
 
     NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
     Napi::Array rel_arr = info[1].As<Napi::Array>();
-    uint8_t n_vars = (uint8_t)info[2].As<Napi::Number>().Uint32Value();
+    uint32_t n_vars_raw = info[2].As<Napi::Number>().Uint32Value();
+    uint32_t n_rels_raw = rel_arr.Length();
 
-    uint8_t n_rels = (uint8_t)rel_arr.Length();
+    if (n_vars_raw > 255 || n_rels_raw > 255) {
+        Napi::RangeError::New(env, "nVars and nRels must be 0-255").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    uint8_t n_vars = (uint8_t)n_vars_raw;
+    uint8_t n_rels = (uint8_t)n_rels_raw;
+
     std::vector<td_rel_t*> rels(n_rels);
     for (uint8_t i = 0; i < n_rels; i++) {
         NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());
@@ -304,9 +346,16 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
 
     NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
     Napi::Array rel_arr = info[1].As<Napi::Array>();
-    uint8_t n_vars = (uint8_t)info[2].As<Napi::Number>().Uint32Value();
+    uint32_t n_vars_raw = info[2].As<Napi::Number>().Uint32Value();
+    uint32_t n_rels_raw = rel_arr.Length();
 
-    uint8_t n_rels = (uint8_t)rel_arr.Length();
+    if (n_vars_raw > 255 || n_rels_raw > 255) {
+        Napi::RangeError::New(env, "nVars and nRels must be 0-255").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    uint8_t n_vars = (uint8_t)n_vars_raw;
+    uint8_t n_rels = (uint8_t)n_rels_raw;
+
     std::vector<td_rel_t*> rels(n_rels);
     for (uint8_t i = 0; i < n_rels; i++) {
         NativeRel* rw = Napi::ObjectWrap<NativeRel>::Unwrap(rel_arr.Get(i).As<Napi::Object>());
@@ -328,7 +377,9 @@ Napi::Value GraphWcoJoin(const Napi::CallbackInfo& info) {
         [deferred, thr](Napi::Env env, void* data) {
             td_t* res = (td_t*)data;
             if (!res || TD_IS_ERR(res)) {
-                deferred.Reject(Napi::Error::New(env, "graphWcoJoin failed").Value());
+                std::string msg = "graphWcoJoin failed";
+                if (res && TD_IS_ERR(res)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(res));
+                deferred.Reject(Napi::Error::New(env, msg).Value());
             } else {
                 deferred.Resolve(NativeTable::Create(env, res, thr));
             }

@@ -11,7 +11,7 @@
     "build:native:release": "npm run sync-vendor && cmake-js compile --release",
     "build:ts": "tsc",
     "build": "npm run build:native && npm run build:ts",
-    "prepublishOnly": "npm run build:ts",
+    "prepublishOnly": "npm run sync-vendor && npm run build:ts",
     "test": "vitest run",
     "clean": "cmake-js clean && rm -rf dist vendor/teide"
   },
