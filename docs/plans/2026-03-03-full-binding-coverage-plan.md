@@ -2320,7 +2320,7 @@ Wrap `td_bool`, `td_u8`, `td_i16`, `td_i32`, `td_i64`, `td_f64`, `td_str`, `td_s
 
 ### Task 5.3: Add NativeList class
 
-- [ ] Add NativeList class wrapping td_list_* API with List TypeScript wrapper
+- [x] Add NativeList class wrapping td_list_* API with List TypeScript wrapper
 
 **Files:**
 - Create: `src/list.h`, `src/list.cpp`

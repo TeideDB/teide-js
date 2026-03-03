@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Context, Vector, Atom } from '../lib';
+import { Context, Vector, Atom, List } from '../lib';
 
 describe('Vector API', () => {
   it('creates and appends to a vector', () => {
@@ -152,6 +152,109 @@ describe('Atom API', () => {
       expect(val.length).toBe(16);
       expect(val[0]).toBe(1);
       expect(val[15]).toBe(16);
+    } finally {
+      ctx.destroy();
+    }
+  });
+});
+
+describe('List API', () => {
+  it('creates an empty list', () => {
+    const ctx = new Context();
+    try {
+      const list = List.newSync(ctx, 10);
+      expect(list.length).toBe(0);
+      expect(list.type).toBe('list');
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('appends atoms and retrieves them', () => {
+    const ctx = new Context();
+    try {
+      const a1 = Atom.f64(ctx, 42.0);
+      const a2 = Atom.str(ctx, 'hello');
+
+      let list = List.newSync(ctx, 10);
+      list = list.append(a1);
+      list = list.append(a2);
+      expect(list.length).toBe(2);
+
+      const item0 = list.get(0) as Atom;
+      expect(item0).not.toBeNull();
+      expect(item0.type).toBe('f64');
+      expect(item0.value).toBeCloseTo(42.0);
+
+      const item1 = list.get(1) as Atom;
+      expect(item1.type).toBe('str');
+      expect(item1.value).toBe('hello');
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('appends vectors and retrieves them', () => {
+    const ctx = new Context();
+    try {
+      const v = Vector.fromRawSync(ctx, 'f64', new Float64Array([1, 2, 3]));
+
+      let list = List.newSync(ctx, 10);
+      list = list.append(v);
+      expect(list.length).toBe(1);
+
+      const item = list.get(0) as Vector;
+      expect(item).not.toBeNull();
+      expect(item.length).toBe(3);
+      expect(item.get(0)).toBeCloseTo(1);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('set replaces an element', () => {
+    const ctx = new Context();
+    try {
+      const a1 = Atom.i32(ctx, 10);
+      const a2 = Atom.i32(ctx, 20);
+      const a3 = Atom.str(ctx, 'replaced');
+
+      let list = List.newSync(ctx, 10);
+      list = list.append(a1);
+      list = list.append(a2);
+
+      list.set(0, a3);
+      const item = list.get(0) as Atom;
+      expect(item.type).toBe('str');
+      expect(item.value).toBe('replaced');
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('mixed types: vectors, atoms, and nested lists', () => {
+    const ctx = new Context();
+    try {
+      const v = Vector.fromRawSync(ctx, 'i32', new Int32Array([10, 20]));
+      const a = Atom.bool(ctx, true);
+      let inner = List.newSync(ctx, 4);
+      inner = inner.append(Atom.f64(ctx, 99.9));
+
+      let list = List.newSync(ctx, 10);
+      list = list.append(v);
+      list = list.append(a);
+      list = list.append(inner);
+      expect(list.length).toBe(3);
+
+      const r0 = list.get(0) as Vector;
+      expect(r0.length).toBe(2);
+
+      const r1 = list.get(1) as Atom;
+      expect(r1.value).toBe(true);
+
+      const r2 = list.get(2) as List;
+      expect(r2.type).toBe('list');
+      expect(r2.length).toBe(1);
     } finally {
       ctx.destroy();
     }

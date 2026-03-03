@@ -11,3 +11,4 @@ export type { Direction, VarExpandOpts, ShortestPathOpts, WcoJoinOpts } from './
 export type { WindowFunc, WindowFuncKind, FrameBound, WindowOpts, JoinOpts, WindowJoinOpts } from './types';
 export { Vector } from './vector';
 export { Atom } from './atom';
+export { List } from './list';
