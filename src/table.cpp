@@ -118,7 +118,6 @@ Napi::Value NativeTable::AddCol(const Napi::CallbackInfo& info) {
 
     void* result = thread_->dispatch_sync([tbl, name, vec_ptr]() -> void* {
         int64_t name_id = td_sym_intern(name.c_str(), name.size());
-        td_retain(vec_ptr);
         return (void*)td_table_add_col(tbl, name_id, vec_ptr);
     });
 
@@ -180,7 +179,11 @@ Napi::Value NativeTable::SetColName(const Napi::CallbackInfo& info) {
 
 Napi::Value NativeTable::Schema(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    td_t* schema = td_table_schema(tbl_);
+    td_t* tbl = tbl_;
+    void* result = thread_->dispatch_sync([tbl]() -> void* {
+        return (void*)td_table_schema(tbl);
+    });
+    td_t* schema = (td_t*)result;
     if (!schema || TD_IS_ERR(schema)) {
         Napi::Error::New(env, "Failed to get table schema").ThrowAsJavaScriptException();
         return env.Undefined();
@@ -209,8 +212,9 @@ Napi::Value TableNewSync(const Napi::CallbackInfo& info) {
     });
 
     td_t* tbl = (td_t*)result;
-    if (TD_IS_ERR(tbl)) {
-        Napi::Error::New(env, std::string("Table creation failed: ") + td_err_str(TD_ERR_CODE(tbl)))
+    if (!tbl || TD_IS_ERR(tbl)) {
+        Napi::Error::New(env, std::string("Table creation failed: ") +
+            (tbl ? td_err_str(TD_ERR_CODE(tbl)) : "out of memory"))
             .ThrowAsJavaScriptException();
         return env.Undefined();
     }

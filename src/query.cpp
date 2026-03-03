@@ -450,6 +450,17 @@ static void DecomposeAgg(td_graph_t* g,
 // ---------------------------------------------------------------------------
 
 td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
+    // RAII guard: release any retained join tables on all return paths.
+    struct PlanCleanup {
+        const std::vector<PlanStep>& steps;
+        ~PlanCleanup() {
+            for (const auto& s : steps) {
+                if (s.join_right_table) td_release(s.join_right_table);
+                if (s.wjoin_right_table) td_release(s.wjoin_right_table);
+            }
+        }
+    } cleanup{plan};
+
     td_graph_t* g = td_graph_new(tbl);
     if (!g) return TD_ERR_PTR(TD_ERR_OOM);
 
@@ -634,6 +645,12 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                 }
                 result = td_table_add_col(result, name_id, col_result);
                 td_release(col_result);
+                if (!result || TD_IS_ERR(result)) {
+                    td_graph_free(g2);
+                    td_release(input_result);
+                    td_graph_free(g);
+                    return result ? result : TD_ERR_PTR(TD_ERR_OOM);
+                }
             }
 
             td_graph_free(g2);
@@ -671,8 +688,6 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
             current = td_join(g, left_table_node, left_keys.data(),
                               right_table_node, right_keys.data(),
                               n_keys, step.join_type);
-
-            td_release(step.join_right_table);
         }
         else if (step.type == "windowJoin") {
             td_op_t* left_table_node = current ? current : td_const_table(g, tbl);
@@ -702,7 +717,6 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                                      step.wjoin_lo, step.wjoin_hi,
                                      agg_ops.data(), agg_ins.data(), n_aggs);
 
-            td_release(step.wjoin_right_table);
             (void)right_id;
         }
         else if (step.type == "window") {
