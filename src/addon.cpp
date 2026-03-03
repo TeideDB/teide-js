@@ -9,6 +9,7 @@
 #include "rel.h"
 #include "graph_ops.h"
 #include "vector.h"
+#include "atom.h"
 #include "compat.h"
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -17,6 +18,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     NativeTable::Init(env, exports);
     NativeRel::Init(env, exports);
     NativeVector::Init(env, exports);
+    NativeAtom::Init(env, exports);
     exports.Set("collectSync", Napi::Function::New(env, QueryCollectSync));
     exports.Set("collect", Napi::Function::New(env, QueryCollect));
     exports.Set("graphExpandSync", Napi::Function::New(env, GraphExpandSync));

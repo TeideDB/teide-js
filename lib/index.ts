@@ -10,3 +10,4 @@ export { Graph } from './graph';
 export type { Direction, VarExpandOpts, ShortestPathOpts, WcoJoinOpts } from './graph';
 export type { WindowFunc, WindowFuncKind, FrameBound, WindowOpts, JoinOpts, WindowJoinOpts } from './types';
 export { Vector } from './vector';
+export { Atom } from './atom';

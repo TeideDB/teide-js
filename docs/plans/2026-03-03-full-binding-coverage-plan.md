@@ -2303,7 +2303,7 @@ git commit -m "feat(low-level): add Vector class wrapping td_vec_* API"
 
 ### Task 5.2: Add NativeAtom class
 
-- [ ] Add NativeAtom class wrapping td_* atom constructors with Atom TypeScript wrapper
+- [x] Add NativeAtom class wrapping td_* atom constructors with Atom TypeScript wrapper
 
 **Files:**
 - Create: `src/atom.h`, `src/atom.cpp`
