@@ -11,6 +11,8 @@ Napi::Object NativeContext::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod("readCsv", &NativeContext::ReadCsv),
         InstanceMethod("writeCsvSync", &NativeContext::WriteCsvSync),
         InstanceMethod("writeCsv", &NativeContext::WriteCsv),
+        InstanceMethod("saveTableSync", &NativeContext::SaveTableSync),
+        InstanceMethod("loadTableSync", &NativeContext::LoadTableSync),
         InstanceAccessor("threadExternal", &NativeContext::GetThreadExternal, nullptr),
     });
     exports.Set("NativeContext", func);
@@ -247,4 +249,60 @@ Napi::Value NativeContext::WriteCsv(const Napi::CallbackInfo& info) {
     );
 
     return deferred.Promise();
+}
+
+Napi::Value NativeContext::SaveTableSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsString()) {
+        Napi::TypeError::New(env, "saveTableSync(table, dir)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    NativeTable* table = Napi::ObjectWrap<NativeTable>::Unwrap(info[0].As<Napi::Object>());
+    std::string dir = info[1].As<Napi::String>().Utf8Value();
+    std::string sym_path = dir + "/.sym";
+    td_t* tbl = table->ptr();
+
+    void* result = thread_->dispatch_sync([tbl, dir, sym_path]() -> void* {
+        td_err_t err = td_splay_save(tbl, dir.c_str(), sym_path.c_str());
+        return (void*)(uintptr_t)err;
+    });
+
+    td_err_t err = (td_err_t)(uintptr_t)result;
+    if (err != TD_OK) {
+        Napi::Error::New(env, std::string("Failed to save splayed table: ") + td_err_str(err))
+            .ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+}
+
+Napi::Value NativeContext::LoadTableSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    check_alive(env);
+    if (env.IsExceptionPending()) return env.Undefined();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "Expected string dir path").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string dir = info[0].As<Napi::String>().Utf8Value();
+    std::string sym_path = dir + "/.sym";
+
+    void* result = thread_->dispatch_sync([dir, sym_path]() -> void* {
+        return (void*)td_read_splayed(dir.c_str(), sym_path.c_str());
+    });
+
+    td_t* tbl = (td_t*)result;
+    if (!tbl || TD_IS_ERR(tbl)) {
+        std::string msg = "Failed to load splayed table";
+        if (tbl && TD_IS_ERR(tbl)) msg += std::string(": ") + td_err_str(TD_ERR_CODE(tbl));
+        Napi::Error::New(env, msg).ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    return NativeTable::Create(env, tbl, thread_.get());
 }

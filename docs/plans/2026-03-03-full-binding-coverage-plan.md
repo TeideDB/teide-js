@@ -1788,7 +1788,7 @@ git commit -m "feat(io): add CSV read with options (delimiter, header, columnTyp
 
 ### Task 3.3: Add splayed table save/load
 
-- [ ] Add saveTableSync/loadTableSync for splayed table persistence
+- [x] Add saveTableSync/loadTableSync for splayed table persistence
 
 **Files:**
 - Modify: `lib/context.ts`

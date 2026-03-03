@@ -44,6 +44,16 @@ export class Context {
         await this._native.writeCsv(table._native, filePath);
     }
 
+    saveTableSync(table: Table, dir: string): void {
+        this._checkAlive();
+        this._native.saveTableSync(table._native, dir);
+    }
+
+    loadTableSync(dir: string): Table {
+        this._checkAlive();
+        return new Table(this._native.loadTableSync(dir), this._native);
+    }
+
     get _threadExternal(): any { return this._native.threadExternal; }
 
     graph(table: Table): Graph {

@@ -53,6 +53,22 @@ describe('I/O operations', () => {
     }
   });
 
+  it('save and load splayed table', () => {
+    const ctx = new Context();
+    const dir = path.join(os.tmpdir(), `teide-splay-${Date.now()}`);
+    fs.mkdirSync(dir, { recursive: true });
+    try {
+      const df = ctx.readCsvSync(SMALL);
+      ctx.saveTableSync(df, dir);
+      const loaded = ctx.loadTableSync(dir);
+      expect(loaded.nRows).toBe(3);
+      expect(loaded.columns).toContain('name');
+    } finally {
+      ctx.destroy();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('writeCsv writes async', async () => {
     const ctx = new Context();
     const outPath = path.join(os.tmpdir(), `teide-test-async-${Date.now()}.csv`);
