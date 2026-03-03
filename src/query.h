@@ -43,6 +43,8 @@ struct PlanStep {
     std::vector<std::string> sort_cols;               // for 'sort'
     std::vector<bool> sort_descs;                     // for 'sort'
     int64_t head_n = 0;                               // for 'head'
+    int64_t tail_n = 0;                               // for 'tail'
+    std::vector<std::string> distinct_cols;            // for 'distinct'
 };
 
 // Static query execution functions exposed to JS

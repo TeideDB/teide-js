@@ -690,7 +690,7 @@ git commit -m "feat(expr): add extract and dateTrunc date/time ops"
 
 ### Task 2.1: Add tail and distinct to Query
 
-- [ ] Add tail and distinct operations to Query and wire through SerializePlan/ExecutePlan
+- [x] Add tail and distinct operations to Query and wire through SerializePlan/ExecutePlan
 
 **Files:**
 - Modify: `lib/query.ts`

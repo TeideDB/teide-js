@@ -137,6 +137,16 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
         else if (step.type == "head") {
             step.head_n = (int64_t)op.Get("n").As<Napi::Number>().Int64Value();
         }
+        else if (step.type == "tail") {
+            step.tail_n = (int64_t)op.Get("n").As<Napi::Number>().Int64Value();
+        }
+        else if (step.type == "distinct") {
+            Napi::Array cols = op.Get("cols").As<Napi::Array>();
+            for (uint32_t c = 0; c < cols.Length(); c++) {
+                step.distinct_cols.push_back(
+                    cols.Get(c).As<Napi::String>().Utf8Value());
+            }
+        }
 
         plan.push_back(std::move(step));
     }
@@ -402,6 +412,31 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                 filter_pred = nullptr;
             }
             current = td_head(g, current, step.head_n);
+        }
+        else if (step.type == "tail") {
+            if (!current) {
+                current = td_const_table(g, tbl);
+            }
+            if (filter_pred) {
+                current = td_filter(g, current, filter_pred);
+                filter_pred = nullptr;
+            }
+            current = td_tail(g, current, step.tail_n);
+        }
+        else if (step.type == "distinct") {
+            if (filter_pred) {
+                td_t* mask = td_execute(g, filter_pred);
+                if (TD_IS_ERR(mask)) { td_graph_free(g); return mask; }
+                td_retain(mask);
+                g->selection = mask;
+                filter_pred = nullptr;
+            }
+            uint8_t n_keys = (uint8_t)step.distinct_cols.size();
+            std::vector<td_op_t*> key_nodes(n_keys);
+            for (uint8_t k = 0; k < n_keys; k++) {
+                key_nodes[k] = td_scan(g, step.distinct_cols[k].c_str());
+            }
+            current = td_distinct(g, key_nodes.data(), n_keys);
         }
     }
 

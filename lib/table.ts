@@ -32,6 +32,14 @@ export class Table {
     head(n: number): Query {
         return new Query(this._native, this._ctx).head(n);
     }
+
+    tail(n: number): Query {
+        return new Query(this._native, this._ctx).tail(n);
+    }
+
+    distinct(...cols: string[]): Query {
+        return new Query(this._native, this._ctx).distinct(...cols);
+    }
 }
 
 export class GroupBy {

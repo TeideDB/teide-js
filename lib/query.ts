@@ -47,6 +47,16 @@ export class Query {
         return this;
     }
 
+    tail(n: number): Query {
+        this._ops.push({ type: 'tail', n });
+        return this;
+    }
+
+    distinct(...cols: string[]): Query {
+        this._ops.push({ type: 'distinct', cols });
+        return this;
+    }
+
     collectSync(): Table {
         const result = addon.collectSync(this._nativeTable, this._ops);
         return new Table(result, this._ctx);
