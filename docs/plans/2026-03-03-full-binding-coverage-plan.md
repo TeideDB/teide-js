@@ -22,6 +22,11 @@
 
 ### Task 1.1: Add new aggregation opcodes to Expr
 
+- [x] Add opcode constants (OP_COUNT_DISTINCT, OP_STDDEV, OP_STDDEV_POP, OP_VAR, OP_VAR_POP) to lib/expr.ts
+- [x] Add aggregation methods (countDistinct, stddev, stddevPop, variance, variancePop) to Expr class
+- [x] Add unit tests to test/expr.test.ts
+- [x] All tests pass
+
 **Files:**
 - Modify: `lib/expr.ts`
 - Test: `test/expr.test.ts`
@@ -104,6 +109,10 @@ git commit -m "feat(expr): add countDistinct, stddev, variance aggregation opcod
 ---
 
 ### Task 1.2: Add new aggregation opcodes to C++ EmitExpr
+
+- [ ] Create test/expr-extended.test.ts with e2e test for countDistinct
+- [ ] Add countDistinct (and available stat agg) opcodes to EmitExpr switch in src/query.cpp
+- [ ] Build and verify e2e test passes
 
 **Files:**
 - Modify: `src/query.cpp` (the `EmitExpr` function, agg switch around line 175-185)
@@ -190,6 +199,8 @@ git commit -m "feat(query): wire countDistinct aggregation through EmitExpr"
 ---
 
 ### Task 1.3: Add string unary ops to Expr and EmitExpr
+
+- [ ] Add string unary ops (upper, lower, strlen, trim) to Expr and wire through EmitExpr
 
 **Files:**
 - Modify: `lib/expr.ts`
@@ -292,6 +303,8 @@ git commit -m "feat(expr): add string unary ops (upper, lower, strlen, trim)"
 
 ### Task 1.4: Add string binary ops (like, ilike) to Expr and EmitExpr
 
+- [ ] Add string binary ops (like, ilike, min2, max2) to Expr and wire through EmitExpr
+
 **Files:**
 - Modify: `lib/expr.ts`
 - Modify: `src/query.cpp`
@@ -374,6 +387,8 @@ git commit -m "feat(expr): add like, ilike, min2, max2 binary ops"
 ---
 
 ### Task 1.5: Add N-ary ops (substr, replace, concat) and cast
+
+- [ ] Add N-ary ops (substr, replace, concat, if) and cast to Expr and wire through EmitExpr
 
 **Files:**
 - Modify: `lib/expr.ts` — add `ExprKind 'naryop'` and `'cast'`
@@ -560,6 +575,8 @@ git commit -m "feat(expr): add naryop (substr, replace, concat, if), cast"
 
 ### Task 1.6: Add date/time ops (extract, dateTrunc)
 
+- [ ] Add date/time ops (extract, dateTrunc) to Expr and wire through EmitExpr
+
 **Files:**
 - Modify: `lib/expr.ts`
 - Modify: `src/query.h` — add `date_field` to ExprNode
@@ -672,6 +689,8 @@ git commit -m "feat(expr): add extract and dateTrunc date/time ops"
 ## Phase 2: Query Layer
 
 ### Task 2.1: Add tail and distinct to Query
+
+- [ ] Add tail and distinct operations to Query and wire through SerializePlan/ExecutePlan
 
 **Files:**
 - Modify: `lib/query.ts`
@@ -825,6 +844,8 @@ git commit -m "feat(query): add tail and distinct operations"
 
 ### Task 2.2: Add select and project to Query
 
+- [ ] Add select and project operations to Query and wire through SerializePlan/ExecutePlan
+
 **Files:**
 - Modify: `lib/query.ts`
 - Modify: `lib/table.ts`
@@ -971,6 +992,8 @@ git commit -m "feat(query): add select and project operations"
 ---
 
 ### Task 2.3: Add join to Query
+
+- [ ] Add join operation (inner, left, full) to Query and wire through SerializePlan/ExecutePlan
 
 **Files:**
 - Modify: `lib/query.ts`
@@ -1139,6 +1162,8 @@ git commit -m "feat(query): add join operation (inner, left, full)"
 ---
 
 ### Task 2.4: Add window functions to Query
+
+- [ ] Add window functions with full frame specification to Query and wire through SerializePlan/ExecutePlan
 
 **Files:**
 - Modify: `lib/query.ts`
@@ -1395,6 +1420,8 @@ git commit -m "feat(query): add window functions with full frame specification"
 
 ### Task 2.5: Add windowJoin to Query
 
+- [ ] Add windowJoin (ASOF-style) operation to Query and wire through SerializePlan/ExecutePlan
+
 **Files:**
 - Modify: `lib/query.ts`
 - Modify: `src/query.h`
@@ -1487,6 +1514,8 @@ git commit -m "feat(query): add windowJoin (ASOF-style) operation"
 ## Phase 3: I/O Layer
 
 ### Task 3.1: Add CSV write
+
+- [ ] Add writeCsvSync and writeCsv methods to Context and NativeContext
 
 **Files:**
 - Modify: `lib/context.ts`
@@ -1625,6 +1654,8 @@ git commit -m "feat(io): add writeCsvSync and writeCsv"
 
 ### Task 3.2: Add CSV read with options
 
+- [ ] Add CSV read options (delimiter, header, columnTypes) to readCsvSync and readCsv
+
 **Files:**
 - Modify: `src/context.h`
 - Modify: `src/context.cpp`
@@ -1757,6 +1788,8 @@ git commit -m "feat(io): add CSV read with options (delimiter, header, columnTyp
 
 ### Task 3.3: Add splayed table save/load
 
+- [ ] Add saveTableSync/loadTableSync for splayed table persistence
+
 **Files:**
 - Modify: `lib/context.ts`
 - Modify: `src/context.h`
@@ -1824,6 +1857,8 @@ git commit -m "feat(io): add splayed table save/load"
 
 ### Task 3.4: Add column save/load/mmap
 
+- [ ] Add column save/load/mmap methods to Series and Context
+
 **Files:**
 - Modify: `lib/series.ts` — add save methods
 - Modify: `lib/context.ts` — add loadCol, mmapCol
@@ -1839,6 +1874,8 @@ Follow the same dispatch_sync pattern. `NativeSeries` needs a `thread_` accessor
 
 ### Task 3.5: Add partitioned table load
 
+- [ ] Add partitioned table load via td_read_parted
+
 **Files:**
 - Modify: `lib/context.ts`
 - Modify: `src/context.h`, `src/context.cpp`
@@ -1851,6 +1888,8 @@ Follow the same dispatch_sync pattern. `NativeSeries` needs a `thread_` accessor
 ---
 
 ### Task 3.6: Add symbol table and metadata persistence
+
+- [ ] Add symbol table and metadata save/load methods to Context
 
 **Files:**
 - Modify: `lib/context.ts`
@@ -1868,6 +1907,8 @@ C calls: `td_sym_save(path)`, `td_sym_load(path)`, `td_meta_save_d(schema, path)
 ## Phase 4: Table Construction
 
 ### Task 4.1: Implement Table.fromArraysSync
+
+- [ ] Implement Table.fromArraysSync for constructing tables from JS arrays and TypedArrays
 
 **Files:**
 - Modify: `lib/table.ts` — add static factory
@@ -2082,6 +2123,8 @@ git commit -m "feat(table): add Table.fromArraysSync for constructing tables fro
 
 ### Task 4.2: Add Table.fromArrays (async variant)
 
+- [ ] Add Table.fromArrays async variant using dispatch_async
+
 Follow the same pattern as 4.1 but with `dispatch_async`. Serialize on V8 thread, dispatch, resolve Promise with NativeTable.
 
 **Commit:** `git commit -m "feat(table): add Table.fromArrays async variant"`
@@ -2091,6 +2134,8 @@ Follow the same pattern as 4.1 but with `dispatch_async`. Serialize on V8 thread
 ## Phase 5: Low-Level APIs
 
 ### Task 5.1: Add NativeVector class
+
+- [ ] Add NativeVector class wrapping td_vec_* API with Vector TypeScript wrapper
 
 **Files:**
 - Create: `src/vector.h`
@@ -2258,6 +2303,8 @@ git commit -m "feat(low-level): add Vector class wrapping td_vec_* API"
 
 ### Task 5.2: Add NativeAtom class
 
+- [ ] Add NativeAtom class wrapping td_* atom constructors with Atom TypeScript wrapper
+
 **Files:**
 - Create: `src/atom.h`, `src/atom.cpp`
 - Create: `lib/atom.ts`
@@ -2272,6 +2319,8 @@ Wrap `td_bool`, `td_u8`, `td_i16`, `td_i32`, `td_i64`, `td_f64`, `td_str`, `td_s
 ---
 
 ### Task 5.3: Add NativeList class
+
+- [ ] Add NativeList class wrapping td_list_* API with List TypeScript wrapper
 
 **Files:**
 - Create: `src/list.h`, `src/list.cpp`
@@ -2288,6 +2337,8 @@ Wrap `td_list_new`, `td_list_append`, `td_list_get`, `td_list_set`.
 
 ### Task 5.4: Add NativeSelection class
 
+- [ ] Add NativeSelection class wrapping td_sel_* API with Selection TypeScript wrapper
+
 **Files:**
 - Create: `src/selection.h`, `src/selection.cpp`
 - Create: `lib/selection.ts`
@@ -2302,6 +2353,8 @@ Wrap `td_sel_new`, `td_sel_from_pred`, `td_sel_and`, `td_sel_recompute`.
 ---
 
 ### Task 5.5: Add symbol table direct access and low-level table builder
+
+- [ ] Add symbol table direct access (symIntern, symStr) and low-level table builder to Context and Table
 
 **Files:**
 - Modify: `lib/context.ts` — add symIntern, symFind, symStr, symCount

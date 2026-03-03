@@ -9,6 +9,11 @@ export const OP_COUNT = 54;
 export const OP_AVG = 55;
 export const OP_FIRST = 56;
 export const OP_LAST = 57;
+export const OP_COUNT_DISTINCT = 58;
+export const OP_STDDEV = 59;
+export const OP_STDDEV_POP = 73;
+export const OP_VAR = 74;
+export const OP_VAR_POP = 75;
 
 export class Expr {
     constructor(
@@ -54,6 +59,11 @@ export class Expr {
     count(): Expr { return new Expr('agg', { op: OP_COUNT, arg: this }); }
     first(): Expr { return new Expr('agg', { op: OP_FIRST, arg: this }); }
     last(): Expr { return new Expr('agg', { op: OP_LAST, arg: this }); }
+    countDistinct(): Expr { return new Expr('agg', { op: OP_COUNT_DISTINCT, arg: this }); }
+    stddev(): Expr { return new Expr('agg', { op: OP_STDDEV, arg: this }); }
+    stddevPop(): Expr { return new Expr('agg', { op: OP_STDDEV_POP, arg: this }); }
+    variance(): Expr { return new Expr('agg', { op: OP_VAR, arg: this }); }
+    variancePop(): Expr { return new Expr('agg', { op: OP_VAR_POP, arg: this }); }
 
     // Rename
     alias(name: string): Expr { return new Expr('alias', { name, arg: this }); }
