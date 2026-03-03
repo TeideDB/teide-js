@@ -181,6 +181,9 @@ td_op_t* EmitExpr(td_graph_t* g, const std::shared_ptr<ExprNode>& node) {
             case OP_AVG:   return td_avg(g, arg);
             case OP_FIRST: return td_first(g, arg);
             case OP_LAST:  return td_last(g, arg);
+            case OP_COUNT_DISTINCT: return td_count_distinct(g, arg);
+            // OP_STDDEV (59), OP_STDDEV_POP (73), OP_VAR (74), OP_VAR_POP (75)
+            // Opcodes defined in td.h but no dedicated builder functions yet.
             default:       return nullptr;
         }
     }

@@ -110,9 +110,9 @@ git commit -m "feat(expr): add countDistinct, stddev, variance aggregation opcod
 
 ### Task 1.2: Add new aggregation opcodes to C++ EmitExpr
 
-- [ ] Create test/expr-extended.test.ts with e2e test for countDistinct
-- [ ] Add countDistinct (and available stat agg) opcodes to EmitExpr switch in src/query.cpp
-- [ ] Build and verify e2e test passes
+- [x] Create test/expr-extended.test.ts with e2e test for countDistinct
+- [x] Add countDistinct (and available stat agg) opcodes to EmitExpr switch in src/query.cpp
+- [x] Build and verify e2e test passes
 
 **Files:**
 - Modify: `src/query.cpp` (the `EmitExpr` function, agg switch around line 175-185)
