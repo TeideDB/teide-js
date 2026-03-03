@@ -1282,11 +1282,11 @@ git commit -m "feat: add TypeScript Graph class with expand, varExpand, shortest
 
 ---
 
-### Task 6: Test Fixtures
+### Task 6: Test Fixtures [DONE]
 
 **Files:**
-- Create: `test/fixtures/edges.csv`
-- Create: `test/fixtures/nodes.csv`
+- [x] Create: `test/fixtures/edges.csv`
+- [x] Create: `test/fixtures/nodes.csv`
 
 **Step 1: Create edge list CSV**
 
