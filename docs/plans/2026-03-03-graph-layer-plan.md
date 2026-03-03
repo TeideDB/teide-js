@@ -1319,10 +1319,10 @@ git commit -m "test: add graph test fixtures (edges.csv, nodes.csv)"
 
 ---
 
-### Task 7: Graph Tests
+### Task 7: Graph Tests [DONE]
 
 **Files:**
-- Create: `test/graph.test.ts`
+- [x] Create: `test/graph.test.ts`
 
 **Context:**
 - Follow the same patterns as `test/e2e.test.ts`: import from `../lib`, use try/finally with `ctx.destroy()`.
