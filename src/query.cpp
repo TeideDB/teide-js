@@ -161,6 +161,24 @@ std::vector<PlanStep> SerializePlan(Napi::Array ops) {
                     SerializeExpr(exprs.Get(e).As<Napi::Object>()));
             }
         }
+        else if (step.type == "join") {
+            NativeTable* right = Napi::ObjectWrap<NativeTable>::Unwrap(
+                op.Get("rightTable").As<Napi::Object>());
+            step.join_right_table = right->ptr();
+            td_retain(step.join_right_table);
+
+            Napi::Array lkeys = op.Get("leftKeys").As<Napi::Array>();
+            for (uint32_t k = 0; k < lkeys.Length(); k++) {
+                step.join_left_keys.push_back(
+                    lkeys.Get(k).As<Napi::String>().Utf8Value());
+            }
+            Napi::Array rkeys = op.Get("rightKeys").As<Napi::Array>();
+            for (uint32_t k = 0; k < rkeys.Length(); k++) {
+                step.join_right_keys.push_back(
+                    rkeys.Get(k).As<Napi::String>().Utf8Value());
+            }
+            step.join_type = (uint8_t)op.Get("joinType").As<Napi::Number>().Uint32Value();
+        }
 
         plan.push_back(std::move(step));
     }
@@ -525,6 +543,30 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
             td_release(input_result);
             td_graph_free(g);
             return result;
+        }
+        else if (step.type == "join") {
+            td_op_t* left_table_node = current ? current : td_const_table(g, tbl);
+            if (filter_pred) {
+                left_table_node = td_filter(g, left_table_node, filter_pred);
+                filter_pred = nullptr;
+            }
+
+            uint16_t right_id = td_graph_add_table(g, step.join_right_table);
+            td_op_t* right_table_node = td_const_table(g, step.join_right_table);
+
+            uint8_t n_keys = (uint8_t)step.join_left_keys.size();
+            std::vector<td_op_t*> left_keys(n_keys);
+            std::vector<td_op_t*> right_keys(n_keys);
+            for (uint8_t k = 0; k < n_keys; k++) {
+                left_keys[k] = td_scan(g, step.join_left_keys[k].c_str());
+                right_keys[k] = td_scan_table(g, right_id, step.join_right_keys[k].c_str());
+            }
+
+            current = td_join(g, left_table_node, left_keys.data(),
+                              right_table_node, right_keys.data(),
+                              n_keys, step.join_type);
+
+            td_release(step.join_right_table);
         }
     }
 

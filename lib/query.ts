@@ -67,6 +67,33 @@ export class Query {
         return this;
     }
 
+    join(other: Table, opts: {
+        on?: string | string[];
+        leftOn?: string | string[];
+        rightOn?: string | string[];
+        how?: 'inner' | 'left' | 'full';
+    }): Query {
+        const how = opts.how ?? 'inner';
+        let leftKeys: string[];
+        let rightKeys: string[];
+        if (opts.on) {
+            const keys = Array.isArray(opts.on) ? opts.on : [opts.on];
+            leftKeys = keys;
+            rightKeys = keys;
+        } else {
+            leftKeys = Array.isArray(opts.leftOn!) ? opts.leftOn! : [opts.leftOn!];
+            rightKeys = Array.isArray(opts.rightOn!) ? opts.rightOn! : [opts.rightOn!];
+        }
+        this._ops.push({
+            type: 'join',
+            rightTable: other._native,
+            leftKeys,
+            rightKeys,
+            joinType: how === 'inner' ? 0 : how === 'left' ? 1 : 2,
+        });
+        return this;
+    }
+
     collectSync(): Table {
         const result = addon.collectSync(this._nativeTable, this._ops);
         return new Table(result, this._ctx);

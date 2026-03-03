@@ -48,6 +48,15 @@ export class Table {
     project(...exprs: Expr[]): Query {
         return new Query(this._native, this._ctx).project(...exprs);
     }
+
+    join(other: Table, opts: {
+        on?: string | string[];
+        leftOn?: string | string[];
+        rightOn?: string | string[];
+        how?: 'inner' | 'left' | 'full';
+    }): Query {
+        return new Query(this._native, this._ctx).join(other, opts);
+    }
 }
 
 export class GroupBy {

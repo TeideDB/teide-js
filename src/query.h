@@ -47,6 +47,10 @@ struct PlanStep {
     std::vector<std::string> distinct_cols;            // for 'distinct'
     std::vector<std::string> select_cols;              // for 'select'
     std::vector<std::shared_ptr<ExprNode>> project_exprs; // for 'project'
+    td_t* join_right_table = nullptr;                      // for 'join'
+    std::vector<std::string> join_left_keys;               // for 'join'
+    std::vector<std::string> join_right_keys;              // for 'join'
+    uint8_t join_type = 0;                                 // for 'join': 0=inner, 1=left, 2=full
 };
 
 // Static query execution functions exposed to JS

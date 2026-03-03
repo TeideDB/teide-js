@@ -993,7 +993,7 @@ git commit -m "feat(query): add select and project operations"
 
 ### Task 2.3: Add join to Query
 
-- [ ] Add join operation (inner, left, full) to Query and wire through SerializePlan/ExecutePlan
+- [x] Add join operation (inner, left, full) to Query and wire through SerializePlan/ExecutePlan
 
 **Files:**
 - Modify: `lib/query.ts`

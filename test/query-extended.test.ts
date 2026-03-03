@@ -3,6 +3,7 @@ import path from 'path';
 import { Context, col } from '../lib';
 
 const SALES = path.join(__dirname, 'fixtures', 'sales.csv');
+const ORDERS = path.join(__dirname, 'fixtures', 'orders.csv');
 
 describe('Extended query ops', () => {
   it('tail returns last N rows', () => {
@@ -49,6 +50,19 @@ describe('Extended query ops', () => {
       ).collectSync();
       expect(result.columns).toContain('revenue');
       expect(result.nRows).toBe(9);
+    } finally {
+      ctx.destroy();
+    }
+  });
+
+  it('inner join on shared column', () => {
+    const ctx = new Context();
+    try {
+      const sales = ctx.readCsvSync(SALES);
+      const orders = ctx.readCsvSync(ORDERS);
+      const result = sales.join(orders, { on: 'category' }).collectSync();
+      expect(result.nRows).toBeGreaterThan(0);
+      expect(result.columns).toContain('category');
     } finally {
       ctx.destroy();
     }
