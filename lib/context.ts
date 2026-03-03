@@ -1,4 +1,5 @@
 import { Table } from './table';
+import { Graph } from './graph';
 import path from 'path';
 
 const addon = require(path.join(__dirname, '..', 'build', 'Release', 'teidedb_addon.node'));
@@ -23,6 +24,11 @@ export class Context {
     }
 
     get _threadExternal(): any { return this._native.threadExternal; }
+
+    graph(table: Table): Graph {
+        this._checkAlive();
+        return new Graph(table, this._native);
+    }
 
     destroy(): void {
         if (!this._destroyed) {

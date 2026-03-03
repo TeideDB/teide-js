@@ -1141,12 +1141,12 @@ git commit -m "feat: add TypeScript Rel class for CSR relationships"
 
 ---
 
-### Task 5: TypeScript Graph Class
+### Task 5: TypeScript Graph Class [DONE]
 
 **Files:**
-- Create: `lib/graph.ts`
-- Modify: `lib/context.ts` (add `graph()` convenience method)
-- Modify: `lib/index.ts` (export Graph, Direction)
+- [x] Create: `lib/graph.ts`
+- [x] Modify: `lib/context.ts` (add `graph()` convenience method)
+- [x] Modify: `lib/index.ts` (export Graph, Direction)
 
 **Step 1: Create `lib/graph.ts`**
 
