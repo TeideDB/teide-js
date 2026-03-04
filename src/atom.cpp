@@ -178,13 +178,19 @@ Napi::Value NativeAtom::I32(const Napi::CallbackInfo& info) {
 
 Napi::Value NativeAtom::I64(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsNumber()) {
+    if (info.Length() < 2 || !info[0].IsObject() || (!info[1].IsNumber() && !info[1].IsBigInt())) {
         Napi::TypeError::New(env, "NativeAtom.i64(ctx, value)").ThrowAsJavaScriptException();
         return env.Undefined();
     }
     NativeContext* ctx = Napi::ObjectWrap<NativeContext>::Unwrap(info[0].As<Napi::Object>());
     TeideThread* thread = &ctx->thread();
-    int64_t val = info[1].As<Napi::Number>().Int64Value();
+    int64_t val;
+    if (info[1].IsBigInt()) {
+        bool lossless;
+        val = info[1].As<Napi::BigInt>().Int64Value(&lossless);
+    } else {
+        val = info[1].As<Napi::Number>().Int64Value();
+    }
 
     void* result = thread->dispatch_sync([val]() -> void* {
         return (void*)td_i64(val);
@@ -304,13 +310,19 @@ Napi::Value NativeAtom::Time(const Napi::CallbackInfo& info) {
 
 Napi::Value NativeAtom::Timestamp(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    if (info.Length() < 2 || !info[0].IsObject() || !info[1].IsNumber()) {
+    if (info.Length() < 2 || !info[0].IsObject() || (!info[1].IsNumber() && !info[1].IsBigInt())) {
         Napi::TypeError::New(env, "NativeAtom.timestamp(ctx, value)").ThrowAsJavaScriptException();
         return env.Undefined();
     }
     NativeContext* ctx = Napi::ObjectWrap<NativeContext>::Unwrap(info[0].As<Napi::Object>());
     TeideThread* thread = &ctx->thread();
-    int64_t val = info[1].As<Napi::Number>().Int64Value();
+    int64_t val;
+    if (info[1].IsBigInt()) {
+        bool lossless;
+        val = info[1].As<Napi::BigInt>().Int64Value(&lossless);
+    } else {
+        val = info[1].As<Napi::Number>().Int64Value();
+    }
 
     void* result = thread->dispatch_sync([val]() -> void* {
         return (void*)td_timestamp(val);

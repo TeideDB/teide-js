@@ -111,12 +111,12 @@ Napi::Value NativeSeries::GetData(const Napi::CallbackInfo& info) {
             break;
         case TD_I64:
         case TD_TIMESTAMP:
-        case TD_TIME:
             arr_type = napi_bigint64_array;
             elem_size = 8;
             break;
         case TD_I32:
         case TD_DATE:
+        case TD_TIME:
             arr_type = napi_int32_array;
             elem_size = 4;
             break;

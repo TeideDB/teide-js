@@ -23,7 +23,7 @@ export class Atom {
         return new Atom(addon.NativeAtom.i32((ctx as any)._native, value));
     }
 
-    static i64(ctx: Context, value: number): Atom {
+    static i64(ctx: Context, value: number | bigint): Atom {
         return new Atom(addon.NativeAtom.i64((ctx as any)._native, value));
     }
 
@@ -47,7 +47,7 @@ export class Atom {
         return new Atom(addon.NativeAtom.time((ctx as any)._native, value));
     }
 
-    static timestamp(ctx: Context, value: number): Atom {
+    static timestamp(ctx: Context, value: number | bigint): Atom {
         return new Atom(addon.NativeAtom.timestamp((ctx as any)._native, value));
     }
 
