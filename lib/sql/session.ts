@@ -14,6 +14,10 @@ export class Session {
     readonly vectorIndexes = new VectorIndexRegistry();
     /** Per-session counter for unique temp table names (avoids cross-session collisions). */
     tempTableCounter = 0;
+    /** Tracks temp table names registered during query execution for cleanup. */
+    queryTempTables = new Set<string>();
+    /** Saves tables overwritten by temp registrations for restoration after query. */
+    overwrittenTables = new Map<string, StoredTable>();
 
     register(name: string, table: Table): void {
         const key = name.toLowerCase();

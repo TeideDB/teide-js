@@ -13,55 +13,46 @@ function tempName(prefix: string, session: Session): string {
     return `__teide_tmp_${prefix}_${++session.tempTableCounter}`;
 }
 
-// Tracks temp table names registered during query execution that should be cleaned up.
-// DDL-created tables (CREATE TABLE) are NOT added here.
-// These are module-level but safe: Node.js is single-threaded and planAndExecuteSync
-// saves/restores them around each top-level call for re-entrancy.
-const queryTempTables = new Set<string>();
-
-// Saves tables that were overwritten by temp registrations so we can restore them.
-const overwrittenTables = new Map<string, StoredTable>();
-
-export function registerQueryTemp(name: string): void {
-    queryTempTables.add(name.toLowerCase());
+export function registerQueryTemp(name: string, session: Session): void {
+    session.queryTempTables.add(name.toLowerCase());
 }
 
 // Register a temp table, saving any existing table under the same name for later restoration.
 function registerTempTable(name: string, table: Table, session: Session): void {
     const key = name.toLowerCase();
     // Save existing non-temp table before overwriting
-    if (session.has(key) && !queryTempTables.has(key) && !overwrittenTables.has(key)) {
-        overwrittenTables.set(key, session.get(key)!);
+    if (session.has(key) && !session.queryTempTables.has(key) && !session.overwrittenTables.has(key)) {
+        session.overwrittenTables.set(key, session.get(key)!);
     }
     session.register(name, table);
-    queryTempTables.add(key);
+    session.queryTempTables.add(key);
 }
 
 export function planAndExecuteSync(sql: string, session: Session, ctx: any): Table | null {
-    const tempsBefore = new Set(queryTempTables);
+    const tempsBefore = new Set(session.queryTempTables);
     try {
         return planAndExecuteSyncInner(sql, session, ctx);
     } finally {
         // Clean up temp tables created during this query
-        for (const name of queryTempTables) {
+        for (const name of session.queryTempTables) {
             if (!tempsBefore.has(name)) {
                 // Restore overwritten table if one was saved
-                const saved = overwrittenTables.get(name);
+                const saved = session.overwrittenTables.get(name);
                 if (saved) {
                     session.register(name, saved.table);
-                    overwrittenTables.delete(name);
+                    session.overwrittenTables.delete(name);
                 } else {
                     session.drop(name);
                 }
             }
         }
         // Clear any remaining overwritten entries from this query
-        for (const key of overwrittenTables.keys()) {
-            if (!tempsBefore.has(key)) overwrittenTables.delete(key);
+        for (const key of session.overwrittenTables.keys()) {
+            if (!tempsBefore.has(key)) session.overwrittenTables.delete(key);
         }
         // Restore the temp set
-        queryTempTables.clear();
-        for (const name of tempsBefore) queryTempTables.add(name);
+        session.queryTempTables.clear();
+        for (const name of tempsBefore) session.queryTempTables.add(name);
     }
 }
 
@@ -545,25 +536,31 @@ function nestedLoopJoin(
     const columns = [...left.columns, ...rightCols];
     const rows: any[][] = [];
 
-    // Parse the ON condition to extract left/right column references
-    const { leftCol, rightCol } = parseEqualityCondition(onCondition, left.columns, right.columns, aliasMap);
+    // Parse the ON condition to extract left/right column references (supports AND-chained)
+    const conditions = parseEqualityConditions(onCondition, left.columns, right.columns, aliasMap);
 
-    const leftColIdx = left.columns.indexOf(leftCol);
-    const rightColIdx = right.columns.indexOf(rightCol);
+    const condIdxPairs = conditions.map(({ leftCol, rightCol }) => {
+        const li = left.columns.indexOf(leftCol);
+        const ri = right.columns.indexOf(rightCol);
+        if (li === -1) throw new Error(`JOIN column not found in left table: ${leftCol}`);
+        if (ri === -1) throw new Error(`JOIN column not found in right table: ${rightCol}`);
+        return { li, ri };
+    });
 
-    if (leftColIdx === -1) throw new Error(`JOIN column not found in left table: ${leftCol}`);
-    if (rightColIdx === -1) throw new Error(`JOIN column not found in right table: ${rightCol}`);
+    // Build composite key for hash join
+    const makeLeftKey = (row: any[]) => condIdxPairs.map(({ li }) => String(row[li])).join('\0');
+    const makeRightKey = (row: any[]) => condIdxPairs.map(({ ri }) => String(row[ri])).join('\0');
 
     // Build hash map on right side for O(n+m) performance
     const rightIndex = new Map<string, any[][]>();
     for (const rr of right.rows) {
-        const key = String(rr[rightColIdx]);
+        const key = makeRightKey(rr);
         if (!rightIndex.has(key)) rightIndex.set(key, []);
         rightIndex.get(key)!.push(rr);
     }
 
     for (const lr of left.rows) {
-        const key = String(lr[leftColIdx]);
+        const key = makeLeftKey(lr);
         const matches = rightIndex.get(key);
         if (matches && matches.length > 0) {
             for (const rr of matches) {
@@ -571,7 +568,7 @@ function nestedLoopJoin(
             }
         } else if (isLeft) {
             // LEFT JOIN: include left row with NULLs for right columns
-            const nullRight = right.columns.map(() => null); // Use null for unmatched right columns
+            const nullRight = right.columns.map(() => null);
             rows.push([...lr, ...nullRight]);
         }
     }
@@ -579,14 +576,22 @@ function nestedLoopJoin(
     return { columns, rows };
 }
 
-function parseEqualityCondition(
+function parseEqualityConditions(
     node: any,
     leftCols: string[],
     rightCols: string[],
     aliasMap: Map<string, string>,
-): { leftCol: string; rightCol: string } {
+): { leftCol: string; rightCol: string }[] {
+    // Handle AND-chained conditions: a.x = b.x AND a.y = b.y
+    if (node.type === 'binary_expr' && node.operator === 'AND') {
+        return [
+            ...parseEqualityConditions(node.left, leftCols, rightCols, aliasMap),
+            ...parseEqualityConditions(node.right, leftCols, rightCols, aliasMap),
+        ];
+    }
+
     if (node.type !== 'binary_expr' || node.operator !== '=') {
-        throw new Error('JOIN ON condition must be an equality expression (a.col = b.col)');
+        throw new Error('JOIN ON condition must be equality expressions (a.col = b.col), optionally AND-chained');
     }
 
     const lref = resolveColumnRef(node.left, aliasMap);
@@ -594,10 +599,10 @@ function parseEqualityCondition(
 
     // Determine which ref belongs to which side
     if (leftCols.includes(lref) && rightCols.includes(rref)) {
-        return { leftCol: lref, rightCol: rref };
+        return [{ leftCol: lref, rightCol: rref }];
     }
     if (leftCols.includes(rref) && rightCols.includes(lref)) {
-        return { leftCol: rref, rightCol: lref };
+        return [{ leftCol: rref, rightCol: lref }];
     }
 
     // Fallback: alias map may resolve to prefixed names; try raw column names
@@ -605,10 +610,10 @@ function parseEqualityCondition(
     const rawR = typeof node.right.column === 'string' ? node.right.column : node.right.column?.expr?.value;
     if (rawL && rawR) {
         if (leftCols.includes(rawL) && rightCols.includes(rawR)) {
-            return { leftCol: rawL, rightCol: rawR };
+            return [{ leftCol: rawL, rightCol: rawR }];
         }
         if (leftCols.includes(rawR) && rightCols.includes(rawL)) {
-            return { leftCol: rawR, rightCol: rawL };
+            return [{ leftCol: rawR, rightCol: rawL }];
         }
     }
 

@@ -149,6 +149,8 @@ function buildPropertyGraph(def: PgqCreateGraph, session: Session): PropertyGrap
 
 export interface MatchResult {
     bindings: Map<string, number>[];  // variable -> node/edge ID for each match
+    // Edge variable names are stored with '__edge__' prefix to distinguish from node IDs
+    // (node and edge IDs both start at 0 and can overlap)
 }
 
 export function executeMatch(graph: PropertyGraph, pattern: MatchPattern): MatchResult {
@@ -268,7 +270,7 @@ function expandEdge(
                 }
                 // Enforce already-bound variables: (n)-[:E]->(n) should only match self-loops
                 if (edgePattern.variable) {
-                    const existing = binding.get(edgePattern.variable);
+                    const existing = binding.get(`__edge__${edgePattern.variable}`);
                     if (existing !== undefined && existing !== edgeIdx) continue;
                 }
                 if (targetNodePattern?.variable) {
@@ -277,7 +279,7 @@ function expandEdge(
                 }
                 const newBinding = new Map(binding);
                 if (edgePattern.variable) {
-                    newBinding.set(edgePattern.variable, edgeIdx);
+                    newBinding.set(`__edge__${edgePattern.variable}`, edgeIdx);
                 }
                 if (targetNodePattern?.variable) newBinding.set(targetNodePattern.variable, neighbor);
                 newBinding.set('_node', neighbor);
@@ -363,11 +365,12 @@ function expandVariableLengthPath(
     const queue: { node: number; depth: number; visited: Set<number> | null }[] = [
         { node: startNode, depth: 0, visited: isWalk ? null : new Set([startNode]) },
     ];
+    let queueHead = 0; // Index pointer instead of shift() for O(1) dequeue
 
     let truncated = false;
-    while (queue.length > 0) {
+    while (queueHead < queue.length) {
         if (results.length >= MAX_RESULTS) { truncated = true; break; }
-        const { node, depth, visited } = queue.shift()!;
+        const { node, depth, visited } = queue[queueHead++];
 
         if (depth >= minDepth) {
             // Check if node matches target pattern
@@ -390,7 +393,7 @@ function expandVariableLengthPath(
                     continue;
                 }
             }
-            if (queue.length >= MAX_QUEUE_SIZE) { truncated = true; break; }
+            if (queue.length - queueHead >= MAX_QUEUE_SIZE) { truncated = true; break; }
             const newVisited = visited ? new Set(visited) : null;
             if (newVisited) newVisited.add(neighbor);
             queue.push({ node: neighbor, depth: depth + 1, visited: newVisited });
@@ -495,6 +498,20 @@ export function executeGraphTable(
         const values: any[] = [];
 
         for (const binding of matchResult.bindings) {
+            // Check for edge variable first (stored with __edge__ prefix)
+            const edgeId = binding.get(`__edge__${col.variable}`);
+            if (edgeId !== undefined) {
+                const edgeData = graph.edgeInfo.get(edgeId);
+                if (edgeData) {
+                    const propIdx = edgeData.columns.indexOf(col.property);
+                    values.push(propIdx >= 0 ? edgeData.row[propIdx] : '');
+                } else {
+                    values.push('');
+                }
+                continue;
+            }
+
+            // Node variable
             const id = binding.get(col.variable);
             if (id === undefined) {
                 values.push('');
@@ -506,14 +523,7 @@ export function executeGraphTable(
                 const propIdx = info.columns.indexOf(col.property);
                 values.push(propIdx >= 0 ? info.row[propIdx] : '');
             } else {
-                // Could be an edge
-                const edgeData = graph.edgeInfo.get(id);
-                if (edgeData) {
-                    const propIdx = edgeData.columns.indexOf(col.property);
-                    values.push(propIdx >= 0 ? edgeData.row[propIdx] : '');
-                } else {
-                    values.push('');
-                }
+                values.push('');
             }
         }
 

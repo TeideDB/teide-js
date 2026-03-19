@@ -2,6 +2,7 @@ import { Table } from '../table';
 import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { randomUUID } from 'crypto';
 
 // Row-oriented data extracted from a native table for TypeScript-level operations
 // (JOINs, set ops, window functions) that aren't yet in the C++ layer.
@@ -100,7 +101,7 @@ export function materializeTable(data: RowData, ctx: any): Table {
 }
 
 function tempCsvPath(): string {
-    return join(tmpdir(), `teide_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.csv`);
+    return join(tmpdir(), `teide_${randomUUID()}.csv`);
 }
 
 function csvEscape(s: string): string {
