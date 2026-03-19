@@ -17,11 +17,17 @@ export class Session {
 
     register(name: string, table: Table): void {
         const key = name.toLowerCase();
+        const existed = this.tables.has(key);
         this.tables.set(key, {
             nativeTable: table._native,
             columns: table.columns,
             table,
         });
+        // Invalidate graph/vector indexes when overwriting an existing table
+        if (existed) {
+            this.graphCatalog.invalidateForTable(key);
+            this.vectorIndexes.invalidateForTable(key);
+        }
     }
 
     get(name: string): StoredTable | undefined {

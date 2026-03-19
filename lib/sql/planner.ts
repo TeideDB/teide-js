@@ -253,6 +253,14 @@ function planSimpleSelect(ast: any, session: Session, ctx: any): Table {
         query = query.filter(havingExpr);
     }
 
+    // DISTINCT before ORDER BY (SQL logical order)
+    if (ast.distinct === 'DISTINCT' && !isAggregate) {
+        const distinctCols = resolveSelectColumns(ast.columns, stored);
+        const groupBy = query.groupBy(...distinctCols);
+        const aggs = distinctCols.map(name => col(name).first().alias(name));
+        query = groupBy.agg(...aggs);
+    }
+
     // Check if ORDER BY references computed expression aliases that can't be sorted natively
     const deferSort = needsDeferredSort(ast);
 
@@ -262,13 +270,6 @@ function planSimpleSelect(ast: any, session: Session, ctx: any): Table {
             const descending = ob.type === 'DESC';
             query = query.sort(colName, { descending });
         }
-    }
-
-    if (ast.distinct === 'DISTINCT' && !isAggregate) {
-        const distinctCols = resolveSelectColumns(ast.columns, stored);
-        const groupBy = query.groupBy(...distinctCols);
-        const aggs = distinctCols.map(name => col(name).first().alias(name));
-        query = groupBy.agg(...aggs);
     }
 
     if (ast.limit && !deferSort) {
