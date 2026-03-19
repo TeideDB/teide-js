@@ -1,5 +1,6 @@
 import { Table } from '../table';
 import { GraphCatalog } from './graph-catalog';
+import { VectorIndexRegistry } from './vector';
 
 export interface StoredTable {
     nativeTable: any;  // NativeTable reference
@@ -10,6 +11,7 @@ export interface StoredTable {
 export class Session {
     private tables = new Map<string, StoredTable>();
     readonly graphCatalog = new GraphCatalog();
+    readonly vectorIndexes = new VectorIndexRegistry();
 
     register(name: string, table: Table): void {
         const key = name.toLowerCase();
@@ -30,7 +32,14 @@ export class Session {
 
     drop(name: string): boolean {
         this.graphCatalog.invalidateForTable(name);
+        this.vectorIndexes.invalidateForTable(name);
         return this.tables.delete(name.toLowerCase());
+    }
+
+    // Called when a table is mutated (INSERT/UPDATE/DELETE)
+    onTableMutated(name: string): void {
+        this.graphCatalog.invalidateForTable(name);
+        this.vectorIndexes.invalidateForTable(name);
     }
 
     listTables(): string[] {

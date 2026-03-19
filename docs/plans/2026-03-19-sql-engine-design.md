@@ -254,8 +254,8 @@ test/
 - [x] Tests for property graphs
 
 ### Task 5: Vector Similarity
-- [ ] COSINE_SIMILARITY, EUCLIDEAN_DISTANCE
-- [ ] KNN fast-path detection and rewrite
-- [ ] HNSW index creation/search/drop
-- [ ] Auto-invalidation on mutation
-- [ ] Tests for vector similarity
+- [x] COSINE_SIMILARITY, EUCLIDEAN_DISTANCE
+- [x] KNN fast-path detection and rewrite
+- [x] HNSW index creation/search/drop
+- [x] Auto-invalidation on mutation
+- [x] Tests for vector similarity

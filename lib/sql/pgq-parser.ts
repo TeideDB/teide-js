@@ -68,9 +68,27 @@ export interface GraphTableColumn {
     alias?: string;
 }
 
+export interface PgqCreateVectorIndex {
+    type: 'create_vector_index';
+    name: string;
+    tableName: string;
+    columnName: string;
+    metric: 'cosine' | 'euclidean';
+    m: number;
+    efConstruction: number;
+}
+
+export interface PgqDropVectorIndex {
+    type: 'drop_vector_index';
+    name: string;
+    ifExists: boolean;
+}
+
 export type PgqResult =
     | PgqCreateGraph
     | PgqDropGraph
+    | PgqCreateVectorIndex
+    | PgqDropVectorIndex
     | { type: 'graph_table_rewrite'; original: string; rewritten: string; graphTableRefs: GraphTableRef[] }
     | null; // null = not PGQ syntax, pass through to SQL parser
 
@@ -248,10 +266,51 @@ export function parsePgq(sql: string): PgqResult {
     const trimmed = sql.trim();
     const upper = trimmed.toUpperCase();
 
-    // CREATE [OR REPLACE] PROPERTY GRAPH
+    // CREATE [OR REPLACE] PROPERTY GRAPH or CREATE VECTOR INDEX
     if (upper.startsWith('CREATE')) {
         const lex = new Lexer(trimmed);
         lex.expect('CREATE');
+
+        // CREATE VECTOR INDEX
+        if (lex.matchKeyword('VECTOR')) {
+            lex.expect('INDEX');
+            const name = lex.readIdent();
+            lex.expect('ON');
+            const tableName = lex.readIdent();
+            lex.expect('(');
+            const columnName = lex.readIdent();
+            lex.expect(')');
+
+            let metric: 'cosine' | 'euclidean' = 'cosine';
+            let m = 16;
+            let efConstruction = 200;
+
+            // USING HNSW(M, ef_construction) or USING COSINE/EUCLIDEAN
+            if (lex.matchKeyword('USING')) {
+                const methodOrMetric = lex.readIdent().toUpperCase();
+                if (methodOrMetric === 'HNSW') {
+                    if (lex.matchPunct('(')) {
+                        m = lex.readNumber();
+                        lex.expect(',');
+                        efConstruction = lex.readNumber();
+                        lex.expect(')');
+                    }
+                } else if (methodOrMetric === 'COSINE') {
+                    metric = 'cosine';
+                } else if (methodOrMetric === 'EUCLIDEAN') {
+                    metric = 'euclidean';
+                }
+
+                // Optional metric after HNSW params
+                if (lex.matchKeyword('METRIC')) {
+                    const met = lex.readIdent().toUpperCase();
+                    if (met === 'COSINE') metric = 'cosine';
+                    else if (met === 'EUCLIDEAN') metric = 'euclidean';
+                }
+            }
+
+            return { type: 'create_vector_index', name, tableName, columnName, metric, m, efConstruction };
+        }
 
         let orReplace = false;
         if (lex.matchKeyword('OR')) {
@@ -297,10 +356,23 @@ export function parsePgq(sql: string): PgqResult {
         return { type: 'create_property_graph', orReplace, ifNotExists, name, vertexTables, edgeTables };
     }
 
-    // DROP PROPERTY GRAPH
+    // DROP PROPERTY GRAPH or DROP VECTOR INDEX
     if (upper.startsWith('DROP')) {
         const lex = new Lexer(trimmed);
         lex.expect('DROP');
+
+        // DROP VECTOR INDEX
+        if (lex.matchKeyword('VECTOR')) {
+            lex.expect('INDEX');
+            let ifExists = false;
+            if (lex.matchKeyword('IF')) {
+                lex.expect('EXISTS');
+                ifExists = true;
+            }
+            const name = lex.readIdent();
+            return { type: 'drop_vector_index', name, ifExists };
+        }
+
         if (!lex.matchKeyword('PROPERTY')) return null;
         lex.expect('GRAPH');
 

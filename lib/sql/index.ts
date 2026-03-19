@@ -7,3 +7,4 @@ export { extractRows, materializeTable } from './js-table';
 export { parsePgq } from './pgq-parser';
 export { GraphCatalog } from './graph-catalog';
 export { executeGraphTable, executeGraphAlgorithm, pagerank, connectedComponents, louvainCommunity, clusteringCoefficient, dijkstra } from './pgq';
+export { cosineSimilarity, euclideanDistance, parseVector, createHnswIndex, hnswSearch, VectorIndexRegistry, detectKnnQuery, computeVectorSimilarity } from './vector';

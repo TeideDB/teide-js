@@ -7,6 +7,7 @@ import { parse } from './parser';
 import { extractRows, materializeTable, RowData } from './js-table';
 import { parsePgq } from './pgq-parser';
 import { executeGraphTable, executeGraphAlgorithm } from './pgq';
+import { detectKnnQuery, hnswSearch, computeVectorSimilarity, parseVector, KnnQuery } from './vector';
 import path from 'path';
 
 const addon = require(path.join(__dirname, '..', '..', 'build', 'Release', 'teidedb_addon.node'));
@@ -49,6 +50,23 @@ function handlePgqResult(pgq: any, session: Session, ctx: any): Table | null {
         case 'drop_property_graph':
             session.graphCatalog.dropGraph(pgq);
             return null;
+        case 'create_vector_index': {
+            const stored = session.get(pgq.tableName);
+            if (!stored) throw new Error(`Table not found: ${pgq.tableName}`);
+            const data = extractRows(stored.table);
+            const colIdx = data.columns.indexOf(pgq.columnName);
+            if (colIdx === -1) throw new Error(`Column not found: ${pgq.columnName}`);
+            const vectors = data.rows.map(row => parseVector(row[colIdx]));
+            session.vectorIndexes.create(pgq.name, pgq.tableName, pgq.columnName, vectors, pgq.metric, pgq.m, pgq.efConstruction);
+            return null;
+        }
+        case 'drop_vector_index': {
+            if (!session.vectorIndexes.has(pgq.name) && !pgq.ifExists) {
+                throw new Error(`Vector index not found: ${pgq.name}`);
+            }
+            session.vectorIndexes.drop(pgq.name);
+            return null;
+        }
         case 'graph_table_rewrite': {
             // Execute each GRAPH_TABLE reference and register as temp table
             for (let i = 0; i < pgq.graphTableRefs.length; i++) {
@@ -114,6 +132,19 @@ function planSelect(ast: any, session: Session, ctx: any): Table {
     // Check if any SELECT column has a window function
     const hasWindowFn = ast.columns !== '*' &&
         ast.columns.some((c: any) => c.expr?.over);
+
+    // Check for KNN fast-path: ORDER BY similarity_func(...) LIMIT k
+    const knnQuery = detectKnnQuery(ast);
+    if (knnQuery) {
+        return planKnnSelect(knnQuery, ast, session, ctx);
+    }
+
+    // Check for vector function in SELECT (not KNN - just computing similarity)
+    const hasVectorFunc = ast.columns !== '*' &&
+        ast.columns.some((c: any) => isVectorFunctionCall(c.expr));
+    if (hasVectorFunc && !hasJoin && !hasSubquery && !hasWindowFn) {
+        return planVectorSelect(ast, session, ctx);
+    }
 
     if (hasJoin) {
         return planJoinSelect(ast, session, ctx);
@@ -710,6 +741,182 @@ function sameOrderByValues(rowA: any[], rowB: any[], orderBy: any[], columns: st
     return true;
 }
 
+// ─── Vector similarity planning ─────────────────────────────────────────────
+
+function isVectorFunctionCall(node: any): boolean {
+    if (!node || node.type !== 'function') return false;
+    const name = extractFunctionName(node).toUpperCase();
+    return name === 'COSINE_SIMILARITY' || name === 'EUCLIDEAN_DISTANCE';
+}
+
+function planVectorSelect(ast: any, session: Session, ctx: any): Table {
+    const stored = resolveFromSingle(ast.from, session, ctx);
+    const data = extractRows(stored.table);
+
+    const resultColumns: string[] = [];
+    const resultColData: any[][] = [];
+
+    for (const c of ast.columns) {
+        if (isVectorFunctionCall(c.expr)) {
+            const { columnName, queryVector, metric } = extractVectorFuncInfo(c.expr);
+            const similarities = computeVectorSimilarity(data.rows, data.columns, columnName, queryVector, metric);
+            resultColumns.push(c.as || `${metric}_similarity`);
+            resultColData.push(similarities);
+        } else if (c.expr.type === 'column_ref') {
+            const colName = resolveColName(c.expr);
+            const colIdx = data.columns.indexOf(colName);
+            if (colIdx === -1) throw new Error(`Column not found: ${colName}`);
+            resultColumns.push(c.as || colName);
+            resultColData.push(data.rows.map(row => row[colIdx]));
+        } else if (c.expr.type === 'star') {
+            for (let ci = 0; ci < data.columns.length; ci++) {
+                resultColumns.push(data.columns[ci]);
+                resultColData.push(data.rows.map(row => row[ci]));
+            }
+        } else {
+            throw new Error('Unsupported expression in vector SELECT');
+        }
+    }
+
+    const nRows = data.rows.length;
+    const resultRows: any[][] = [];
+    for (let i = 0; i < nRows; i++) {
+        resultRows.push(resultColData.map(col => col[i]));
+    }
+
+    let result: RowData = { columns: resultColumns, rows: resultRows };
+
+    if (ast.orderby) {
+        result = sortRowData(result, ast.orderby);
+    }
+
+    if (ast.limit) {
+        const limitVal = ast.limit.value;
+        if (limitVal.length === 1) {
+            result.rows = result.rows.slice(0, limitVal[0].value);
+        }
+    }
+
+    return materializeTable(result, ctx);
+}
+
+function planKnnSelect(knn: KnnQuery, ast: any, session: Session, ctx: any): Table {
+    const stored = session.get(knn.tableName);
+    if (!stored) throw new Error(`Table not found: ${knn.tableName}`);
+
+    const data = extractRows(stored.table);
+
+    // Check for HNSW index
+    const index = session.vectorIndexes.findIndex(knn.tableName, knn.columnName, knn.metric);
+
+    let topKIndices: number[];
+    let topKDistances: number[];
+
+    if (index) {
+        // Use HNSW index for approximate KNN
+        const results = hnswSearch(index, knn.queryVector, knn.k);
+        topKIndices = results.map(r => r.rowIndex);
+        topKDistances = results.map(r => knn.metric === 'cosine' ? 1 - r.distance : r.distance);
+    } else {
+        // Brute-force KNN: compute all similarities, sort, take top k
+        const similarities = computeVectorSimilarity(
+            data.rows, data.columns, knn.columnName, knn.queryVector, knn.metric,
+        );
+
+        const indexed = similarities.map((s, i) => ({ score: s, idx: i }));
+        if (knn.metric === 'cosine') {
+            indexed.sort((a, b) => b.score - a.score); // DESC for cosine
+        } else {
+            indexed.sort((a, b) => a.score - b.score); // ASC for euclidean
+        }
+
+        const topK = indexed.slice(0, knn.k);
+        topKIndices = topK.map(t => t.idx);
+        topKDistances = topK.map(t => t.score);
+    }
+
+    // Build result with selected columns
+    const resultColumns: string[] = [];
+    const resultRows: any[][] = [];
+
+    // Determine which columns to include
+    const selectCols = knn.selectColumns;
+    const colSpecs: { name: string; type: 'regular' | 'vector_func'; colIdx?: number; metric?: 'cosine' | 'euclidean' }[] = [];
+
+    if (selectCols === '*') {
+        for (let ci = 0; ci < data.columns.length; ci++) {
+            colSpecs.push({ name: data.columns[ci], type: 'regular', colIdx: ci });
+        }
+    } else {
+        for (const c of selectCols) {
+            if (isVectorFunctionCall(c.expr)) {
+                const info = extractVectorFuncInfo(c.expr);
+                colSpecs.push({ name: c.as || `${info.metric}_result`, type: 'vector_func', metric: info.metric });
+            } else if (c.expr.type === 'column_ref') {
+                const colName = resolveColName(c.expr);
+                const colIdx = data.columns.indexOf(colName);
+                if (colIdx === -1) throw new Error(`Column not found: ${colName}`);
+                colSpecs.push({ name: c.as || colName, type: 'regular', colIdx });
+            } else if (c.expr.type === 'star') {
+                for (let ci = 0; ci < data.columns.length; ci++) {
+                    colSpecs.push({ name: data.columns[ci], type: 'regular', colIdx: ci });
+                }
+            }
+        }
+    }
+
+    for (const spec of colSpecs) {
+        resultColumns.push(spec.name);
+    }
+
+    for (let i = 0; i < topKIndices.length; i++) {
+        const rowIdx = topKIndices[i];
+        const row: any[] = [];
+        for (const spec of colSpecs) {
+            if (spec.type === 'regular') {
+                row.push(data.rows[rowIdx][spec.colIdx!]);
+            } else {
+                row.push(topKDistances[i]);
+            }
+        }
+        resultRows.push(row);
+    }
+
+    return materializeTable({ columns: resultColumns, rows: resultRows }, ctx);
+}
+
+function extractVectorFuncInfo(node: any): { columnName: string; queryVector: number[]; metric: 'cosine' | 'euclidean' } {
+    const funcName = extractFunctionName(node).toUpperCase();
+    const metric: 'cosine' | 'euclidean' = funcName === 'COSINE_SIMILARITY' ? 'cosine' : 'euclidean';
+    const args = node.args?.value;
+    if (!args || args.length !== 2) throw new Error(`${funcName} requires exactly 2 arguments`);
+
+    const colArg = args[0];
+    if (colArg.type !== 'column_ref') throw new Error(`${funcName} first argument must be a column reference`);
+    const columnName = typeof colArg.column === 'string' ? colArg.column : colArg.column?.expr?.value;
+
+    const vecArg = args[1];
+    const queryVector = extractArrayFromArg(vecArg);
+
+    return { columnName, queryVector, metric };
+}
+
+function extractArrayFromArg(node: any): number[] {
+    if (node?.type === 'expr_list') {
+        return node.value.map((v: any) => {
+            if (v.type === 'number') return v.value;
+            if (v.type === 'unary_expr' && v.operator === '-' && v.expr?.type === 'number') {
+                return -v.expr.value;
+            }
+            throw new Error(`Unexpected value in array literal: ${JSON.stringify(v)}`);
+        });
+    }
+    if (node?.type === 'array') {
+        return extractArrayFromArg(node.value);
+    }
+    throw new Error('Expected array literal as second argument to vector function');
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function resolveFromSingle(from: any[], session: Session, ctx: any): StoredTable {
@@ -1021,6 +1228,7 @@ function planInsert(ast: any, session: Session, ctx: any): Table | null {
 
     const newTable = materializeTable(combined, ctx);
     session.register(tableName, newTable);
+    session.onTableMutated(tableName);
     return null;
 }
 
@@ -1096,6 +1304,7 @@ function planUpdate(ast: any, session: Session, ctx: any): Table | null {
 
     const newTable = materializeTable({ columns, rows: updatedRows }, ctx);
     session.register(tableName, newTable);
+    session.onTableMutated(tableName);
     return null;
 }
 
@@ -1119,6 +1328,7 @@ function planDelete(ast: any, session: Session, ctx: any): Table | null {
 
     const newTable = materializeTable({ columns, rows: filteredRows }, ctx);
     session.register(tableName, newTable);
+    session.onTableMutated(tableName);
     return null;
 }
 
