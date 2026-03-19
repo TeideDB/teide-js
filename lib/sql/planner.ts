@@ -1903,7 +1903,7 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
         const r = evaluateExprOnRow(node.right, row, columns);
         // SQL three-valued logic: NULL AND FALSE = FALSE, NULL AND TRUE = NULL
         if (l === null || l === undefined) return (r === 0 || r === false) ? 0 : null;
-        if (r === null || r === undefined) return (l === 0 || l === false || !l) ? 0 : null;
+        if (r === null || r === undefined) return (l === 0 || l === false) ? 0 : null;
         return (l && r) ? 1 : 0;
     }
     if (op === 'OR') {
@@ -1942,29 +1942,20 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
         if (val === null || val === undefined || lo === null || lo === undefined || hi === null || hi === undefined) return null;
         return (val < lo || val > hi) ? 1 : 0;
     }
-    if (op === 'LIKE') {
-        const left = String(evaluateExprOnRow(node.left, row, columns));
-        const pattern = String(evaluateExprOnRow(node.right, row, columns));
-        return likeMatch(left, pattern) ? 1 : 0;
-    }
-    if (op === 'NOT LIKE') {
-        const left = String(evaluateExprOnRow(node.left, row, columns));
-        const pattern = String(evaluateExprOnRow(node.right, row, columns));
-        return !likeMatch(left, pattern) ? 1 : 0;
+    if (op === 'LIKE' || op === 'NOT LIKE') {
+        const left = evaluateExprOnRow(node.left, row, columns);
+        const right = evaluateExprOnRow(node.right, row, columns);
+        if (left === null || left === undefined || right === null || right === undefined) return null;
+        const matched = likeMatch(String(left), String(right));
+        return (op === 'LIKE' ? matched : !matched) ? 1 : 0;
     }
 
     const left = evaluateExprOnRow(node.left, row, columns);
     const right = evaluateExprOnRow(node.right, row, columns);
 
-    // SQL NULL semantics: NULL propagates through comparisons and arithmetic
+    // SQL NULL semantics: NULL propagates through all comparisons and arithmetic
     if ((left === null || left === undefined) || (right === null || right === undefined)) {
-        switch (op) {
-            case '=': case '==': case '!=': case '<>':
-            case '<': case '<=': case '>': case '>=':
-                return 0;
-            case '+': case '-': case '*': case '/': case '%':
-                return null;
-        }
+        return null;
     }
 
     switch (op) {

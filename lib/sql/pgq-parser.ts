@@ -171,6 +171,7 @@ class Lexer {
                         i++;
                     }
                 }
+                if (i >= s.length) throw new Error('Unterminated quoted identifier in PGQ SQL');
                 i++; // skip closing quote
                 this.tokens.push({ type: 'ident', value: ident });
                 continue;
@@ -193,6 +194,7 @@ class Lexer {
                         i++;
                     }
                 }
+                if (i >= s.length) throw new Error('Unterminated string literal in PGQ SQL');
                 i++;
                 this.tokens.push({ type: 'string', value: str });
                 continue;
