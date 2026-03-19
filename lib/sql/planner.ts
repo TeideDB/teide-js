@@ -5,6 +5,8 @@ import { Session, StoredTable } from './session';
 import { compileExpr, containsAggregate } from './expr';
 import { parse } from './parser';
 import { extractRows, materializeTable, RowData } from './js-table';
+import { parsePgq } from './pgq-parser';
+import { executeGraphTable, executeGraphAlgorithm } from './pgq';
 import path from 'path';
 
 const addon = require(path.join(__dirname, '..', '..', 'build', 'Release', 'teidedb_addon.node'));
@@ -14,6 +16,12 @@ export interface PlanResult {
 }
 
 export function planAndExecuteSync(sql: string, session: Session, ctx: any): Table | null {
+    // PGQ pre-parser: intercept graph DDL and GRAPH_TABLE before standard SQL parsing
+    const pgqResult = parsePgq(sql);
+    if (pgqResult) {
+        return handlePgqResult(pgqResult, session, ctx);
+    }
+
     const ast = parse(sql);
     switch (ast.type) {
         case 'select':
@@ -30,6 +38,31 @@ export function planAndExecuteSync(sql: string, session: Session, ctx: any): Tab
             return planDelete(ast, session, ctx);
         default:
             throw new Error(`Unsupported SQL statement type: ${ast.type}`);
+    }
+}
+
+function handlePgqResult(pgq: any, session: Session, ctx: any): Table | null {
+    switch (pgq.type) {
+        case 'create_property_graph':
+            session.graphCatalog.createGraph(pgq, session);
+            return null;
+        case 'drop_property_graph':
+            session.graphCatalog.dropGraph(pgq);
+            return null;
+        case 'graph_table_rewrite': {
+            // Execute each GRAPH_TABLE reference and register as temp table
+            for (let i = 0; i < pgq.graphTableRefs.length; i++) {
+                const ref = pgq.graphTableRefs[i];
+                const alias = `_gt${i + 1}`;
+                const table = executeGraphTable(ref, session.graphCatalog, session, ctx);
+                session.register(alias, table);
+            }
+            // Parse and execute the rewritten SQL (with temp table refs)
+            const ast = parse(pgq.rewritten);
+            return planSelectWithSetOps(ast, session, ctx);
+        }
+        default:
+            throw new Error(`Unknown PGQ result type: ${pgq.type}`);
     }
 }
 

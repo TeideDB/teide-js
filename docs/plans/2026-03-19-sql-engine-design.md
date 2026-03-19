@@ -246,12 +246,12 @@ test/
 - [x] Tests for DDL & DML
 
 ### Task 4: Property Graphs
-- [ ] PGQ pre-parser
-- [ ] Property graph catalog + CSR construction
-- [ ] GRAPH_TABLE with MATCH patterns
-- [ ] Path traversal (BFS, quantifiers, shortest path)
-- [ ] Graph algorithms: PageRank, Connected Components, Community, Clustering Coefficient, Dijkstra
-- [ ] Tests for property graphs
+- [x] PGQ pre-parser
+- [x] Property graph catalog + CSR construction
+- [x] GRAPH_TABLE with MATCH patterns
+- [x] Path traversal (BFS, quantifiers, shortest path)
+- [x] Graph algorithms: PageRank, Connected Components, Community, Clustering Coefficient, Dijkstra
+- [x] Tests for property graphs
 
 ### Task 5: Vector Similarity
 - [ ] COSINE_SIMILARITY, EUCLIDEAN_DISTANCE

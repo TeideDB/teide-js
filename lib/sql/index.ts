@@ -4,3 +4,6 @@ export { compileExpr, containsAggregate } from './expr';
 export { resolveFunction, hasFunction } from './functions';
 export { planAndExecuteSync, planAndExecute } from './planner';
 export { extractRows, materializeTable } from './js-table';
+export { parsePgq } from './pgq-parser';
+export { GraphCatalog } from './graph-catalog';
+export { executeGraphTable, executeGraphAlgorithm, pagerank, connectedComponents, louvainCommunity, clusteringCoefficient, dijkstra } from './pgq';
