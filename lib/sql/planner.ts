@@ -2030,7 +2030,9 @@ function compareValues(a: any, b: any): boolean {
     if (typeof a === 'number' || typeof b === 'number') {
         const na = Number(a);
         const nb = Number(b);
-        if (!isNaN(na) && !isNaN(nb)) return na === nb;
+        // NaN !== NaN per SQL semantics
+        if (isNaN(na) || isNaN(nb)) return false;
+        return na === nb;
     }
     return String(a) === String(b);
 }

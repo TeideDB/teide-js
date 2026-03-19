@@ -398,6 +398,10 @@ export class VectorIndexRegistry {
     }
 
     // Invalidate all indexes for a given table
+    clear(): void {
+        this.indexes.clear();
+    }
+
     invalidateForTable(tableName: string): void {
         for (const idx of this.indexes.values()) {
             if (idx.tableName.toLowerCase() === tableName.toLowerCase()) {

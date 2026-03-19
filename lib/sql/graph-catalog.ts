@@ -62,6 +62,10 @@ export class GraphCatalog {
         return this.graphs.has(name.toLowerCase());
     }
 
+    clear(): void {
+        this.graphs.clear();
+    }
+
     invalidateForTable(tableName: string): void {
         const lower = tableName.toLowerCase();
         for (const [key, graph] of this.graphs) {

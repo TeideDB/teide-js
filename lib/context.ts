@@ -42,6 +42,7 @@ export class Context {
 
     destroy(): void {
         if (!this._destroyed) {
+            this._session.clear();
             this._native.destroy();
             this._destroyed = true;
         }

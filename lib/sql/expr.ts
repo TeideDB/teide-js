@@ -144,6 +144,10 @@ function compileAggrFunc(node: any, aliases?: Map<string, Expr>): Expr {
     const opcode = AGG_MAP[name];
     if (opcode === undefined) throw new Error(`Unknown aggregate function: ${name}`);
 
+    if (node.args.distinct) {
+        throw new Error(`${name}(DISTINCT ...) is not yet supported`);
+    }
+
     // COUNT(*) → count on first column (the C layer handles this)
     let arg: Expr;
     if (node.args.expr?.type === 'star') {

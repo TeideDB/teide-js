@@ -57,4 +57,12 @@ export class Session {
     listTables(): string[] {
         return Array.from(this.tables.keys());
     }
+
+    clear(): void {
+        this.tables.clear();
+        this.graphCatalog.clear();
+        this.vectorIndexes.clear();
+        this.queryTempTables.clear();
+        this.overwrittenTables.clear();
+    }
 }
