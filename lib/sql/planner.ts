@@ -12,7 +12,26 @@ import path from 'path';
 
 const addon = require(path.join(__dirname, '..', '..', 'build', 'Release', 'teidedb_addon.node'));
 
+let tempTableCounter = 0;
+function tempName(prefix: string): string {
+    return `${prefix}_${++tempTableCounter}`;
+}
+
 export function planAndExecuteSync(sql: string, session: Session, ctx: any): Table | null {
+    const tempsBefore = new Set(session.listTables());
+    try {
+        return planAndExecuteSyncInner(sql, session, ctx);
+    } finally {
+        // Clean up temp tables created during this query
+        for (const name of session.listTables()) {
+            if (!tempsBefore.has(name) && name.startsWith('_')) {
+                session.drop(name);
+            }
+        }
+    }
+}
+
+function planAndExecuteSyncInner(sql: string, session: Session, ctx: any): Table | null {
     // PGQ pre-parser: intercept graph DDL and GRAPH_TABLE before standard SQL parsing
     const pgqResult = parsePgq(sql);
     if (pgqResult) {
@@ -246,7 +265,8 @@ function planJoinSelect(ast: any, session: Session, ctx: any): Table {
         const joinType: string = joinEntry.join || 'INNER JOIN';
         const rightStored = resolveFromSingle([joinEntry], session, ctx);
         const rightData = extractRows(rightStored.table);
-        const rightAliases = buildAliasMap(joinEntry, rightData.columns);
+        const rightPrefixed = prefixColumns(rightData.columns, result.columns);
+        const rightAliases = buildAliasMap(joinEntry, rightData.columns, rightPrefixed);
 
         // Merge alias maps
         const combinedAliases = new Map([...tableAliases, ...rightAliases]);
@@ -267,7 +287,7 @@ function planJoinSelect(ast: any, session: Session, ctx: any): Table {
     let table = materializeTable(result, ctx);
 
     // Register temporarily for query operations
-    const tmpName = `_join_${Date.now()}`;
+    const tmpName = tempName('_join');
     session.register(tmpName, table);
     const stored = session.get(tmpName)!;
 
@@ -283,12 +303,13 @@ function planJoinSelect(ast: any, session: Session, ctx: any): Table {
     return planSimpleSelect(joinedAst, session, ctx);
 }
 
-function buildAliasMap(fromEntry: any, columns: string[]): Map<string, string> {
+function buildAliasMap(fromEntry: any, columns: string[], prefixedColumns?: string[]): Map<string, string> {
     const map = new Map<string, string>();
     const alias = fromEntry.as || fromEntry.table;
     if (alias) {
-        for (const col of columns) {
-            map.set(`${alias}.${col}`, col);
+        const targets = prefixedColumns || columns;
+        for (let i = 0; i < columns.length; i++) {
+            map.set(`${alias}.${columns[i]}`, targets[i]);
         }
     }
     return map;
@@ -418,10 +439,7 @@ function rewriteTablePrefixes(ast: any, aliasMap: Map<string, string>, resultCol
             const qualified = `${node.table}.${colName}`;
             const resolved = aliasMap.get(qualified);
             if (resolved) {
-                // Find the actual column name in the result (may have _1 suffix)
-                const actual = resultColumns.includes(resolved) ? resolved :
-                    resultColumns.find(c => c === `${resolved}_1`) || resolved;
-                node.column = actual;
+                node.column = resolved;
                 node.table = null;
             }
         }
@@ -1385,7 +1403,11 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
         case '+': return Number(left) + Number(right);
         case '-': return Number(left) - Number(right);
         case '*': return Number(left) * Number(right);
-        case '/': return Number(left) / Number(right);
+        case '/': {
+            const divisor = Number(right);
+            if (divisor === 0) throw new Error('Division by zero');
+            return Number(left) / divisor;
+        }
         case '%': return Number(left) % Number(right);
         default: throw new Error(`Unsupported binary operator in DML: ${op}`);
     }
