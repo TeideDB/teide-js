@@ -1,4 +1,6 @@
 import { Table } from './table';
+import { Session } from './sql/session';
+import { planAndExecuteSync, planAndExecute } from './sql/planner';
 import path from 'path';
 
 const addon = require(path.join(__dirname, '..', 'build', 'Release', 'teidedb_addon.node'));
@@ -6,6 +8,7 @@ const addon = require(path.join(__dirname, '..', 'build', 'Release', 'teidedb_ad
 export class Context {
     private _native: any;
     private _destroyed = false;
+    private _session = new Session();
 
     constructor() {
         this._native = new addon.NativeContext();
@@ -20,6 +23,21 @@ export class Context {
         this._checkAlive();
         const nativeTable = await this._native.readCsv(filePath);
         return new Table(nativeTable, this._native);
+    }
+
+    registerTable(name: string, table: Table): void {
+        this._checkAlive();
+        this._session.register(name, table);
+    }
+
+    executeSync(sql: string): Table | null {
+        this._checkAlive();
+        return planAndExecuteSync(sql, this._session, this._native);
+    }
+
+    async execute(sql: string): Promise<Table | null> {
+        this._checkAlive();
+        return planAndExecute(sql, this._session, this._native);
     }
 
     destroy(): void {
