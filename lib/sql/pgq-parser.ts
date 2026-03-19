@@ -94,7 +94,6 @@ export type PgqResult =
 
 // Tokenizer
 class Lexer {
-    private pos = 0;
     private tokens: Token[] = [];
     private idx = 0;
 
@@ -513,10 +512,17 @@ function parseGraphTableRewrite(sql: string): PgqResult {
         // Check for alias after the closing paren
         const afterParen = sql.substring(endIdx).trimStart();
         let alias = `_gt${graphTableRefs.length}`;
+        const SQL_KEYWORDS = new Set([
+            'WHERE', 'ORDER', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION',
+            'INTERSECT', 'EXCEPT', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL',
+            'CROSS', 'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN',
+            'LIKE', 'IS', 'NULL', 'TRUE', 'FALSE', 'CASE', 'WHEN', 'THEN',
+            'ELSE', 'END', 'SELECT', 'FROM', 'INTO', 'SET', 'VALUES',
+        ]);
         const aliasMatch = afterParen.match(/^(?:AS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)/i);
 
         let aliasEndIdx = endIdx;
-        if (aliasMatch) {
+        if (aliasMatch && !SQL_KEYWORDS.has(aliasMatch[1].toUpperCase())) {
             alias = aliasMatch[1];
             aliasEndIdx = endIdx + afterParen.indexOf(aliasMatch[0]) + aliasMatch[0].length;
         }

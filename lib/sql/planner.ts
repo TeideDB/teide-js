@@ -8,13 +8,10 @@ import { extractRows, materializeTable, RowData } from './js-table';
 import { parsePgq } from './pgq-parser';
 import { executeGraphTable, executeGraphAlgorithm } from './pgq';
 import { detectKnnQuery, hnswSearch, computeVectorSimilarity, parseVector, KnnQuery } from './vector';
-import path from 'path';
-
-const addon = require(path.join(__dirname, '..', '..', 'build', 'Release', 'teidedb_addon.node'));
 
 let tempTableCounter = 0;
 function tempName(prefix: string): string {
-    return `${prefix}_${++tempTableCounter}`;
+    return `__teide_tmp_${prefix}_${++tempTableCounter}`;
 }
 
 export function planAndExecuteSync(sql: string, session: Session, ctx: any): Table | null {
@@ -24,7 +21,7 @@ export function planAndExecuteSync(sql: string, session: Session, ctx: any): Tab
     } finally {
         // Clean up temp tables created during this query
         for (const name of session.listTables()) {
-            if (!tempsBefore.has(name) && name.startsWith('_')) {
+            if (!tempsBefore.has(name) && name.startsWith('__teide_tmp_')) {
                 session.drop(name);
             }
         }
@@ -409,7 +406,18 @@ function resolveColumnRef(node: any, aliasMap: Map<string, string>): string {
 }
 
 function prefixColumns(cols: string[], existingCols: string[]): string[] {
-    return cols.map(c => existingCols.includes(c) ? `${c}_1` : c);
+    const allCols = new Set(existingCols);
+    return cols.map(c => {
+        if (!allCols.has(c)) {
+            allCols.add(c);
+            return c;
+        }
+        let suffix = 1;
+        while (allCols.has(`${c}_${suffix}`)) suffix++;
+        const renamed = `${c}_${suffix}`;
+        allCols.add(renamed);
+        return renamed;
+    });
 }
 
 function rewriteTablePrefixes(ast: any, aliasMap: Map<string, string>, resultColumns: string[]): void {

@@ -87,7 +87,7 @@ export function createHnswIndex(
 
     // Assign random levels
     function randomLevel(): number {
-        return Math.floor(-Math.log(Math.random()) * mL);
+        return Math.floor(-Math.log(Math.random() || Number.MIN_VALUE) * mL);
     }
 
     function distance(a: number[], b: number[]): number {
