@@ -11,7 +11,7 @@ import { GraphCatalog, PropertyGraph, CSR, setGraphBuilder } from './graph-catal
 
 export { GraphCatalog, PropertyGraph, CSR } from './graph-catalog';
 
-function buildCSR(edges: [number, number][], nodeCount: number, weights?: number[]): CSR {
+function buildCSR(edges: [number, number][], nodeCount: number, weights?: number[], originalEdgeIds?: number[]): CSR {
     // Count outgoing edges per node
     const degree = new Array(nodeCount).fill(0);
     for (const [src] of edges) {
@@ -25,41 +25,46 @@ function buildCSR(edges: [number, number][], nodeCount: number, weights?: number
         offsets[i + 1] = offsets[i] + degree[i];
     }
 
-    // Fill targets
+    // Fill targets and edgeIds (maps CSR slot -> original edge insertion index)
     const targets = new Array(offsets[nodeCount]);
+    const edgeIds = new Array(offsets[nodeCount]);
     const edgeWeights = weights ? new Array(offsets[nodeCount]) : undefined;
     const pos = new Array(nodeCount).fill(0);
     for (let e = 0; e < edges.length; e++) {
         const [src, dst] = edges[e];
         const idx = offsets[src] + pos[src];
         targets[idx] = dst;
+        edgeIds[idx] = originalEdgeIds ? originalEdgeIds[e] : e;
         if (edgeWeights && weights) edgeWeights[idx] = weights[e];
         pos[src]++;
     }
 
-    return { nodeCount, offsets, targets, weights: edgeWeights };
+    return { nodeCount, offsets, targets, weights: edgeWeights, edgeIds };
 }
 
 function buildUndirectedCSR(edges: [number, number][], nodeCount: number, weights?: number[]): CSR {
     // Add reverse edges
     const biEdges: [number, number][] = [];
     const biWeights: number[] = [];
+    const biEdgeIds: number[] = [];
     for (let i = 0; i < edges.length; i++) {
         biEdges.push(edges[i]);
         biEdges.push([edges[i][1], edges[i][0]]);
+        biEdgeIds.push(i);
+        biEdgeIds.push(i); // Reverse edge maps to same original edge
         if (weights) {
             biWeights.push(weights[i]);
             biWeights.push(weights[i]);
         }
     }
-    return buildCSR(biEdges, nodeCount, weights ? biWeights : undefined);
+    return buildCSR(biEdges, nodeCount, weights ? biWeights : undefined, biEdgeIds);
 }
 
 // ─── Property Graph ─────────────────────────────────────────────────────────
 
 function buildPropertyGraph(def: PgqCreateGraph, session: Session): PropertyGraph {
     const nodeIndex = new Map<string, Map<string | number, number>>();
-    const nodeInfo = new Map<number, { label: string; key: string | number; row: any[]; columns: string[] }>();
+    const nodeInfo = new Map<number, { label: string; tableName: string; key: string | number; row: any[]; columns: string[] }>();
     let nextNodeId = 0;
 
     // Build vertex tables
@@ -77,9 +82,13 @@ function buildPropertyGraph(def: PgqCreateGraph, session: Session): PropertyGrap
             const key = row[keyColIdx];
             const nodeId = nextNodeId++;
             labelMap.set(key, nodeId);
-            nodeInfo.set(nodeId, { label, key, row, columns: data.columns });
+            nodeInfo.set(nodeId, { label, tableName: vtDef.table, key, row, columns: data.columns });
         }
         nodeIndex.set(label.toLowerCase(), labelMap);
+        // Also index by table name so edge REFERENCES can find vertices by either
+        if (vtDef.label && vtDef.table.toLowerCase() !== label.toLowerCase()) {
+            nodeIndex.set(vtDef.table.toLowerCase(), labelMap);
+        }
     }
 
     const nodeCount = nextNodeId;
@@ -190,11 +199,17 @@ export function executeMatch(graph: PropertyGraph, pattern: MatchPattern): Match
 
 function getCandidateNodes(graph: PropertyGraph, nodePattern: PatternElement): number[] {
     if (nodePattern.labels && nodePattern.labels.length > 0) {
+        const seen = new Set<number>();
         const candidates: number[] = [];
         for (const label of nodePattern.labels) {
             const labelMap = graph.nodeIndex.get(label.toLowerCase());
             if (labelMap) {
-                candidates.push(...labelMap.values());
+                for (const nodeId of labelMap.values()) {
+                    if (!seen.has(nodeId)) {
+                        seen.add(nodeId);
+                        candidates.push(nodeId);
+                    }
+                }
             }
         }
         return candidates;
@@ -229,20 +244,25 @@ function expandEdge(
                 results.push(newBinding);
             }
         } else {
-            // Single hop
-            const neighbors = getNeighbors(graph, currentNode, edgePattern.direction || '->');
-            for (const neighbor of neighbors) {
+            // Single hop - iterate CSR entries directly to handle multigraphs correctly
+            const entries = getCSREntries(graph, currentNode, edgePattern.direction || '->');
+            for (const { target: neighbor, edgeId: edgeIdx } of entries) {
+                // Check target node label (matches against both label and table name)
                 if (targetNodePattern && targetNodePattern.labels) {
-                    const info = graph.nodeInfo.get(neighbor);
-                    if (!info || !targetNodePattern.labels.some(l => l.toLowerCase() === info.label.toLowerCase())) {
+                    if (!matchesLabel(graph, neighbor, targetNodePattern.labels)) {
+                        continue;
+                    }
+                }
+                // Check edge label if specified in the pattern
+                if (edgePattern.labels && edgePattern.labels.length > 0) {
+                    const edgeData = graph.edgeInfo.get(edgeIdx);
+                    if (!edgeData || !edgePattern.labels.some(l => l.toLowerCase() === edgeData.label.toLowerCase())) {
                         continue;
                     }
                 }
                 const newBinding = new Map(binding);
                 if (edgePattern.variable) {
-                    // Find edge index between currentNode and neighbor
-                    const edgeIdx = findEdgeIndex(graph, currentNode, neighbor);
-                    if (edgeIdx !== undefined) newBinding.set(edgePattern.variable, edgeIdx);
+                    newBinding.set(edgePattern.variable, edgeIdx);
                 }
                 if (targetNodePattern?.variable) newBinding.set(targetNodePattern.variable, neighbor);
                 newBinding.set('_node', neighbor);
@@ -254,35 +274,39 @@ function expandEdge(
     return results;
 }
 
-function getNeighbors(graph: PropertyGraph, nodeId: number, direction: string): number[] {
+interface CSREntry {
+    target: number;
+    edgeId: number;
+}
+
+function getCSREntries(graph: PropertyGraph, nodeId: number, direction: string): CSREntry[] {
     if (direction === '->' || direction === '-') {
         const csr = direction === '-' ? graph.undirectedCsr : graph.csr;
         const start = csr.offsets[nodeId];
         const end = csr.offsets[nodeId + 1];
-        return csr.targets.slice(start, end);
+        const entries: CSREntry[] = [];
+        for (let i = start; i < end; i++) {
+            entries.push({ target: csr.targets[i], edgeId: csr.edgeIds ? csr.edgeIds[i] : i });
+        }
+        return entries;
     }
     if (direction === '<-') {
-        // Reverse: find all nodes that have nodeId as target
-        const result: number[] = [];
+        const entries: CSREntry[] = [];
         for (let src = 0; src < graph.csr.nodeCount; src++) {
             const start = graph.csr.offsets[src];
             const end = graph.csr.offsets[src + 1];
             for (let j = start; j < end; j++) {
                 if (graph.csr.targets[j] === nodeId) {
-                    result.push(src);
+                    entries.push({ target: src, edgeId: graph.csr.edgeIds ? graph.csr.edgeIds[j] : j });
                 }
             }
         }
-        return result;
+        return entries;
     }
     if (direction === '<->') {
-        const forward = getNeighbors(graph, nodeId, '->');
-        const reverse = getNeighbors(graph, nodeId, '<-');
-        const seen = new Set(forward);
-        for (const n of reverse) {
-            if (!seen.has(n)) forward.push(n);
-        }
-        return forward;
+        const forward = getCSREntries(graph, nodeId, '->');
+        const reverse = getCSREntries(graph, nodeId, '<-');
+        return [...forward, ...reverse];
     }
     return [];
 }
@@ -291,7 +315,10 @@ function findEdgeIndex(graph: PropertyGraph, src: number, dst: number): number |
     const start = graph.csr.offsets[src];
     const end = graph.csr.offsets[src + 1];
     for (let i = start; i < end; i++) {
-        if (graph.csr.targets[i] === dst) return i;
+        if (graph.csr.targets[i] === dst) {
+            // Return the original edge insertion index, not the CSR slot
+            return graph.csr.edgeIds ? graph.csr.edgeIds[i] : i;
+        }
     }
     return undefined;
 }
@@ -330,9 +357,16 @@ function expandVariableLengthPath(
 
         if (depth >= maxSteps) continue;
 
-        const neighbors = getNeighbors(graph, node, direction);
-        for (const neighbor of neighbors) {
+        const entries = getCSREntries(graph, node, direction);
+        for (const { target: neighbor, edgeId } of entries) {
             if (!visited.has(neighbor)) {
+                // Check edge label if specified in the pattern
+                if (edgePattern.labels && edgePattern.labels.length > 0) {
+                    const edgeData = graph.edgeInfo.get(edgeId);
+                    if (!edgeData || !edgePattern.labels.some(l => l.toLowerCase() === edgeData.label.toLowerCase())) {
+                        continue;
+                    }
+                }
                 const newVisited = new Set(visited);
                 newVisited.add(neighbor);
                 queue.push({ node: neighbor, depth: depth + 1, visited: newVisited });
@@ -346,7 +380,10 @@ function expandVariableLengthPath(
 function matchesLabel(graph: PropertyGraph, nodeId: number, labels: string[]): boolean {
     const info = graph.nodeInfo.get(nodeId);
     if (!info) return false;
-    return labels.some(l => l.toLowerCase() === info.label.toLowerCase());
+    return labels.some(l => {
+        const lower = l.toLowerCase();
+        return lower === info.label.toLowerCase() || lower === info.tableName.toLowerCase();
+    });
 }
 
 function filterAnyShortest(bindings: Map<string, number>[], elements: PatternElement[]): Map<string, number>[] {
@@ -657,6 +694,17 @@ export function dijkstra(
     const n = graph.nodeCount;
     const csr = graph.csr;
 
+    // Resolve edge weight lookup: if a weight column is specified, look up
+    // weights from edgeInfo rows via the CSR edgeIds mapping.
+    let edgeWeightColIdx: number | undefined;
+    if (weightColumn && graph.edgeInfo.size > 0) {
+        const firstEdge = graph.edgeInfo.values().next().value;
+        if (firstEdge) {
+            edgeWeightColIdx = firstEdge.columns.indexOf(weightColumn);
+            if (edgeWeightColIdx === -1) edgeWeightColIdx = undefined;
+        }
+    }
+
     const dist = new Array(n).fill(Infinity);
     dist[sourceId] = 0;
     const visited = new Set<number>();
@@ -677,7 +725,16 @@ export function dijkstra(
 
         for (let j = csr.offsets[u]; j < csr.offsets[u + 1]; j++) {
             const v = csr.targets[j];
-            const w = csr.weights ? csr.weights[j] : 1;
+            let w = csr.weights ? csr.weights[j] : 1;
+            // Override with edge-row weight when a weight column is specified
+            if (edgeWeightColIdx !== undefined && csr.edgeIds) {
+                const edgeId = csr.edgeIds[j];
+                const info = graph.edgeInfo.get(edgeId);
+                if (info) {
+                    const val = info.row[edgeWeightColIdx];
+                    if (typeof val === 'number') w = val;
+                }
+            }
             const newDist = dist[u] + w;
 
             if (newDist < dist[v]) {
@@ -730,10 +787,18 @@ export function executeGraphAlgorithm(
         case 'DIJKSTRA': {
             const srcArg = args?.[0];
             const dstArg = args?.[1];
+            const weightCol = args?.[2];
             if (srcArg === undefined) throw new Error(`${funcName} requires source node argument`);
             const srcId = resolveNodeId(graph, srcArg);
             const dstId = dstArg !== undefined ? resolveNodeId(graph, dstArg) : undefined;
-            const distances = dijkstra(graph, srcId, dstId);
+            const weightColumn = typeof weightCol === 'string' ? weightCol : undefined;
+            const distances = dijkstra(graph, srcId, dstId, weightColumn);
+            // When a specific destination is requested, return only that row
+            if (dstId !== undefined) {
+                const filtered = new Map<number, number>();
+                if (distances.has(dstId)) filtered.set(dstId, distances.get(dstId)!);
+                return algorithmResultToTable(graph, filtered, 'node_key', 'distance', ctx);
+            }
             return algorithmResultToTable(graph, distances, 'node_key', 'distance', ctx);
         }
         default:

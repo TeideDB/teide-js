@@ -168,6 +168,9 @@ describe('Vector Similarity', () => {
         });
 
         it('should drop HNSW index', () => {
+            // Create the index first so this test is independent
+            try { ctx.executeSync(`DROP VECTOR INDEX IF EXISTS items_emb_idx`); } catch {}
+            ctx.executeSync(`CREATE VECTOR INDEX items_emb_idx ON items(embedding) USING HNSW(4, 50)`);
             ctx.executeSync(`DROP VECTOR INDEX items_emb_idx`);
             // Should still work without index (brute force)
             const result = ctx.executeSync(

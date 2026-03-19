@@ -14,17 +14,53 @@ function tempName(prefix: string): string {
     return `__teide_tmp_${prefix}_${++tempTableCounter}`;
 }
 
+// Tracks temp table names registered during query execution that should be cleaned up.
+// DDL-created tables (CREATE TABLE) are NOT added here.
+const queryTempTables = new Set<string>();
+
+// Saves tables that were overwritten by temp registrations so we can restore them.
+const overwrittenTables = new Map<string, StoredTable>();
+
+export function registerQueryTemp(name: string): void {
+    queryTempTables.add(name.toLowerCase());
+}
+
+// Register a temp table, saving any existing table under the same name for later restoration.
+function registerTempTable(name: string, table: Table, session: Session): void {
+    const key = name.toLowerCase();
+    // Save existing non-temp table before overwriting
+    if (session.has(key) && !queryTempTables.has(key) && !overwrittenTables.has(key)) {
+        overwrittenTables.set(key, session.get(key)!);
+    }
+    session.register(name, table);
+    queryTempTables.add(key);
+}
+
 export function planAndExecuteSync(sql: string, session: Session, ctx: any): Table | null {
-    const tempsBefore = new Set(session.listTables());
+    const tempsBefore = new Set(queryTempTables);
     try {
         return planAndExecuteSyncInner(sql, session, ctx);
     } finally {
         // Clean up temp tables created during this query
-        for (const name of session.listTables()) {
-            if (!tempsBefore.has(name) && (name.startsWith('__teide_tmp_') || /^_gt\d+$/.test(name) || name === '_sub' || name === '_csv')) {
-                session.drop(name);
+        for (const name of queryTempTables) {
+            if (!tempsBefore.has(name)) {
+                // Restore overwritten table if one was saved
+                const saved = overwrittenTables.get(name);
+                if (saved) {
+                    session.register(name, saved.table);
+                    overwrittenTables.delete(name);
+                } else {
+                    session.drop(name);
+                }
             }
         }
+        // Clear any remaining overwritten entries from this query
+        for (const key of overwrittenTables.keys()) {
+            if (!tempsBefore.has(key)) overwrittenTables.delete(key);
+        }
+        // Restore the temp set
+        queryTempTables.clear();
+        for (const name of tempsBefore) queryTempTables.add(name);
     }
 }
 
@@ -81,11 +117,12 @@ function handlePgqResult(pgq: any, session: Session, ctx: any): Table | null {
         }
         case 'graph_table_rewrite': {
             // Execute each GRAPH_TABLE reference and register as temp table
+            const aliases: string[] = pgq.graphTableAliases || [];
             for (let i = 0; i < pgq.graphTableRefs.length; i++) {
                 const ref = pgq.graphTableRefs[i];
-                const alias = `_gt${i + 1}`;
+                const alias = aliases[i] || `_gt${i + 1}`;
                 const table = executeGraphTable(ref, session.graphCatalog, session, ctx);
-                session.register(alias, table);
+                registerTempTable(alias, table, session);
             }
             // Parse and execute the rewritten SQL (with temp table refs)
             const ast = parse(pgq.rewritten);
@@ -158,6 +195,10 @@ function planSelect(ast: any, session: Session, ctx: any): Table {
         return planVectorSelect(ast, session, ctx);
     }
 
+    // Check for graph algorithm function calls (e.g., SELECT PAGERANK('graph'))
+    const graphAlgoResult = tryPlanGraphAlgorithm(ast, session, ctx);
+    if (graphAlgoResult) return graphAlgoResult;
+
     if (hasJoin) {
         return planJoinSelect(ast, session, ctx);
     }
@@ -167,7 +208,7 @@ function planSelect(ast: any, session: Session, ctx: any): Table {
         const subAst = from[0].expr.ast;
         const subResult = planSelectWithSetOps(subAst, session, ctx);
         const alias = from[0].as || '_sub';
-        session.register(alias, subResult);
+        registerTempTable(alias, subResult, session);
         // Replace FROM with the registered alias
         const modifiedAst = { ...ast, from: [{ table: alias, as: null }] };
         return planSimpleSelect(modifiedAst, session, ctx);
@@ -211,9 +252,12 @@ function planSimpleSelect(ast: any, session: Session, ctx: any): Table {
         query = query.filter(havingExpr);
     }
 
-    if (ast.orderby) {
+    // Check if ORDER BY references computed expression aliases that can't be sorted natively
+    const deferSort = needsDeferredSort(ast);
+
+    if (ast.orderby && !deferSort) {
         for (const ob of ast.orderby) {
-            const colName = resolveOrderByColumn(ob.expr, selectAliases);
+            const colName = resolveOrderByColumn(ob.expr, selectAliases, ast.columns !== '*' ? ast.columns : undefined);
             const descending = ob.type === 'DESC';
             query = query.sort(colName, { descending });
         }
@@ -226,7 +270,7 @@ function planSimpleSelect(ast: any, session: Session, ctx: any): Table {
         query = groupBy.agg(...aggs);
     }
 
-    if (ast.limit) {
+    if (ast.limit && !deferSort) {
         const limitVal = ast.limit.value;
         if (ast.limit.seperator === 'offset' && limitVal.length === 2) {
             const limit = limitVal[0].value;
@@ -234,7 +278,7 @@ function planSimpleSelect(ast: any, session: Session, ctx: any): Table {
             if (offset > 0) {
                 query = query.head(limit + offset);
                 const fullResult = query.collectSync();
-                return sliceTable(fullResult, offset, limit, ctx);
+                return projectColumns(sliceTable(fullResult, offset, limit, ctx), ast.columns, ctx);
             }
             query = query.head(limit);
         } else if (limitVal.length === 1) {
@@ -242,7 +286,153 @@ function planSimpleSelect(ast: any, session: Session, ctx: any): Table {
         }
     }
 
-    return query.collectSync();
+    let result: Table;
+
+    // Deferred sort: ORDER BY on computed expression aliases, applied after projection
+    if (deferSort) {
+        // Identify ORDER BY columns that reference source columns not in the SELECT list.
+        // These need to be temporarily included in the projection for sorting.
+        const selectColNames = new Set<string>();
+        if (ast.columns !== '*') {
+            for (const c of ast.columns) {
+                if (c.expr.type === 'column_ref') {
+                    const n = typeof c.expr.column === 'string' ? c.expr.column : c.expr.column?.expr?.value;
+                    selectColNames.add(n);
+                }
+                if (c.as) selectColNames.add(c.as);
+            }
+        }
+        const extraOrderCols: any[] = [];
+        for (const ob of ast.orderby) {
+            if (ob.expr.type === 'column_ref') {
+                const name = typeof ob.expr.column === 'string' ? ob.expr.column : ob.expr.column?.expr?.value;
+                // If this ORDER BY column isn't an alias for a computed expression,
+                // and isn't already in the SELECT list, add it temporarily.
+                const isAlias = ast.columns !== '*' && ast.columns.some((c: any) => c.as === name);
+                if (!isAlias && !selectColNames.has(name)) {
+                    extraOrderCols.push({ expr: { type: 'column_ref', table: null, column: name }, as: null });
+                    selectColNames.add(name);
+                }
+            }
+        }
+
+        const augmentedColumns = extraOrderCols.length > 0
+            ? [...ast.columns, ...extraOrderCols]
+            : ast.columns;
+
+        result = projectColumns(query.collectSync(), augmentedColumns, ctx);
+        const data = extractRows(result);
+
+        // Resolve ORDER BY column names to projected names. After projection,
+        // source columns may be renamed to aliases (e.g., `id` → `x`), so we
+        // need to map ORDER BY references to the projected column names.
+        const sourceToProjected = new Map<string, string>();
+        if (ast.columns !== '*') {
+            for (const c of ast.columns) {
+                if (c.as && c.expr.type === 'column_ref') {
+                    const srcName = typeof c.expr.column === 'string' ? c.expr.column : c.expr.column?.expr?.value;
+                    sourceToProjected.set(srcName, c.as);
+                }
+            }
+        }
+        const resolvedOrderBy = ast.orderby.map((ob: any) => {
+            if (ob.expr.type === 'column_ref') {
+                const name = typeof ob.expr.column === 'string' ? ob.expr.column : ob.expr.column?.expr?.value;
+                const projected = sourceToProjected.get(name);
+                if (projected && !data.columns.includes(name) && data.columns.includes(projected)) {
+                    return { ...ob, expr: { ...ob.expr, column: projected } };
+                }
+            }
+            return ob;
+        });
+        sortRowData(data, resolvedOrderBy);
+        if (ast.limit) {
+            const limitVal = ast.limit.value;
+            if (ast.limit.seperator === 'offset' && limitVal.length === 2) {
+                const limit = limitVal[0].value;
+                const offset = limitVal[1].value;
+                data.rows = data.rows.slice(offset, offset + limit);
+            } else if (limitVal.length === 1) {
+                data.rows = data.rows.slice(0, limitVal[0].value);
+            }
+        }
+
+        // Remove the extra ORDER BY columns that weren't in the original SELECT
+        if (extraOrderCols.length > 0) {
+            const originalColCount = ast.columns.length;
+            data.columns = data.columns.slice(0, originalColCount);
+            data.rows = data.rows.map(row => row.slice(0, originalColCount));
+        }
+
+        result = materializeTable(data, ctx);
+    } else {
+        result = projectColumns(query.collectSync(), ast.columns, ctx);
+    }
+
+    return result;
+}
+
+// ─── Graph algorithm detection ──────────────────────────────────────────────
+
+const GRAPH_ALGORITHM_NAMES = new Set([
+    'PAGERANK', 'CONNECTED_COMPONENT', 'COMPONENT',
+    'COMMUNITY', 'LOUVAIN', 'CLUSTERING_COEFFICIENT',
+    'SHORTEST_DISTANCE', 'DIJKSTRA',
+]);
+
+function tryPlanGraphAlgorithm(ast: any, session: Session, ctx: any): Table | null {
+    if (ast.columns === '*' || !ast.columns || ast.columns.length === 0) return null;
+
+    // Check if the first column is a graph algorithm function call
+    const firstCol = ast.columns[0];
+    if (!firstCol?.expr || firstCol.expr.type !== 'function') return null;
+
+    const funcName = extractFunctionName(firstCol.expr).toUpperCase();
+    if (!GRAPH_ALGORITHM_NAMES.has(funcName)) return null;
+
+    const args = firstCol.expr.args?.value || [];
+    if (args.length < 1) throw new Error(`${funcName} requires at least a graph name argument`);
+
+    // First arg is the graph name (string literal)
+    const graphNameArg = args[0];
+    const graphName = graphNameArg.type === 'single_quote_string' || graphNameArg.type === 'string'
+        ? graphNameArg.value
+        : typeof graphNameArg.value === 'string' ? graphNameArg.value : String(graphNameArg.value);
+
+    // Additional args (e.g., source/dest for DIJKSTRA)
+    const extraArgs = args.slice(1).map((a: any) => {
+        if (a.type === 'number') return a.value;
+        if (a.type === 'single_quote_string' || a.type === 'string') return a.value;
+        return a.value;
+    });
+
+    const algoResult = executeGraphAlgorithm(funcName, graphName, session.graphCatalog, session, ctx, extraArgs);
+
+    // Register as temp table and let planSimpleSelect handle ORDER BY, LIMIT, etc.
+    const tmpName = tempName('algo');
+    registerTempTable(tmpName, algoResult, session);
+
+    // Build column entries preserving aliases from the original SELECT.
+    // The algo result table has well-known columns (e.g., node_key, pagerank).
+    // Map the function-call column to its alias, and include all other result columns.
+    const algoStored = session.get(tmpName)!;
+    const algoColumns = algoStored.columns;
+    const algoAlias = firstCol.as; // e.g., 'pr' from SELECT PAGERANK(...) AS pr
+    const mappedColumns: any[] = algoColumns.map((colName: string) => {
+        // If this is the value column (not node_key) and the user provided an alias, apply it
+        const useAlias = (colName !== 'node_key' && algoAlias) ? algoAlias : null;
+        return {
+            expr: { type: 'column_ref', table: null, column: colName },
+            as: useAlias,
+        };
+    });
+
+    const modifiedAst = {
+        ...ast,
+        from: [{ table: tmpName, as: null }],
+        columns: mappedColumns,
+    };
+    return planSimpleSelect(modifiedAst, session, ctx);
 }
 
 // ─── JOIN planning ──────────────────────────────────────────────────────────
@@ -285,7 +475,7 @@ function planJoinSelect(ast: any, session: Session, ctx: any): Table {
 
     // Register temporarily for query operations
     const tmpName = tempName('_join');
-    session.register(tmpName, table);
+    registerTempTable(tmpName, table, session);
     const stored = session.get(tmpName)!;
 
     // Apply remaining clauses through a simplified planSimpleSelect
@@ -442,9 +632,25 @@ function rewriteTablePrefixes(ast: any, aliasMap: Map<string, string>, resultCol
         }
     }
     if (ast.columns !== '*') {
+        // Expand table-qualified stars (t1.*) into individual column refs
+        const expandedColumns: any[] = [];
         for (const c of ast.columns) {
-            rewriteNode(c.expr);
+            if (c.expr.type === 'column_ref' && c.expr.column === '*' && c.expr.table) {
+                const tablePrefix = `${c.expr.table}.`;
+                for (const [qualified, resolved] of aliasMap) {
+                    if (qualified.startsWith(tablePrefix)) {
+                        expandedColumns.push({
+                            expr: { type: 'column_ref', table: null, column: resolved },
+                            as: null,
+                        });
+                    }
+                }
+            } else {
+                rewriteNode(c.expr);
+                expandedColumns.push(c);
+            }
         }
+        ast.columns = expandedColumns;
     }
     if (ast.groupby?.columns) {
         for (const g of ast.groupby.columns) {
@@ -958,7 +1164,7 @@ function resolveFromSingle(from: any[], session: Session, ctx: any): StoredTable
             const filePath = args[0].value;
             const table = new Table(ctx.readCsvSync(filePath), ctx);
             const alias = source.as || '_csv';
-            session.register(alias, table);
+            registerTempTable(alias, table, session);
             return session.get(alias)!;
         }
     }
@@ -967,7 +1173,7 @@ function resolveFromSingle(from: any[], session: Session, ctx: any): StoredTable
     if (source.expr?.ast) {
         const subResult = planSelectWithSetOps(source.expr.ast, session, ctx);
         const alias = source.as || '_sub';
-        session.register(alias, subResult);
+        registerTempTable(alias, subResult, session);
         return session.get(alias)!;
     }
 
@@ -994,7 +1200,16 @@ function buildSelectAliases(columns: any, stored: StoredTable): Map<string, Expr
 
     for (const c of columns) {
         if (c.as) {
-            aliases.set(c.as, compileExpr(c.expr));
+            try {
+                aliases.set(c.as, compileExpr(c.expr));
+            } catch (e: any) {
+                // Skip expressions not compilable to native Expr (e.g., UPPER, CASE WHEN).
+                // These will be handled by the JS-level evaluator in projectColumns.
+                const msg = e?.message || '';
+                if (!msg.includes('not yet supported') && !msg.includes('Unsupported') && !msg.includes('Unknown')) {
+                    throw e;
+                }
+            }
         }
     }
     return aliases;
@@ -1019,6 +1234,7 @@ function buildGroupByPlan(
 
     const aggs: Expr[] = [];
     if (ast.columns !== '*') {
+        const seenAggs = new Set<string>();
         for (const c of ast.columns) {
             if (c.expr.type === 'column_ref') {
                 const name = typeof c.expr.column === 'string'
@@ -1027,16 +1243,60 @@ function buildGroupByPlan(
                 if (keys.includes(name)) continue;
             }
 
-            const expr = compileExpr(c.expr);
-            const alias = c.as || getExprName(c.expr);
-            aggs.push(expr.alias(alias));
+            if (c.expr.type === 'aggr_func') {
+                // Pure aggregate — pass directly to native engine
+                const expr = compileExpr(c.expr);
+                const alias = c.as || getExprName(c.expr);
+                aggs.push(expr.alias(alias));
+            } else if (containsAggregate(c.expr)) {
+                // Composite expression wrapping aggregate(s) (e.g., COUNT(*) + 1).
+                // Extract only the pure aggregate sub-expressions so the native
+                // engine computes them as separate columns. The outer expression
+                // is evaluated in projectColumns() via evaluateExprOnRow().
+                const nestedAggs = collectAggNodes(c.expr);
+                for (const aggNode of nestedAggs) {
+                    const aggKey = getExprName(aggNode);
+                    if (!seenAggs.has(aggKey)) {
+                        seenAggs.add(aggKey);
+                        const expr = compileExpr(aggNode);
+                        aggs.push(expr.alias(aggKey));
+                    }
+                }
+            } else {
+                const expr = compileExpr(c.expr);
+                const alias = c.as || getExprName(c.expr);
+                aggs.push(expr.alias(alias));
+            }
         }
     }
 
     return { keys, aggs };
 }
 
+const NATIVE_AGG_SUFFIX: Record<string, string> = {
+    count: 'count', sum: 'sum', min: 'min', max: 'max',
+    avg: 'mean', prod: 'prod', first: 'first', last: 'last',
+};
+
+function getNativeAggColName(node: any, aggIndex: number): string {
+    const funcName = node.name.toLowerCase();
+    const suffix = NATIVE_AGG_SUFFIX[funcName] || funcName;
+    const argExpr = node.args?.expr;
+    // If the aggregate input is a direct column ref or star, the native engine
+    // names it {colName}_{suffix}. Otherwise it uses _e{index}_{suffix}.
+    if (argExpr?.type === 'star') {
+        return `*_${suffix}`;
+    }
+    if (argExpr?.type === 'column_ref') {
+        const colName = typeof argExpr.column === 'string' ? argExpr.column : argExpr?.column?.expr?.value;
+        if (colName) return `${colName}_${suffix}`;
+    }
+    // Expression-based aggregate: native engine uses synthetic _e{index}_{suffix}
+    return `_e${aggIndex}_${suffix}`;
+}
+
 function getExprName(node: any): string {
+    if (!node || typeof node !== 'object') return 'null';
     if (node.type === 'column_ref') {
         return typeof node.column === 'string' ? node.column : node.column?.expr?.value || 'col';
     }
@@ -1045,12 +1305,68 @@ function getExprName(node: any): string {
             getExprName(node.args?.expr);
         return `${node.name.toLowerCase()}_${argName}`;
     }
+    if (node.type === 'binary_expr') {
+        const left = getExprName(node.left);
+        const right = getExprName(node.right);
+        return `${left}_${node.operator}_${right}`;
+    }
+    if (node.type === 'function') {
+        const args = (node.args?.value || []).map((a: any) => getExprName(a)).join('_');
+        return `${node.name?.name?.[0]?.value || node.name || 'fn'}_${args}`;
+    }
+    if (node.type === 'number') return `n${node.value}`;
+    if (node.type === 'single_quote_string') return `s${node.value}`;
+    if (node.type === 'unary_expr') return `${node.operator}_${getExprName(node.expr)}`;
     return 'expr';
 }
 
-function resolveOrderByColumn(expr: any, aliases: Map<string, Expr>): string {
+// Collect all aggr_func AST nodes from a composite expression tree.
+function collectAggNodes(node: any): any[] {
+    if (!node || typeof node !== 'object') return [];
+    if (node.type === 'aggr_func') return [node];
+    const result: any[] = [];
+    for (const key of Object.keys(node)) {
+        if (key === 'type') continue;
+        const child = node[key];
+        if (Array.isArray(child)) {
+            for (const c of child) result.push(...collectAggNodes(c));
+        } else if (child && typeof child === 'object') {
+            result.push(...collectAggNodes(child));
+        }
+    }
+    return result;
+}
+
+function needsDeferredSort(ast: any): boolean {
+    if (!ast.orderby || ast.columns === '*') return false;
+    for (const ob of ast.orderby) {
+        if (ob.expr.type !== 'column_ref') continue;
+        const name = typeof ob.expr.column === 'string' ? ob.expr.column : ob.expr.column?.expr?.value;
+        for (const c of ast.columns) {
+            // Defer sort when ORDER BY references an alias for any non-column_ref
+            // expression, including aggregates. The native engine uses its own
+            // naming convention for aggregate columns (e.g., quantity_sum) which
+            // doesn't match SQL aliases, so sorting must happen after projection.
+            if (c.as === name && c.expr.type !== 'column_ref') {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function resolveOrderByColumn(expr: any, aliases: Map<string, Expr>, columns?: any[]): string {
     if (expr.type === 'column_ref') {
         const name = typeof expr.column === 'string' ? expr.column : expr.column?.expr?.value;
+        // Check if name is a SELECT alias and resolve to the underlying column
+        if (columns) {
+            for (const c of columns) {
+                if (c.as === name && c.expr.type === 'column_ref') {
+                    const underlying = typeof c.expr.column === 'string' ? c.expr.column : c.expr.column?.expr?.value;
+                    if (underlying) return underlying;
+                }
+            }
+        }
         return name;
     }
     throw new Error('Only column references supported in ORDER BY');
@@ -1075,6 +1391,116 @@ function resolveColName(node: any): string {
     throw new Error(`Expected column reference, got ${node.type}`);
 }
 
+function projectColumns(table: Table, columns: any, ctx: any): Table {
+    if (columns === '*') return table;
+
+    // Check if all columns are unqualified star - equivalent to SELECT *
+    const allStar = columns.every((c: any) =>
+        c.expr.type === 'star' ||
+        (c.expr.type === 'column_ref' && c.expr.column === '*' && !c.expr.table));
+    if (allStar) return table;
+
+    const data = extractRows(table);
+
+    // Pre-rename native aggregate columns so evaluateExprOnRow can find them.
+    // The native engine names aggregates as {col}_{suffix} for column inputs or
+    // _e{index}_{suffix} for expression inputs. We rename expression-based ones
+    // to the getExprName convention so downstream lookups are consistent.
+    let preAggIdx = 0;
+    const seenRenames = new Set<string>();
+    for (const c of columns) {
+        if (c.expr.type === 'column_ref') {
+            // Group key columns don't contribute to the agg index
+            const colName = typeof c.expr.column === 'string' ? c.expr.column : c.expr.column?.expr?.value;
+            if (data.columns.includes(colName)) continue;
+            // Non-key column ref treated as OP_FIRST by buildGroupByPlan
+            preAggIdx++;
+        } else if (c.expr.type === 'star' || (c.expr.type === 'column_ref' && c.expr.column === '*')) {
+            continue;
+        } else if (c.expr.type === 'aggr_func') {
+            preAggIdx++;
+        } else if (containsAggregate(c.expr)) {
+            const nestedAggs = collectAggNodes(c.expr);
+            for (const aggNode of nestedAggs) {
+                const aggKey = getExprName(aggNode);
+                if (!seenRenames.has(aggKey)) {
+                    seenRenames.add(aggKey);
+                    const nativeName = getNativeAggColName(aggNode, preAggIdx);
+                    const colIdx = data.columns.indexOf(nativeName);
+                    if (colIdx !== -1 && data.columns.indexOf(aggKey) === -1) {
+                        data.columns[colIdx] = aggKey;
+                    }
+                    preAggIdx++;
+                }
+            }
+        } else {
+            preAggIdx++;
+        }
+    }
+
+    const resultColumns: string[] = [];
+    const resultColData: any[][] = [];
+    let projAggIdx = 0; // Must mirror preAggIdx counting to address native columns correctly
+
+    for (const c of columns) {
+        if (c.expr.type === 'star') {
+            for (let ci = 0; ci < data.columns.length; ci++) {
+                resultColumns.push(data.columns[ci]);
+                resultColData.push(data.rows.map(row => row[ci]));
+            }
+        } else if (c.expr.type === 'column_ref' && c.expr.column === '*') {
+            // Table-qualified star (t1.*): expand only columns from that table prefix
+            // After join rewriting, we can't distinguish per-table columns, so expand all
+            for (let ci = 0; ci < data.columns.length; ci++) {
+                resultColumns.push(data.columns[ci]);
+                resultColData.push(data.rows.map(row => row[ci]));
+            }
+        } else if (c.expr.type === 'column_ref') {
+            const colName = typeof c.expr.column === 'string' ? c.expr.column : c.expr.column?.expr?.value;
+            if (!data.columns.includes(colName)) {
+                // Non-key column ref (OP_FIRST) occupies an agg slot
+                projAggIdx++;
+            }
+            const colIdx = data.columns.indexOf(colName);
+            if (colIdx === -1) throw new Error(`Column not found: ${colName}`);
+            resultColumns.push(c.as || colName);
+            resultColData.push(data.rows.map(row => row[colIdx]));
+        } else if (c.expr.type === 'aggr_func') {
+            // Aggregate results are already computed in the table by buildGroupByPlan.
+            // The native layer names columns as {col}_{suffix} for scan inputs,
+            // or _e{index}_{suffix} for expression inputs.
+            const nativeColName = getNativeAggColName(c.expr, projAggIdx);
+            projAggIdx++;
+            const alias = c.as || getExprName(c.expr);
+            const colIdx = data.columns.indexOf(nativeColName);
+            if (colIdx === -1) throw new Error(`Aggregate column not found: ${nativeColName}`);
+            resultColumns.push(alias);
+            resultColData.push(data.rows.map(row => row[colIdx]));
+        } else if (containsAggregate(c.expr)) {
+            // Composite expression containing aggregates - agg slots already renamed
+            const nestedAggs = collectAggNodes(c.expr);
+            projAggIdx += nestedAggs.length;
+            const alias = c.as || getExprName(c.expr);
+            resultColumns.push(alias);
+            resultColData.push(data.rows.map(row => evaluateExprOnRow(c.expr, row, data.columns)));
+        } else {
+            // Computed expression - evaluate using JS-level evaluator
+            projAggIdx++;
+            const alias = c.as || getExprName(c.expr);
+            resultColumns.push(alias);
+            resultColData.push(data.rows.map(row => evaluateExprOnRow(c.expr, row, data.columns)));
+        }
+    }
+
+    const nRows = data.rows.length;
+    const resultRows: any[][] = [];
+    for (let i = 0; i < nRows; i++) {
+        resultRows.push(resultColData.map(col => col[i]));
+    }
+
+    return materializeTable({ columns: resultColumns, rows: resultRows }, ctx);
+}
+
 function sliceTable(fullResult: Table, offset: number, limit: number, ctx: any): Table {
     const data = extractRows(fullResult);
     data.rows = data.rows.slice(offset, offset + limit);
@@ -1093,6 +1519,12 @@ function sortRowData(data: RowData, orderBy: any[]): RowData {
         for (const { idx, desc } of sortCols) {
             const av = a[idx];
             const bv = b[idx];
+            // SQL NULLS LAST: nulls sort after all non-null values
+            const aNull = av === null || av === undefined;
+            const bNull = bv === null || bv === undefined;
+            if (aNull && bNull) continue;
+            if (aNull) return 1;
+            if (bNull) return -1;
             let cmp = 0;
             if (typeof av === 'number' && typeof bv === 'number') {
                 cmp = av - bv;
@@ -1297,7 +1729,7 @@ function planUpdate(ast: any, session: Session, ctx: any): Table | null {
 
     // Apply UPDATE: for each row, if WHERE matches, apply assignments
     const updatedRows = data.rows.map(row => {
-        if (ast.where && !evaluateWhereOnRow(ast.where, row, columns)) {
+        if (ast.where && !Boolean(evaluateExprOnRow(ast.where, row, columns))) {
             return row;
         }
         const newRow = [...row];
@@ -1325,7 +1757,7 @@ function planDelete(ast: any, session: Session, ctx: any): Table | null {
     // Keep rows that do NOT match the WHERE condition
     let filteredRows: any[][];
     if (ast.where) {
-        filteredRows = data.rows.filter(row => !evaluateWhereOnRow(ast.where, row, columns));
+        filteredRows = data.rows.filter(row => !Boolean(evaluateExprOnRow(ast.where, row, columns)));
     } else {
         // DELETE without WHERE = delete all rows
         filteredRows = [];
@@ -1339,13 +1771,8 @@ function planDelete(ast: any, session: Session, ctx: any): Table | null {
 
 // ─── JS-level expression evaluator for WHERE/SET on extracted rows ──────────
 
-function evaluateWhereOnRow(node: any, row: any[], columns: string[]): boolean {
-    const result = evaluateExprOnRow(node, row, columns);
-    return Boolean(result);
-}
-
 function evaluateExprOnRow(node: any, row: any[], columns: string[]): any {
-    if (!node) return 0;
+    if (!node) return null;
 
     switch (node.type) {
         case 'column_ref': {
@@ -1374,6 +1801,75 @@ function evaluateExprOnRow(node: any, row: any[], columns: string[]): any {
                 case 'NOT': return !inner ? 1 : 0;
                 default: throw new Error(`Unsupported unary: ${node.operator}`);
             }
+        }
+        case 'function': {
+            const funcName = extractFunctionName(node).toUpperCase();
+            const args = (node.args?.value || []).map((a: any) => evaluateExprOnRow(a, row, columns));
+            return evaluateScalarFunction(funcName, args);
+        }
+        case 'cast': {
+            const val = evaluateExprOnRow(node.expr, row, columns);
+            if (val === null || val === undefined) return null;
+            const target = Array.isArray(node.target) ? node.target[0] : node.target;
+            const targetType = target?.dataType?.toUpperCase() || '';
+            if (targetType.startsWith('INT') || targetType === 'INTEGER' || targetType === 'BIGINT') return Math.trunc(Number(val));
+            if (targetType.startsWith('FLOAT') || targetType.startsWith('DOUBLE') || targetType === 'REAL' || targetType.startsWith('NUMERIC') || targetType.startsWith('DECIMAL')) return Number(val);
+            if (targetType.startsWith('VARCHAR') || targetType === 'TEXT' || targetType === 'STRING') return String(val);
+            return val;
+        }
+        case 'case': {
+            // Simple CASE (CASE expr WHEN val THEN ...) vs searched CASE (CASE WHEN cond THEN ...)
+            // Distinguish by AST structure (node.expr exists), not by evaluated value,
+            // because the discriminant can legitimately evaluate to null.
+            const isSimpleCase = node.expr != null;
+            const discriminant = isSimpleCase ? evaluateExprOnRow(node.expr, row, columns) : null;
+            if (node.args) {
+                for (const arg of node.args) {
+                    if (arg.type === 'when') {
+                        if (isSimpleCase) {
+                            // Simple CASE: compare discriminant against each WHEN value
+                            // Per SQL semantics, NULL = anything is NULL (no match)
+                            if (discriminant === null || discriminant === undefined) continue;
+                            const whenVal = evaluateExprOnRow(arg.cond, row, columns);
+                            if (discriminant === whenVal) {
+                                return evaluateExprOnRow(arg.result, row, columns);
+                            }
+                        } else {
+                            // Searched CASE: evaluate WHEN as boolean
+                            if (evaluateExprOnRow(arg.cond, row, columns)) {
+                                return evaluateExprOnRow(arg.result, row, columns);
+                            }
+                        }
+                    } else if (arg.type === 'else') {
+                        return evaluateExprOnRow(arg.result, row, columns);
+                    }
+                }
+            }
+            return null;
+        }
+        case 'aggr_func': {
+            // Look up pre-computed aggregate value from the row's columns.
+            // This is needed when an aggregate is nested inside a composite
+            // expression (e.g., COUNT(*) + 1) and evaluated row-by-row.
+            const funcName = node.name.toLowerCase();
+            const suffix = NATIVE_AGG_SUFFIX[funcName] || funcName;
+            const argExpr = node.args?.expr;
+            let colName: string | null = null;
+            if (argExpr?.type === 'star') {
+                colName = `*_${suffix}`;
+            } else if (argExpr?.type === 'column_ref') {
+                const argCol = typeof argExpr.column === 'string' ? argExpr.column : argExpr?.column?.expr?.value;
+                if (argCol) colName = `${argCol}_${suffix}`;
+            }
+            if (colName) {
+                const idx = columns.indexOf(colName);
+                if (idx !== -1) return row[idx];
+            }
+            // Fallback: try the getExprName convention (used by buildGroupByPlan aliases)
+            const altName = getExprName(node);
+            const altIdx = columns.indexOf(altName);
+            if (altIdx !== -1) return row[altIdx];
+            throw new Error(`Aggregate column not found: ${node.name}(${colName || '...'})`);
         }
         default:
             return evaluateLiteralValue(node);
@@ -1429,6 +1925,15 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     const left = evaluateExprOnRow(node.left, row, columns);
     const right = evaluateExprOnRow(node.right, row, columns);
 
+    // SQL NULL semantics: comparisons with NULL return 0 (unknown/false)
+    if ((left === null || left === undefined) || (right === null || right === undefined)) {
+        switch (op) {
+            case '=': case '==': case '!=': case '<>':
+            case '<': case '<=': case '>': case '>=':
+                return 0;
+        }
+    }
+
     switch (op) {
         case '=': case '==': return (left === right) ? 1 : 0;
         case '!=': case '<>': return (left !== right) ? 1 : 0;
@@ -1450,6 +1955,38 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
             return Number(left) % mod;
         }
         default: throw new Error(`Unsupported binary operator in DML: ${op}`);
+    }
+}
+
+function evaluateScalarFunction(name: string, args: any[]): any {
+    // SQL NULL propagation: most scalar functions return NULL if any argument is NULL
+    // (except functions that handle NULLs with their own semantics)
+    if (name !== 'COALESCE' && name !== 'CONCAT' && name !== 'NULLIF' && name !== 'IF') {
+        if (args.some(a => a === null || a === undefined)) return null;
+    }
+    switch (name) {
+        case 'ABS': return Math.abs(Number(args[0]));
+        case 'CEIL': case 'CEILING': return Math.ceil(Number(args[0]));
+        case 'FLOOR': return Math.floor(Number(args[0]));
+        case 'SQRT': return Math.sqrt(Number(args[0]));
+        case 'ROUND': return Math.round(Number(args[0]));
+        case 'LN': case 'LOG': return Math.log(Number(args[0]));
+        case 'EXP': return Math.exp(Number(args[0]));
+        case 'UPPER': return String(args[0]).toUpperCase();
+        case 'LOWER': return String(args[0]).toLowerCase();
+        case 'LENGTH': case 'LEN': case 'STRLEN': return String(args[0]).length;
+        case 'TRIM': return String(args[0]).trim();
+        case 'LTRIM': return String(args[0]).trimStart();
+        case 'RTRIM': return String(args[0]).trimEnd();
+        case 'SUBSTR': case 'SUBSTRING': return String(args[0]).substring(Number(args[1]) - 1, args[2] !== undefined ? Number(args[1]) - 1 + Number(args[2]) : undefined);
+        case 'REPLACE': return String(args[0]).replaceAll(String(args[1]), String(args[2]));
+        case 'CONCAT': return args.map(a => (a === null || a === undefined) ? '' : String(a)).join('');
+        case 'COALESCE': return args.find(a => a !== null && a !== undefined) ?? null;
+        case 'NULLIF': return args[0] === args[1] ? null : args[0];
+        case 'LEAST': return Math.min(...args.map(Number));
+        case 'GREATEST': return Math.max(...args.map(Number));
+        case 'IF': return args[0] ? args[1] : (args[2] ?? null);
+        default: throw new Error(`Unsupported function in expression projection: ${name}`);
     }
 }
 

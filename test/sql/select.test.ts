@@ -29,10 +29,9 @@ describe('SQL SELECT', () => {
         it('SELECT specific columns', () => {
             const df = ctx.readCsvSync(SALES);
             ctx.registerTable('sales', df);
-            // SELECT with specific columns still returns all (projection not implemented at C level)
-            // but the query should parse and execute
             const result = ctx.executeSync('SELECT category, price FROM sales')!;
             expect(result.nRows).toBe(9);
+            expect(result.columns).toEqual(['category', 'price']);
         });
 
         it('case-insensitive table names', () => {
@@ -156,6 +155,9 @@ describe('SQL SELECT', () => {
                 'SELECT category, SUM(quantity) as total_qty FROM sales GROUP BY category'
             )!;
             expect(result.nRows).toBe(3);
+            // Verify actual aggregate values (electronics=50, clothing=220, food=470)
+            const totals = Array.from(result.col('total_qty').data).sort((a, b) => a - b);
+            expect(totals).toEqual([50, 220, 470]);
         });
 
         it('GROUP BY with AVG', () => {
@@ -165,6 +167,10 @@ describe('SQL SELECT', () => {
                 'SELECT category, AVG(price) as avg_price FROM sales GROUP BY category'
             )!;
             expect(result.nRows).toBe(3);
+            // Verify aggregate values: food~5.66, clothing~56.66, electronics~716.66
+            const avgs = Array.from(result.col('avg_price').data).sort((a, b) => a - b);
+            expect(avgs[0]).toBeCloseTo(5.66, 0);
+            expect(avgs[2]).toBeCloseTo(716.66, 0);
         });
 
         it('GROUP BY with MIN and MAX', () => {
@@ -174,6 +180,11 @@ describe('SQL SELECT', () => {
                 'SELECT category, MIN(price) as min_p, MAX(price) as max_p FROM sales GROUP BY category'
             )!;
             expect(result.nRows).toBe(3);
+            // Verify: food min=3.99, clothing min=29.99, electronics min=449.99
+            const mins = Array.from(result.col('min_p').data).sort((a, b) => a - b);
+            expect(mins[0]).toBeCloseTo(3.99, 1);
+            const maxes = Array.from(result.col('max_p').data).sort((a, b) => a - b);
+            expect(maxes[2]).toBeCloseTo(999.99, 1);
         });
     });
 
@@ -234,6 +245,84 @@ describe('SQL SELECT', () => {
                 'SELECT category, SUM(quantity) as total FROM sales GROUP BY category ORDER BY total DESC LIMIT 2'
             )!;
             expect(result.nRows).toBe(2);
+        });
+    });
+
+    describe('expression-valued aggregates', () => {
+        it('composite expression wrapping aggregate', () => {
+            const df = ctx.readCsvSync(SALES);
+            ctx.registerTable('sales', df);
+            const result = ctx.executeSync(
+                'SELECT category, SUM(price * quantity) + 1 AS adjusted FROM sales GROUP BY category'
+            )!;
+            expect(result.nRows).toBe(3);
+            expect(result.columns).toContain('adjusted');
+        });
+
+        it('multiple composite aggregates', () => {
+            const df = ctx.readCsvSync(SALES);
+            ctx.registerTable('sales', df);
+            const result = ctx.executeSync(
+                'SELECT category, COUNT(*) + 1 AS adj_count, SUM(price * quantity) + 10 AS adj_total FROM sales GROUP BY category'
+            )!;
+            expect(result.nRows).toBe(3);
+            expect(result.columns).toEqual(['category', 'adj_count', 'adj_total']);
+        });
+
+        it('distinct expression-based aggregates are not collapsed', () => {
+            const df = ctx.readCsvSync(SALES);
+            ctx.registerTable('sales', df);
+            // SUM(price * quantity) and SUM(price + quantity) must produce different results
+            const combined = ctx.executeSync(
+                'SELECT category, SUM(price * quantity) + SUM(price + quantity) AS total FROM sales GROUP BY category ORDER BY category'
+            )!;
+            expect(combined.nRows).toBe(3);
+            expect(combined.columns).toContain('total');
+            // Verify the values are computed from two distinct sums, not the same one doubled
+            const separate = ctx.executeSync(
+                'SELECT category, SUM(price * quantity) AS s1, SUM(price + quantity) AS s2 FROM sales GROUP BY category ORDER BY category'
+            )!;
+            // Access via native col().data typed arrays
+            const totalData = Array.from(combined.col('total').data as Float64Array);
+            const s1Data = Array.from(separate.col('s1').data as Float64Array);
+            const s2Data = Array.from(separate.col('s2').data as Float64Array);
+            for (let i = 0; i < combined.nRows; i++) {
+                expect(totalData[i]).toBeCloseTo(s1Data[i] + s2Data[i], 5);
+            }
+        });
+    });
+
+    describe('ORDER BY on aggregate aliases', () => {
+        it('ORDER BY alias of SUM aggregate', () => {
+            const df = ctx.readCsvSync(SALES);
+            ctx.registerTable('sales', df);
+            const result = ctx.executeSync(
+                'SELECT category, SUM(quantity) AS total FROM sales GROUP BY category ORDER BY total DESC'
+            )!;
+            expect(result.nRows).toBe(3);
+            expect(result.columns).toEqual(['category', 'total']);
+        });
+
+        it('ORDER BY alias of COUNT aggregate with LIMIT', () => {
+            const df = ctx.readCsvSync(SALES);
+            ctx.registerTable('sales', df);
+            const result = ctx.executeSync(
+                'SELECT category, COUNT(*) AS cnt FROM sales GROUP BY category ORDER BY cnt DESC LIMIT 2'
+            )!;
+            expect(result.nRows).toBe(2);
+            expect(result.columns).toEqual(['category', 'cnt']);
+        });
+    });
+
+    describe('ORDER BY with aliased columns', () => {
+        it('ORDER BY source column aliased in SELECT', () => {
+            const df = ctx.readCsvSync(SALES);
+            ctx.registerTable('sales', df);
+            const result = ctx.executeSync(
+                'SELECT UPPER(product) AS p, price AS cost FROM sales ORDER BY p, price'
+            )!;
+            expect(result.nRows).toBe(9);
+            expect(result.columns).toEqual(['p', 'cost']);
         });
     });
 

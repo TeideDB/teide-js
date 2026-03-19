@@ -89,7 +89,7 @@ export type PgqResult =
     | PgqDropGraph
     | PgqCreateVectorIndex
     | PgqDropVectorIndex
-    | { type: 'graph_table_rewrite'; original: string; rewritten: string; graphTableRefs: GraphTableRef[] }
+    | { type: 'graph_table_rewrite'; original: string; rewritten: string; graphTableRefs: GraphTableRef[]; graphTableAliases: string[] }
     | null; // null = not PGQ syntax, pass through to SQL parser
 
 // Tokenizer
@@ -384,7 +384,8 @@ export function parsePgq(sql: string): PgqResult {
     }
 
     // Check for GRAPH_TABLE in SELECT ... FROM GRAPH_TABLE(...)
-    if (upper.includes('GRAPH_TABLE')) {
+    // Use word-boundary check to avoid matching inside strings or identifiers
+    if (/\bGRAPH_TABLE\s*\(/.test(upper)) {
         return parseGraphTableRewrite(trimmed);
     }
 
@@ -510,7 +511,9 @@ function parseGraphTableRewrite(sql: string): PgqResult {
         graphTableRefs.push(ref);
 
         // Check for alias after the closing paren
-        const afterParen = sql.substring(endIdx).trimStart();
+        const afterParenRaw = sql.substring(endIdx);
+        const afterParen = afterParenRaw.trimStart();
+        const trimmedWhitespace = afterParenRaw.length - afterParen.length;
         let alias = `_gt${graphTableRefs.length}`;
         const SQL_KEYWORDS = new Set([
             'WHERE', 'ORDER', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION',
@@ -524,7 +527,7 @@ function parseGraphTableRewrite(sql: string): PgqResult {
         let aliasEndIdx = endIdx;
         if (aliasMatch && !SQL_KEYWORDS.has(aliasMatch[1].toUpperCase())) {
             alias = aliasMatch[1];
-            aliasEndIdx = endIdx + afterParen.indexOf(aliasMatch[0]) + aliasMatch[0].length;
+            aliasEndIdx = endIdx + trimmedWhitespace + afterParen.indexOf(aliasMatch[0]) + aliasMatch[0].length;
         }
 
         replacements.push({ start: startIdx, end: aliasEndIdx, alias });
@@ -541,6 +544,7 @@ function parseGraphTableRewrite(sql: string): PgqResult {
         original: sql,
         rewritten,
         graphTableRefs,
+        graphTableAliases: replacements.map(r => r.alias),
     };
 }
 
