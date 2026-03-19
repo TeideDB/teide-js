@@ -49,16 +49,11 @@ registry.set('PROD', agg(OP_PROD));
 registry.set('FIRST', agg(OP_FIRST));
 registry.set('LAST', agg(OP_LAST));
 
-// COALESCE(a, b, ...) → chain of: if a IS NOT NULL then a else COALESCE(b, ...)
-// For now, support 2-arg COALESCE as: IF(a IS NULL, b, a)
-// This doesn't map perfectly to Teide ops without td_if, so we approximate
-// with a simple 2-arg version that returns the first non-null
+// COALESCE requires td_if NAPI binding for multi-arg support
 registry.set('COALESCE', (args) => {
     if (args.length < 1) throw new Error('COALESCE() requires at least 1 argument');
-    // For single arg, just return it
     if (args.length === 1) return args[0];
-    // For now, COALESCE is not fully expressible without td_if - throw for >2 args
-    throw new Error('COALESCE() not yet supported (requires td_if NAPI binding)');
+    throw new Error('COALESCE() with multiple arguments not yet supported (requires td_if NAPI binding)');
 });
 
 // NULLIF not expressible without td_if either

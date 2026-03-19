@@ -30,16 +30,26 @@ export function euclideanDistance(a: number[], b: number[]): number {
 
 // Parse a vector from its storage representation (JSON array string or actual array)
 export function parseVector(value: any): number[] {
-    if (Array.isArray(value)) return value.map(Number);
-    if (typeof value === 'string') {
+    let result: number[];
+    if (Array.isArray(value)) {
+        result = value.map(Number);
+    } else if (typeof value === 'string') {
         const trimmed = value.trim();
         if (trimmed.startsWith('[')) {
-            return JSON.parse(trimmed);
+            const parsed = JSON.parse(trimmed);
+            if (!Array.isArray(parsed)) throw new Error(`Expected array, got: ${typeof parsed}`);
+            result = parsed.map(Number);
+        } else {
+            // Comma-separated values without brackets
+            result = trimmed.split(',').map(s => parseFloat(s.trim()));
         }
-        // Comma-separated values without brackets
-        return trimmed.split(',').map(s => parseFloat(s.trim()));
+    } else {
+        throw new Error(`Cannot parse vector from: ${value}`);
     }
-    throw new Error(`Cannot parse vector from: ${value}`);
+    if (result.some(v => !Number.isFinite(v))) {
+        throw new Error('Vector contains non-finite values (NaN or Infinity)');
+    }
+    return result;
 }
 
 // ─── HNSW Index ─────────────────────────────────────────────────────────────
@@ -243,8 +253,9 @@ export function detectKnnQuery(ast: any): KnnQuery | null {
 
     // Cosine similarity should be DESC (higher = more similar)
     // Euclidean distance should be ASC (lower = closer)
-    if (funcInfo.metric === 'cosine' && orderDir !== 'DESC') return null;
-    if (funcInfo.metric === 'euclidean' && orderDir !== 'ASC') return null;
+    const dir = (orderDir || 'ASC').toUpperCase();
+    if (funcInfo.metric === 'cosine' && dir !== 'DESC') return null;
+    if (funcInfo.metric === 'euclidean' && dir !== 'ASC') return null;
 
     // Extract LIMIT k
     const limitVal = ast.limit.value;

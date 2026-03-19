@@ -21,7 +21,7 @@ export function planAndExecuteSync(sql: string, session: Session, ctx: any): Tab
     } finally {
         // Clean up temp tables created during this query
         for (const name of session.listTables()) {
-            if (!tempsBefore.has(name) && name.startsWith('__teide_tmp_')) {
+            if (!tempsBefore.has(name) && (name.startsWith('__teide_tmp_') || /^_gt\d+$/.test(name) || name === '_sub' || name === '_csv')) {
                 session.drop(name);
             }
         }
@@ -744,7 +744,15 @@ function isVectorFunctionCall(node: any): boolean {
 
 function planVectorSelect(ast: any, session: Session, ctx: any): Table {
     const stored = resolveFromSingle(ast.from, session, ctx);
-    const data = extractRows(stored.table);
+    let data = extractRows(stored.table);
+
+    // Apply WHERE filter before computing vector similarities
+    if (ast.where) {
+        data = {
+            columns: data.columns,
+            rows: data.rows.filter(row => evaluateExprOnRow(ast.where, row, data.columns)),
+        };
+    }
 
     const resultColumns: string[] = [];
     const resultColData: any[][] = [];
@@ -797,7 +805,15 @@ function planKnnSelect(knn: KnnQuery, ast: any, session: Session, ctx: any): Tab
     const stored = session.get(knn.tableName);
     if (!stored) throw new Error(`Table not found: ${knn.tableName}`);
 
-    const data = extractRows(stored.table);
+    let data = extractRows(stored.table);
+
+    // Apply WHERE filter before KNN search
+    if (ast.where) {
+        data = {
+            columns: data.columns,
+            rows: data.rows.filter(row => evaluateExprOnRow(ast.where, row, data.columns)),
+        };
+    }
 
     // Check for HNSW index
     const index = session.vectorIndexes.findIndex(knn.tableName, knn.columnName, knn.metric);
