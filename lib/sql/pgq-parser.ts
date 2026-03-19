@@ -154,21 +154,45 @@ class Lexer {
                 continue;
             }
 
-            // Quoted identifier
+            // Quoted identifier (handles "" escape for embedded double quotes)
             if (s[i] === '"') {
                 let ident = '';
                 i++; // skip opening quote
-                while (i < s.length && s[i] !== '"') { ident += s[i]; i++; }
+                while (i < s.length) {
+                    if (s[i] === '"') {
+                        if (i + 1 < s.length && s[i + 1] === '"') {
+                            ident += '"'; // escaped double quote
+                            i += 2;
+                        } else {
+                            break; // end of identifier
+                        }
+                    } else {
+                        ident += s[i];
+                        i++;
+                    }
+                }
                 i++; // skip closing quote
                 this.tokens.push({ type: 'ident', value: ident });
                 continue;
             }
 
-            // Single-quoted string
+            // Single-quoted string (handles '' escape for embedded single quotes)
             if (s[i] === "'") {
                 let str = '';
                 i++;
-                while (i < s.length && s[i] !== "'") { str += s[i]; i++; }
+                while (i < s.length) {
+                    if (s[i] === "'") {
+                        if (i + 1 < s.length && s[i + 1] === "'") {
+                            str += "'"; // escaped single quote
+                            i += 2;
+                        } else {
+                            break; // end of string
+                        }
+                    } else {
+                        str += s[i];
+                        i++;
+                    }
+                }
                 i++;
                 this.tokens.push({ type: 'string', value: str });
                 continue;

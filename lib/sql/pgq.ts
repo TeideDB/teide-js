@@ -338,6 +338,7 @@ function expandVariableLengthPath(
 ): PathResult[] {
     const results: PathResult[] = [];
     const maxSteps = Math.min(maxDepth, 100); // Safety cap
+    const MAX_RESULTS = 10000; // Prevent unbounded memory growth
     const direction = edgePattern.direction || '->';
 
     // BFS
@@ -346,6 +347,7 @@ function expandVariableLengthPath(
     ];
 
     while (queue.length > 0) {
+        if (results.length >= MAX_RESULTS) break;
         const { node, depth, visited } = queue.shift()!;
 
         if (depth >= minDepth) {

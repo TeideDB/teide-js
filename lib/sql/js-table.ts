@@ -87,7 +87,7 @@ function tempCsvPath(): string {
 }
 
 function csvEscape(s: string): string {
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
         return '"' + s.replace(/"/g, '""') + '"';
     }
     return s;

@@ -12,6 +12,8 @@ export class Session {
     private tables = new Map<string, StoredTable>();
     readonly graphCatalog = new GraphCatalog();
     readonly vectorIndexes = new VectorIndexRegistry();
+    /** Per-session counter for unique temp table names (avoids cross-session collisions). */
+    tempTableCounter = 0;
 
     register(name: string, table: Table): void {
         const key = name.toLowerCase();

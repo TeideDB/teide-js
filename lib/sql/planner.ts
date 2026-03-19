@@ -9,13 +9,14 @@ import { parsePgq } from './pgq-parser';
 import { executeGraphTable, executeGraphAlgorithm } from './pgq';
 import { detectKnnQuery, hnswSearch, computeVectorSimilarity, parseVector, KnnQuery } from './vector';
 
-let tempTableCounter = 0;
-function tempName(prefix: string): string {
-    return `__teide_tmp_${prefix}_${++tempTableCounter}`;
+function tempName(prefix: string, session: Session): string {
+    return `__teide_tmp_${prefix}_${++session.tempTableCounter}`;
 }
 
 // Tracks temp table names registered during query execution that should be cleaned up.
 // DDL-created tables (CREATE TABLE) are NOT added here.
+// These are module-level but safe: Node.js is single-threaded and planAndExecuteSync
+// saves/restores them around each top-level call for re-entrancy.
 const queryTempTables = new Set<string>();
 
 // Saves tables that were overwritten by temp registrations so we can restore them.
@@ -409,7 +410,7 @@ function tryPlanGraphAlgorithm(ast: any, session: Session, ctx: any): Table | nu
     const algoResult = executeGraphAlgorithm(funcName, graphName, session.graphCatalog, session, ctx, extraArgs);
 
     // Register as temp table and let planSimpleSelect handle ORDER BY, LIMIT, etc.
-    const tmpName = tempName('algo');
+    const tmpName = tempName('algo', session);
     registerTempTable(tmpName, algoResult, session);
 
     // Build column entries preserving aliases from the original SELECT.
@@ -461,9 +462,22 @@ function planJoinSelect(ast: any, session: Session, ctx: any): Table {
         if (joinType === 'CROSS JOIN') {
             result = crossJoin(result, rightData);
         } else {
-            // INNER JOIN or LEFT JOIN - evaluate ON condition
-            const isLeft = joinType.includes('LEFT');
-            result = nestedLoopJoin(result, rightData, joinEntry.on, combinedAliases, isLeft);
+            // INNER JOIN, LEFT JOIN, or RIGHT JOIN - evaluate ON condition
+            if (joinType.includes('RIGHT')) {
+                // RIGHT JOIN = swap sides, do LEFT JOIN, then swap columns back
+                const swapped = nestedLoopJoin(rightData, result, joinEntry.on, combinedAliases, true);
+                // Re-order columns: left columns first, then right columns
+                const leftColCount = result.columns.length;
+                const rightColCount = rightData.columns.length;
+                const reorderedRows = swapped.rows.map(row => [
+                    ...row.slice(rightColCount),
+                    ...row.slice(0, rightColCount),
+                ]);
+                result = { columns: [...result.columns, ...rightData.columns], rows: reorderedRows };
+            } else {
+                const isLeft = joinType.includes('LEFT');
+                result = nestedLoopJoin(result, rightData, joinEntry.on, combinedAliases, isLeft);
+            }
         }
 
         // Update alias map with combined columns
@@ -474,7 +488,7 @@ function planJoinSelect(ast: any, session: Session, ctx: any): Table {
     let table = materializeTable(result, ctx);
 
     // Register temporarily for query operations
-    const tmpName = tempName('_join');
+    const tmpName = tempName('_join', session);
     registerTempTable(tmpName, table, session);
     const stored = session.get(tmpName)!;
 
@@ -702,7 +716,12 @@ function rewriteSubqueryInWhere(node: any, session: Session, ctx: any): any {
             if (subSelectCols !== '*' && subSelectCols.length === 1) {
                 const selColName = resolveColName(subSelectCols[0].expr);
                 colIdx = subData.columns.indexOf(selColName);
-                if (colIdx === -1) colIdx = 0;
+                if (colIdx === -1) {
+                    // Try matching by alias from the select expression
+                    const alias = subSelectCols[0].as;
+                    if (alias) colIdx = subData.columns.indexOf(alias);
+                    if (colIdx === -1) colIdx = 0; // Single-column subquery, use first column
+                }
             }
             const values = subData.rows.map(row => row[colIdx]);
 
@@ -1880,10 +1899,20 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     const op = node.operator;
 
     if (op === 'AND') {
-        return (evaluateExprOnRow(node.left, row, columns) && evaluateExprOnRow(node.right, row, columns)) ? 1 : 0;
+        const l = evaluateExprOnRow(node.left, row, columns);
+        const r = evaluateExprOnRow(node.right, row, columns);
+        // SQL three-valued logic: NULL AND FALSE = FALSE, NULL AND TRUE = NULL
+        if (l === null || l === undefined) return (r === 0 || r === false) ? 0 : null;
+        if (r === null || r === undefined) return (l === 0 || l === false || !l) ? 0 : null;
+        return (l && r) ? 1 : 0;
     }
     if (op === 'OR') {
-        return (evaluateExprOnRow(node.left, row, columns) || evaluateExprOnRow(node.right, row, columns)) ? 1 : 0;
+        const l = evaluateExprOnRow(node.left, row, columns);
+        const r = evaluateExprOnRow(node.right, row, columns);
+        // SQL three-valued logic: NULL OR TRUE = TRUE, NULL OR FALSE = NULL
+        if (l === null || l === undefined) return (r && r !== 0) ? 1 : null;
+        if (r === null || r === undefined) return (l && l !== 0) ? 1 : null;
+        return (l || r) ? 1 : 0;
     }
     if (op === 'IS') {
         const left = evaluateExprOnRow(node.left, row, columns);
@@ -1903,12 +1932,14 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
         const val = evaluateExprOnRow(node.left, row, columns);
         const lo = evaluateExprOnRow(node.right.value[0], row, columns);
         const hi = evaluateExprOnRow(node.right.value[1], row, columns);
+        if (val === null || val === undefined || lo === null || lo === undefined || hi === null || hi === undefined) return null;
         return (val >= lo && val <= hi) ? 1 : 0;
     }
     if (op === 'NOT BETWEEN') {
         const val = evaluateExprOnRow(node.left, row, columns);
         const lo = evaluateExprOnRow(node.right.value[0], row, columns);
         const hi = evaluateExprOnRow(node.right.value[1], row, columns);
+        if (val === null || val === undefined || lo === null || lo === undefined || hi === null || hi === undefined) return null;
         return (val < lo || val > hi) ? 1 : 0;
     }
     if (op === 'LIKE') {
