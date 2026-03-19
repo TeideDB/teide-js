@@ -1694,6 +1694,9 @@ function planInsert(ast: any, session: Session, ctx: any): Table | null {
 }
 
 function buildInsertRow(values: any[], insertCols: string[], tableCols: string[]): any[] {
+    if (values.length !== insertCols.length) {
+        throw new Error(`INSERT value count (${values.length}) does not match column count (${insertCols.length})`);
+    }
     const row = new Array(tableCols.length).fill(null);
     for (let i = 0; i < insertCols.length; i++) {
         const colIdx = tableCols.indexOf(insertCols[i]);
@@ -1921,11 +1924,17 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     }
     if (op === 'IS') {
         const left = evaluateExprOnRow(node.left, row, columns);
-        return (node.right?.type === 'null' && left === null) ? 1 : 0;
+        if (node.right?.type === 'null') return (left === null || left === undefined) ? 1 : 0;
+        if (node.right?.type === 'bool' || node.right?.value === true) return left ? 1 : 0;
+        if (node.right?.value === false) return (!left || left === 0) ? 1 : 0;
+        return 0;
     }
     if (op === 'IS NOT') {
         const left = evaluateExprOnRow(node.left, row, columns);
-        return (node.right?.type === 'null' && left !== null) ? 1 : 0;
+        if (node.right?.type === 'null') return (left !== null && left !== undefined) ? 1 : 0;
+        if (node.right?.type === 'bool' || node.right?.value === true) return !left ? 1 : 0;
+        if (node.right?.value === false) return (left && left !== 0) ? 1 : 0;
+        return 1;
     }
     if (op === 'IN' || op === 'NOT IN') {
         const left = evaluateExprOnRow(node.left, row, columns);
@@ -1967,8 +1976,8 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     }
 
     switch (op) {
-        case '=': case '==': return (left === right) ? 1 : 0;
-        case '!=': case '<>': return (left !== right) ? 1 : 0;
+        case '=': case '==': return compareValues(left, right) ? 1 : 0;
+        case '!=': case '<>': return !compareValues(left, right) ? 1 : 0;
         case '<': return (left < right) ? 1 : 0;
         case '<=': return (left <= right) ? 1 : 0;
         case '>': return (left > right) ? 1 : 0;
@@ -1986,8 +1995,21 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
             if (mod === 0) throw new Error('Modulus by zero');
             return Number(left) % mod;
         }
+        case '||': return String(left) + String(right);
         default: throw new Error(`Unsupported binary operator in DML: ${op}`);
     }
+}
+
+// SQL-style comparison: coerce to same type before comparing
+function compareValues(a: any, b: any): boolean {
+    if (a === b) return true;
+    // If either is a number, try numeric comparison
+    if (typeof a === 'number' || typeof b === 'number') {
+        const na = Number(a);
+        const nb = Number(b);
+        if (!isNaN(na) && !isNaN(nb)) return na === nb;
+    }
+    return String(a) === String(b);
 }
 
 function evaluateScalarFunction(name: string, args: any[]): any {
