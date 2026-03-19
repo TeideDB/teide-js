@@ -15,10 +15,22 @@ export interface PlanResult {
 
 export function planAndExecuteSync(sql: string, session: Session, ctx: any): Table | null {
     const ast = parse(sql);
-    if (ast.type !== 'select') {
-        throw new Error(`Unsupported SQL statement type: ${ast.type}`);
+    switch (ast.type) {
+        case 'select':
+            return planSelectWithSetOps(ast, session, ctx);
+        case 'create':
+            return planCreate(ast, session, ctx);
+        case 'drop':
+            return planDrop(ast, session);
+        case 'insert':
+            return planInsert(ast, session, ctx);
+        case 'update':
+            return planUpdate(ast, session, ctx);
+        case 'delete':
+            return planDelete(ast, session, ctx);
+        default:
+            throw new Error(`Unsupported SQL statement type: ${ast.type}`);
     }
-    return planSelectWithSetOps(ast, session, ctx);
 }
 
 export async function planAndExecute(sql: string, session: Session, ctx: any): Promise<Table | null> {
@@ -860,4 +872,338 @@ function deduplicateRows(rows: any[][]): any[][] {
         }
     }
     return result;
+}
+
+// ─── DDL: CREATE TABLE / DROP TABLE ─────────────────────────────────────────
+
+function planCreate(ast: any, session: Session, ctx: any): Table | null {
+    if (ast.keyword !== 'table') {
+        throw new Error(`CREATE ${ast.keyword} not supported`);
+    }
+
+    const tableName = ast.table[0].table;
+    const ifNotExists = ast.if_not_exists != null;
+
+    if (session.has(tableName) && ifNotExists) {
+        return null;
+    }
+    if (session.has(tableName) && !ifNotExists) {
+        throw new Error(`Table already exists: ${tableName}`);
+    }
+
+    // CTAS: CREATE TABLE ... AS SELECT ...
+    if (ast.query_expr) {
+        const result = planSelectWithSetOps(ast.query_expr, session, ctx);
+        session.register(tableName, result);
+        return null;
+    }
+
+    // Schema-only CREATE TABLE: build empty table from column definitions
+    if (!ast.create_definitions || ast.create_definitions.length === 0) {
+        throw new Error('CREATE TABLE requires column definitions or AS SELECT');
+    }
+
+    const columns: string[] = [];
+    const colTypes: string[] = [];
+    for (const def of ast.create_definitions) {
+        if (def.resource !== 'column') continue;
+        const colName = typeof def.column.column === 'string'
+            ? def.column.column
+            : def.column.column?.expr?.value;
+        columns.push(colName);
+        colTypes.push(mapSqlType(def.definition?.dataType));
+    }
+
+    if (columns.length === 0) {
+        throw new Error('CREATE TABLE requires at least one column');
+    }
+
+    // Create an empty table via CSV with just a header row
+    const emptyData: RowData = { columns, rows: [] };
+    const table = materializeTable(emptyData, ctx);
+    session.register(tableName, table);
+    return null;
+}
+
+function mapSqlType(dataType: string | undefined): string {
+    if (!dataType) return 'f64';
+    const dt = dataType.toUpperCase();
+    if (['INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT'].includes(dt)) return 'f64';
+    if (['FLOAT', 'DOUBLE', 'REAL', 'DECIMAL', 'NUMERIC'].includes(dt)) return 'f64';
+    if (['VARCHAR', 'CHAR', 'TEXT', 'STRING'].includes(dt)) return 'sym';
+    if (['BOOLEAN', 'BOOL'].includes(dt)) return 'f64';
+    return 'f64';
+}
+
+function planDrop(ast: any, session: Session): Table | null {
+    if (ast.keyword !== 'table') {
+        throw new Error(`DROP ${ast.keyword} not supported`);
+    }
+
+    const tableName = ast.name[0].table;
+    const ifExists = ast.prefix === 'if exists';
+
+    if (!session.has(tableName) && !ifExists) {
+        throw new Error(`Table not found: ${tableName}`);
+    }
+
+    session.drop(tableName);
+    return null;
+}
+
+// ─── DML: INSERT, UPDATE, DELETE ────────────────────────────────────────────
+
+function planInsert(ast: any, session: Session, ctx: any): Table | null {
+    const tableName = ast.table[0].table;
+    const stored = session.get(tableName);
+    if (!stored) throw new Error(`Table not found: ${tableName}`);
+
+    const existingData = extractRows(stored.table);
+    let newRows: any[][];
+
+    if (ast.values.type === 'select') {
+        // INSERT INTO ... SELECT ...
+        const selectResult = planSelectWithSetOps(ast.values, session, ctx);
+        const selectData = extractRows(selectResult);
+        newRows = selectData.rows;
+
+        // If INSERT specifies columns, reorder to match target table
+        if (ast.columns) {
+            newRows = reorderInsertRows(newRows, ast.columns, selectData.columns, existingData.columns);
+        }
+    } else {
+        // INSERT INTO ... VALUES (...)
+        const targetCols = ast.columns || existingData.columns;
+        newRows = [];
+        for (const valueRow of ast.values.values) {
+            const row = buildInsertRow(valueRow.value, targetCols, existingData.columns);
+            newRows.push(row);
+        }
+    }
+
+    const combined: RowData = {
+        columns: existingData.columns,
+        rows: [...existingData.rows, ...newRows],
+    };
+
+    const newTable = materializeTable(combined, ctx);
+    session.register(tableName, newTable);
+    return null;
+}
+
+function buildInsertRow(values: any[], insertCols: string[], tableCols: string[]): any[] {
+    const row = new Array(tableCols.length).fill(0);
+    for (let i = 0; i < insertCols.length; i++) {
+        const colIdx = tableCols.indexOf(insertCols[i]);
+        if (colIdx === -1) throw new Error(`Column not found: ${insertCols[i]}`);
+        row[colIdx] = evaluateLiteralValue(values[i]);
+    }
+    return row;
+}
+
+function reorderInsertRows(
+    rows: any[][],
+    insertCols: string[],
+    sourceCols: string[],
+    targetCols: string[],
+): any[][] {
+    return rows.map(sourceRow => {
+        const targetRow = new Array(targetCols.length).fill(0);
+        for (let i = 0; i < insertCols.length; i++) {
+            const targetIdx = targetCols.indexOf(insertCols[i]);
+            if (targetIdx === -1) throw new Error(`Column not found: ${insertCols[i]}`);
+            // Map source column index: if insertCols align with sourceCols by position
+            targetRow[targetIdx] = i < sourceRow.length ? sourceRow[i] : 0;
+        }
+        return targetRow;
+    });
+}
+
+function evaluateLiteralValue(node: any): any {
+    if (!node) return 0;
+    switch (node.type) {
+        case 'number': return node.value;
+        case 'single_quote_string':
+        case 'double_quote_string':
+        case 'string': return node.value;
+        case 'bool': return node.value ? 1 : 0;
+        case 'null': return 0;
+        default: return node.value ?? 0;
+    }
+}
+
+function planUpdate(ast: any, session: Session, ctx: any): Table | null {
+    const tableName = ast.table[0].table;
+    const stored = session.get(tableName);
+    if (!stored) throw new Error(`Table not found: ${tableName}`);
+
+    const data = extractRows(stored.table);
+    const columns = data.columns;
+
+    // Build set assignments: column index → value expression evaluator
+    const assignments: { colIdx: number; valueNode: any }[] = [];
+    for (const setItem of ast.set) {
+        const colName = setItem.column;
+        const colIdx = columns.indexOf(colName);
+        if (colIdx === -1) throw new Error(`Column not found: ${colName}`);
+        assignments.push({ colIdx, valueNode: setItem.value });
+    }
+
+    // Apply UPDATE: for each row, if WHERE matches, apply assignments
+    const updatedRows = data.rows.map(row => {
+        if (ast.where && !evaluateWhereOnRow(ast.where, row, columns)) {
+            return row;
+        }
+        const newRow = [...row];
+        for (const { colIdx, valueNode } of assignments) {
+            newRow[colIdx] = evaluateExprOnRow(valueNode, row, columns);
+        }
+        return newRow;
+    });
+
+    const newTable = materializeTable({ columns, rows: updatedRows }, ctx);
+    session.register(tableName, newTable);
+    return null;
+}
+
+function planDelete(ast: any, session: Session, ctx: any): Table | null {
+    // DELETE FROM table WHERE ...
+    const tableName = ast.from[0].table;
+    const stored = session.get(tableName);
+    if (!stored) throw new Error(`Table not found: ${tableName}`);
+
+    const data = extractRows(stored.table);
+    const columns = data.columns;
+
+    // Keep rows that do NOT match the WHERE condition
+    let filteredRows: any[][];
+    if (ast.where) {
+        filteredRows = data.rows.filter(row => !evaluateWhereOnRow(ast.where, row, columns));
+    } else {
+        // DELETE without WHERE = delete all rows
+        filteredRows = [];
+    }
+
+    const newTable = materializeTable({ columns, rows: filteredRows }, ctx);
+    session.register(tableName, newTable);
+    return null;
+}
+
+// ─── JS-level expression evaluator for WHERE/SET on extracted rows ──────────
+
+function evaluateWhereOnRow(node: any, row: any[], columns: string[]): boolean {
+    const result = evaluateExprOnRow(node, row, columns);
+    return Boolean(result);
+}
+
+function evaluateExprOnRow(node: any, row: any[], columns: string[]): any {
+    if (!node) return 0;
+
+    switch (node.type) {
+        case 'column_ref': {
+            const name = typeof node.column === 'string' ? node.column : node.column?.expr?.value;
+            const idx = columns.indexOf(name);
+            if (idx === -1) throw new Error(`Column not found: ${name}`);
+            return row[idx];
+        }
+        case 'number':
+            return node.value;
+        case 'single_quote_string':
+        case 'double_quote_string':
+        case 'string':
+            return node.value;
+        case 'bool':
+            return node.value ? 1 : 0;
+        case 'null':
+            return null;
+        case 'binary_expr':
+            return evaluateBinaryOnRow(node, row, columns);
+        case 'unary_expr': {
+            const inner = evaluateExprOnRow(node.expr, row, columns);
+            switch (node.operator) {
+                case '-': return -inner;
+                case '+': return +inner;
+                case 'NOT': return !inner ? 1 : 0;
+                default: throw new Error(`Unsupported unary: ${node.operator}`);
+            }
+        }
+        default:
+            return evaluateLiteralValue(node);
+    }
+}
+
+function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
+    const op = node.operator;
+
+    if (op === 'AND') {
+        return evaluateExprOnRow(node.left, row, columns) && evaluateExprOnRow(node.right, row, columns) ? 1 : 0;
+    }
+    if (op === 'OR') {
+        return evaluateExprOnRow(node.left, row, columns) || evaluateExprOnRow(node.right, row, columns) ? 1 : 0;
+    }
+    if (op === 'IS') {
+        const left = evaluateExprOnRow(node.left, row, columns);
+        return (node.right?.type === 'null' && left === null) ? 1 : 0;
+    }
+    if (op === 'IS NOT') {
+        const left = evaluateExprOnRow(node.left, row, columns);
+        return (node.right?.type === 'null' && left !== null) ? 1 : 0;
+    }
+    if (op === 'IN' || op === 'NOT IN') {
+        const left = evaluateExprOnRow(node.left, row, columns);
+        const values = (node.right.value || []).map((v: any) => evaluateExprOnRow(v, row, columns));
+        const found = values.some((v: any) => v == left);
+        return (op === 'IN' ? found : !found) ? 1 : 0;
+    }
+    if (op === 'BETWEEN') {
+        const val = evaluateExprOnRow(node.left, row, columns);
+        const lo = evaluateExprOnRow(node.right.value[0], row, columns);
+        const hi = evaluateExprOnRow(node.right.value[1], row, columns);
+        return (val >= lo && val <= hi) ? 1 : 0;
+    }
+    if (op === 'NOT BETWEEN') {
+        const val = evaluateExprOnRow(node.left, row, columns);
+        const lo = evaluateExprOnRow(node.right.value[0], row, columns);
+        const hi = evaluateExprOnRow(node.right.value[1], row, columns);
+        return (val < lo || val > hi) ? 1 : 0;
+    }
+    if (op === 'LIKE') {
+        const left = String(evaluateExprOnRow(node.left, row, columns));
+        const pattern = String(evaluateExprOnRow(node.right, row, columns));
+        return likeMatch(left, pattern) ? 1 : 0;
+    }
+    if (op === 'NOT LIKE') {
+        const left = String(evaluateExprOnRow(node.left, row, columns));
+        const pattern = String(evaluateExprOnRow(node.right, row, columns));
+        return !likeMatch(left, pattern) ? 1 : 0;
+    }
+
+    const left = evaluateExprOnRow(node.left, row, columns);
+    const right = evaluateExprOnRow(node.right, row, columns);
+
+    switch (op) {
+        case '=': case '==': return (left == right) ? 1 : 0;
+        case '!=': case '<>': return (left != right) ? 1 : 0;
+        case '<': return (left < right) ? 1 : 0;
+        case '<=': return (left <= right) ? 1 : 0;
+        case '>': return (left > right) ? 1 : 0;
+        case '>=': return (left >= right) ? 1 : 0;
+        case '+': return Number(left) + Number(right);
+        case '-': return Number(left) - Number(right);
+        case '*': return Number(left) * Number(right);
+        case '/': return Number(left) / Number(right);
+        case '%': return Number(left) % Number(right);
+        default: throw new Error(`Unsupported binary operator in DML: ${op}`);
+    }
+}
+
+function likeMatch(value: string, pattern: string): boolean {
+    // Convert SQL LIKE pattern to regex: % → .*, _ → .
+    const regex = new RegExp(
+        '^' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            .replace(/%/g, '.*')
+            .replace(/_/g, '.') + '$',
+        'i'
+    );
+    return regex.test(value);
 }

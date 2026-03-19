@@ -238,12 +238,12 @@ test/
 - [x] Tests for JOINs, subqueries, set ops, windows
 
 ### Task 3: DDL & DML
-- [ ] CREATE TABLE (schema definition + CTAS)
-- [ ] DROP TABLE
-- [ ] INSERT INTO (VALUES + SELECT)
-- [ ] UPDATE with WHERE
-- [ ] DELETE with WHERE
-- [ ] Tests for DDL & DML
+- [x] CREATE TABLE (schema definition + CTAS)
+- [x] DROP TABLE
+- [x] INSERT INTO (VALUES + SELECT)
+- [x] UPDATE with WHERE
+- [x] DELETE with WHERE
+- [x] Tests for DDL & DML
 
 ### Task 4: Property Graphs
 - [ ] PGQ pre-parser
