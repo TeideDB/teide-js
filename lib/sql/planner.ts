@@ -1942,15 +1942,15 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     if (op === 'IS') {
         const left = evaluateExprOnRow(node.left, row, columns);
         if (node.right?.type === 'null') return (left === null || left === undefined) ? 1 : 0;
+        if (node.right?.type === 'bool' && node.right?.value === false) return (!left || left === 0) ? 1 : 0;
         if (node.right?.type === 'bool' || node.right?.value === true) return left ? 1 : 0;
-        if (node.right?.value === false) return (!left || left === 0) ? 1 : 0;
         return 0;
     }
     if (op === 'IS NOT') {
         const left = evaluateExprOnRow(node.left, row, columns);
         if (node.right?.type === 'null') return (left !== null && left !== undefined) ? 1 : 0;
+        if (node.right?.type === 'bool' && node.right?.value === false) return (left && left !== 0) ? 1 : 0;
         if (node.right?.type === 'bool' || node.right?.value === true) return !left ? 1 : 0;
-        if (node.right?.value === false) return (left && left !== 0) ? 1 : 0;
         return 1;
     }
     if (op === 'IN' || op === 'NOT IN') {

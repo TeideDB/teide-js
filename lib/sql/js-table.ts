@@ -76,7 +76,7 @@ export function materializeTable(data: RowData, ctx: any): Table {
 
     const tmpPath = tempCsvPath();
     try {
-        const header = data.columns.join(',');
+        const header = data.columns.map(c => csvEscape(c)).join(',');
         // NOTE: NULL values are written as empty fields in the CSV. The C CSV reader
         // will parse these as 0 (numeric) or empty symbol (string), losing null info.
         // This is a known limitation pending C++ table-from-data bindings that would
