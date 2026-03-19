@@ -390,6 +390,18 @@ function parseEqualityCondition(
         return { leftCol: rref, rightCol: lref };
     }
 
+    // Fallback: alias map may resolve to prefixed names; try raw column names
+    const rawL = typeof node.left.column === 'string' ? node.left.column : node.left.column?.expr?.value;
+    const rawR = typeof node.right.column === 'string' ? node.right.column : node.right.column?.expr?.value;
+    if (rawL && rawR) {
+        if (leftCols.includes(rawL) && rightCols.includes(rawR)) {
+            return { leftCol: rawL, rightCol: rawR };
+        }
+        if (leftCols.includes(rawR) && rightCols.includes(rawL)) {
+            return { leftCol: rawR, rightCol: rawL };
+        }
+    }
+
     throw new Error(`JOIN columns not found: ${lref}, ${rref}`);
 }
 
@@ -631,7 +643,7 @@ function buildPartitions(rows: any[][], columns: string[], partitionBy: any[] | 
 
     const groups = new Map<string, number[]>();
     for (let i = 0; i < rows.length; i++) {
-        const key = partColIndices.map(ci => String(rows[i][ci])).join('|');
+        const key = JSON.stringify(partColIndices.map(ci => rows[i][ci]));
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push(i);
     }
@@ -821,8 +833,8 @@ function planKnnSelect(knn: KnnQuery, ast: any, session: Session, ctx: any): Tab
     let topKIndices: number[];
     let topKDistances: number[];
 
-    if (index) {
-        // Use HNSW index for approximate KNN
+    if (index && !ast.where) {
+        // Use HNSW index for approximate KNN (only without WHERE, since index has original row indices)
         const results = hnswSearch(index, knn.queryVector, knn.k);
         topKIndices = results.map(r => r.rowIndex);
         topKDistances = results.map(r => knn.metric === 'cosine' ? 1 - r.distance : r.distance);
@@ -1226,7 +1238,7 @@ function planInsert(ast: any, session: Session, ctx: any): Table | null {
 }
 
 function buildInsertRow(values: any[], insertCols: string[], tableCols: string[]): any[] {
-    const row = new Array(tableCols.length).fill(0);
+    const row = new Array(tableCols.length).fill(null);
     for (let i = 0; i < insertCols.length; i++) {
         const colIdx = tableCols.indexOf(insertCols[i]);
         if (colIdx === -1) throw new Error(`Column not found: ${insertCols[i]}`);
@@ -1242,27 +1254,27 @@ function reorderInsertRows(
     targetCols: string[],
 ): any[][] {
     return rows.map(sourceRow => {
-        const targetRow = new Array(targetCols.length).fill(0);
+        const targetRow = new Array(targetCols.length).fill(null);
         for (let i = 0; i < insertCols.length; i++) {
             const targetIdx = targetCols.indexOf(insertCols[i]);
             if (targetIdx === -1) throw new Error(`Column not found: ${insertCols[i]}`);
             // Map source column index: if insertCols align with sourceCols by position
-            targetRow[targetIdx] = i < sourceRow.length ? sourceRow[i] : 0;
+            targetRow[targetIdx] = i < sourceRow.length ? sourceRow[i] : null;
         }
         return targetRow;
     });
 }
 
 function evaluateLiteralValue(node: any): any {
-    if (!node) return 0;
+    if (!node) return null;
     switch (node.type) {
         case 'number': return node.value;
         case 'single_quote_string':
         case 'double_quote_string':
         case 'string': return node.value;
         case 'bool': return node.value ? 1 : 0;
-        case 'null': return 0;
-        default: return node.value ?? 0;
+        case 'null': return null;
+        default: return node.value ?? null;
     }
 }
 
@@ -1432,7 +1444,11 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
             if (divisor === 0) throw new Error('Division by zero');
             return Number(left) / divisor;
         }
-        case '%': return Number(left) % Number(right);
+        case '%': {
+            const mod = Number(right);
+            if (mod === 0) throw new Error('Modulus by zero');
+            return Number(left) % mod;
+        }
         default: throw new Error(`Unsupported binary operator in DML: ${op}`);
     }
 }

@@ -628,30 +628,93 @@ function parseNodePattern(lex: Lexer): PatternElement {
     return { type: 'node', variable, labels: labels.length > 0 ? labels : undefined, quantifier };
 }
 
+function parseEdgeBracket(lex: Lexer): { variable?: string; labels: string[] } {
+    let variable: string | undefined;
+    const labels: string[] = [];
+
+    if (!lex.matchPunct('[')) return { variable, labels };
+
+    const tok2 = lex.peek();
+    if (tok2 && tok2.type === 'ident') {
+        const ident = lex.next()!;
+        if (lex.matchPunct(':')) {
+            // variable:Label
+            variable = ident.value;
+            while (true) {
+                const labelTok = lex.peek();
+                if (labelTok && labelTok.type === 'ident') {
+                    labels.push(lex.next()!.value);
+                } else {
+                    break;
+                }
+                if (!lex.matchPunct('|')) break;
+            }
+        } else {
+            // Just a variable name, no label
+            variable = ident.value;
+        }
+    } else if (tok2 && tok2.value === ':') {
+        // [:Label] without variable
+        lex.next(); // consume ':'
+        while (true) {
+            const labelTok = lex.peek();
+            if (labelTok && labelTok.type === 'ident') {
+                labels.push(lex.next()!.value);
+            } else {
+                break;
+            }
+            if (!lex.matchPunct('|')) break;
+        }
+    }
+    lex.expect(']');
+    return { variable, labels };
+}
+
 function parseEdgePattern(lex: Lexer): PatternElement {
     let direction: PatternElement['direction'] = '-';
 
     const tok = lex.peek();
     if (!tok) throw new Error('Expected edge pattern');
 
-    // Determine direction from token(s)
+    // Simple complete direction tokens (no bracket notation)
     if (tok.value === '->') {
         lex.next();
         direction = '->';
-    } else if (tok.value === '<-') {
-        lex.next();
-        // Check if followed by -> for bidirectional <->
-        if (lex.matchPunct('->')) {
-            direction = '<->';
-        } else {
-            direction = '<-';
-        }
     } else if (tok.value === '<->') {
         lex.next();
         direction = '<->';
+    } else if (tok.value === '<-') {
+        lex.next();
+        // Check for bracket notation: <-[e:Label]->
+        const bracket = parseEdgeBracket(lex);
+        // Check right side: -> makes it bidirectional, nothing makes it left-directed
+        if (lex.matchPunct('->') || lex.matchPunct('>')) {
+            direction = '<->';
+        } else if (lex.matchPunct('-')) {
+            direction = '<-';
+        } else {
+            direction = '<-';
+        }
+        const quantifier = tryParseQuantifier(lex);
+        return { type: 'edge', variable: bracket.variable, labels: bracket.labels.length > 0 ? bracket.labels : undefined, direction, quantifier };
     } else if (tok.value === '-') {
         lex.next();
-        // Check if this is an undirected edge (-) or start of ->
+        // Check for bracket notation: -[e:Label]->
+        const nextTok = lex.peek();
+        if (nextTok && nextTok.value === '[') {
+            const bracket = parseEdgeBracket(lex);
+            // Check right side direction
+            if (lex.matchPunct('->') || lex.matchPunct('>')) {
+                direction = '->';
+            } else if (lex.matchPunct('-')) {
+                direction = '-';
+            } else {
+                direction = '-';
+            }
+            const quantifier = tryParseQuantifier(lex);
+            return { type: 'edge', variable: bracket.variable, labels: bracket.labels.length > 0 ? bracket.labels : undefined, direction, quantifier };
+        }
+        // No bracket - check if this is -> or just -
         if (lex.matchPunct('>')) {
             direction = '->';
         } else if (lex.matchPunct('->')) {
@@ -661,12 +724,10 @@ function parseEdgePattern(lex: Lexer): PatternElement {
         }
     }
 
-    let variable: string | undefined;
-    const labels: string[] = [];
-
     const quantifier = tryParseQuantifier(lex);
 
-    return { type: 'edge', variable, labels: labels.length > 0 ? labels : undefined, direction, quantifier };
+    // Simple direction tokens (-> or <->) without bracket notation have no variable/labels
+    return { type: 'edge', variable: undefined, labels: undefined, direction, quantifier };
 }
 
 function tryParseQuantifier(lex: Lexer): PatternElement['quantifier'] {
