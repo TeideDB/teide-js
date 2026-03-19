@@ -176,7 +176,7 @@ function planSelectWithSetOps(ast: any, session: Session, ctx: any): Table {
 function planSelect(ast: any, session: Session, ctx: any): Table {
     // 1. Resolve FROM - may be a single table, JOIN, or subquery
     const from = ast.from;
-    const hasJoin = from && from.length > 1 && from[1].join;
+    const hasJoin = from && from.length > 1;
     const hasSubquery = from && from.length === 1 && from[0].expr?.ast;
 
     // Check if any SELECT column has a window function
@@ -450,7 +450,7 @@ function planJoinSelect(ast: any, session: Session, ctx: any): Table {
     // Process each subsequent JOIN
     for (let i = 1; i < from.length; i++) {
         const joinEntry = from[i];
-        const joinType: string = joinEntry.join || 'INNER JOIN';
+        const joinType: string = joinEntry.join || (joinEntry.on ? 'INNER JOIN' : 'CROSS JOIN');
         const rightStored = resolveFromSingle([joinEntry], session, ctx);
         const rightData = extractRows(rightStored.table);
         const rightPrefixed = prefixColumns(rightData.columns, result.columns);
@@ -1943,14 +1943,14 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
         const left = evaluateExprOnRow(node.left, row, columns);
         if (node.right?.type === 'null') return (left === null || left === undefined) ? 1 : 0;
         if (node.right?.type === 'bool' && node.right?.value === false) return (!left || left === 0) ? 1 : 0;
-        if (node.right?.type === 'bool' || node.right?.value === true) return left ? 1 : 0;
+        if (node.right?.type === 'bool' && node.right?.value === true) return left ? 1 : 0;
         return 0;
     }
     if (op === 'IS NOT') {
         const left = evaluateExprOnRow(node.left, row, columns);
         if (node.right?.type === 'null') return (left !== null && left !== undefined) ? 1 : 0;
         if (node.right?.type === 'bool' && node.right?.value === false) return (left && left !== 0) ? 1 : 0;
-        if (node.right?.type === 'bool' || node.right?.value === true) return !left ? 1 : 0;
+        if (node.right?.type === 'bool' && node.right?.value === true) return !left ? 1 : 0;
         return 1;
     }
     if (op === 'IN' || op === 'NOT IN') {

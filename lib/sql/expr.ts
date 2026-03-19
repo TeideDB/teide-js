@@ -108,7 +108,10 @@ function compileBinaryExpr(node: any, aliases?: Map<string, Expr>): Expr {
             const eq = expr.eq(compileExpr(v, aliases));
             result = result ? result.or(eq) : eq;
         }
-        if (!result) throw new Error('IN list cannot be empty');
+        if (!result) {
+            // Empty IN list (e.g., from empty subquery) matches nothing
+            return lit(0);
+        }
         return op === 'NOT IN' ? result.not() : result;
     }
 

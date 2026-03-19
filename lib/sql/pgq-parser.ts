@@ -124,7 +124,7 @@ class Lexer {
             }
 
             // Parentheses and punctuation
-            if ('(),.:{}|'.includes(s[i])) {
+            if ('()[],.:{}|'.includes(s[i])) {
                 this.tokens.push({ type: 'punct', value: s[i] });
                 i++;
                 continue;
