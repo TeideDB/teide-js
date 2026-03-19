@@ -108,6 +108,21 @@ class Lexer {
             // Skip whitespace
             if (/\s/.test(s[i])) { i++; continue; }
 
+            // Skip block comments: /* ... */
+            if (s[i] === '/' && s[i + 1] === '*') {
+                i += 2;
+                while (i < s.length && !(s[i] === '*' && s[i + 1] === '/')) i++;
+                if (i < s.length) i += 2; // skip closing */
+                continue;
+            }
+
+            // Skip line comments: -- ...
+            if (s[i] === '-' && s[i + 1] === '-') {
+                i += 2;
+                while (i < s.length && s[i] !== '\n') i++;
+                continue;
+            }
+
             // Parentheses and punctuation
             if ('(),.:{}|'.includes(s[i])) {
                 this.tokens.push({ type: 'punct', value: s[i] });
@@ -285,8 +300,43 @@ interface Token {
 
 // Detect and parse PGQ statements.
 // Returns null if the SQL is not PGQ syntax.
+// Strip string literals and SQL comments from text so keyword detection
+// (e.g. GRAPH_TABLE, CREATE PROPERTY GRAPH) doesn't match inside them.
+// Uses a single-pass regex so that comment markers inside quoted strings
+// are not mistakenly treated as comments.
+function stripLiteralsAndComments(s: string): string {
+    return s.replace(
+        /'(?:[^']|'')*'|"(?:[^"]|"")*"|--[^\n]*|\/\*[\s\S]*?\*\//g,
+        (match) => {
+            // Preserve quoted strings as empty (already stripped),
+            // remove comments entirely
+            if (match.startsWith("'") || match.startsWith('"')) return '';
+            return ''; // comments
+        }
+    );
+}
+
+// Strip leading SQL comments (block and line) so that keyword detection
+// works even when the statement starts with a comment.
+function stripLeadingComments(s: string): string {
+    let result = s;
+    while (true) {
+        result = result.trimStart();
+        if (result.startsWith('--')) {
+            const nl = result.indexOf('\n');
+            result = nl === -1 ? '' : result.slice(nl + 1);
+        } else if (result.startsWith('/*')) {
+            const end = result.indexOf('*/');
+            result = end === -1 ? '' : result.slice(end + 2);
+        } else {
+            break;
+        }
+    }
+    return result;
+}
+
 export function parsePgq(sql: string): PgqResult {
-    const trimmed = sql.trim();
+    const trimmed = stripLeadingComments(sql.trim());
     const upper = trimmed.toUpperCase();
 
     // CREATE [OR REPLACE] PROPERTY GRAPH or CREATE VECTOR INDEX
@@ -410,8 +460,9 @@ export function parsePgq(sql: string): PgqResult {
     }
 
     // Check for GRAPH_TABLE in SELECT ... FROM GRAPH_TABLE(...)
-    // Use word-boundary check to avoid matching inside strings or identifiers
-    if (/\bGRAPH_TABLE\s*\(/.test(upper)) {
+    // Strip string literals and comments to avoid false matches
+    const stripped = stripLiteralsAndComments(upper);
+    if (/\bGRAPH_TABLE\s*\(/.test(stripped)) {
         return parseGraphTableRewrite(trimmed);
     }
 
@@ -519,13 +570,91 @@ function parseGraphTableRewrite(sql: string): PgqResult {
     let match: RegExpExecArray | null;
     const replacements: { start: number; end: number; alias: string }[] = [];
 
-    // Find each GRAPH_TABLE(...) occurrence
+    // Build a set of positions that fall inside string literals or comments
+    // so we can skip false GRAPH_TABLE matches inside them.
+    const inLiteralOrComment = new Set<number>();
+    for (let qi = 0; qi < sql.length; qi++) {
+        // Block comments: /* ... */
+        if (sql[qi] === '/' && sql[qi + 1] === '*') {
+            inLiteralOrComment.add(qi);
+            inLiteralOrComment.add(qi + 1);
+            qi += 2;
+            while (qi < sql.length && !(sql[qi] === '*' && sql[qi + 1] === '/')) {
+                inLiteralOrComment.add(qi);
+                qi++;
+            }
+            if (qi < sql.length) { inLiteralOrComment.add(qi); inLiteralOrComment.add(qi + 1); qi++; }
+            continue;
+        }
+        // Line comments: -- ...
+        if (sql[qi] === '-' && sql[qi + 1] === '-') {
+            while (qi < sql.length && sql[qi] !== '\n') {
+                inLiteralOrComment.add(qi);
+                qi++;
+            }
+            continue;
+        }
+        // String literals (handles '' and "" SQL-standard escapes)
+        if (sql[qi] === "'" || sql[qi] === '"') {
+            const q = sql[qi];
+            qi++; // skip opening quote
+            while (qi < sql.length) {
+                if (sql[qi] === q) {
+                    if (qi + 1 < sql.length && sql[qi + 1] === q) {
+                        // Escaped quote: mark both characters as literal
+                        inLiteralOrComment.add(qi);
+                        inLiteralOrComment.add(qi + 1);
+                        qi += 2;
+                    } else {
+                        break; // closing quote
+                    }
+                } else {
+                    inLiteralOrComment.add(qi);
+                    qi++;
+                }
+            }
+            // qi now points at closing quote (or end of string)
+        }
+    }
+
+    // Find each GRAPH_TABLE(...) occurrence, skipping matches inside string literals
     while ((match = regex.exec(sql)) !== null) {
+        if (inLiteralOrComment.has(match.index)) continue;
         const startIdx = match.index;
-        // Find matching closing paren
+        // Find matching closing paren, respecting quoted strings and comments
         let depth = 1;
         let i = startIdx + match[0].length;
         while (i < sql.length && depth > 0) {
+            // Skip block comments
+            if (sql[i] === '/' && sql[i + 1] === '*') {
+                i += 2;
+                while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+                if (i < sql.length) i += 2;
+                continue;
+            }
+            // Skip line comments
+            if (sql[i] === '-' && sql[i + 1] === '-') {
+                i += 2;
+                while (i < sql.length && sql[i] !== '\n') i++;
+                continue;
+            }
+            if (sql[i] === "'" || sql[i] === '"') {
+                const quote = sql[i];
+                i++;
+                while (i < sql.length) {
+                    if (sql[i] === quote) {
+                        if (i + 1 < sql.length && sql[i + 1] === quote) {
+                            i += 2; // skip escaped quote
+                        } else {
+                            break; // closing quote
+                        }
+                    } else {
+                        i++;
+                    }
+                }
+                if (i < sql.length) i++; // skip closing quote
+                continue;
+            }
             if (sql[i] === '(') depth++;
             if (sql[i] === ')') depth--;
             i++;

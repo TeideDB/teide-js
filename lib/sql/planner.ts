@@ -1092,7 +1092,7 @@ function planKnnSelect(knn: KnnQuery, ast: any, session: Session, ctx: any): Tab
 
     // Determine which columns to include
     const selectCols = knn.selectColumns;
-    const colSpecs: { name: string; type: 'regular' | 'vector_func'; colIdx?: number; metric?: 'cosine' | 'euclidean' }[] = [];
+    const colSpecs: { name: string; type: 'regular' | 'vector_func'; colIdx?: number; scores?: number[] }[] = [];
 
     if (selectCols === '*') {
         for (let ci = 0; ci < data.columns.length; ci++) {
@@ -1102,7 +1102,24 @@ function planKnnSelect(knn: KnnQuery, ast: any, session: Session, ctx: any): Tab
         for (const c of selectCols) {
             if (isVectorFunctionCall(c.expr)) {
                 const info = extractVectorFuncInfo(c.expr);
-                colSpecs.push({ name: c.as || `${info.metric}_result`, type: 'vector_func', metric: info.metric });
+                // Check if this vector function matches the ORDER BY function
+                // (same column, same query vector, same metric). If so, reuse
+                // the pre-computed topKDistances. Otherwise compute separately.
+                const matchesOrderBy = info.columnName === knn.columnName &&
+                    info.metric === knn.metric &&
+                    info.queryVector.length === knn.queryVector.length &&
+                    info.queryVector.every((v, idx) => v === knn.queryVector[idx]);
+                if (matchesOrderBy) {
+                    colSpecs.push({ name: c.as || `${info.metric}_result`, type: 'vector_func', scores: topKDistances });
+                } else {
+                    // Compute separate scores for this different vector function
+                    const scores = topKIndices.map(rowIdx =>
+                        computeVectorSimilarity(
+                            [data.rows[rowIdx]], data.columns, info.columnName, info.queryVector, info.metric,
+                        )[0],
+                    );
+                    colSpecs.push({ name: c.as || `${info.metric}_result`, type: 'vector_func', scores });
+                }
             } else if (c.expr.type === 'column_ref') {
                 const colName = resolveColName(c.expr);
                 const colIdx = data.columns.indexOf(colName);
@@ -1127,7 +1144,7 @@ function planKnnSelect(knn: KnnQuery, ast: any, session: Session, ctx: any): Tab
             if (spec.type === 'regular') {
                 row.push(data.rows[rowIdx][spec.colIdx!]);
             } else {
-                row.push(topKDistances[i]);
+                row.push(spec.scores![i]);
             }
         }
         resultRows.push(row);

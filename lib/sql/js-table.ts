@@ -12,6 +12,7 @@ export interface RowData {
 
 // Extract all row data from a native Table into JS arrays.
 // Numeric columns → number[], symbol columns → string[] (via indices+dictionary).
+// Respects nullBitmap: null entries are preserved as JS null.
 export function extractRows(table: Table): RowData {
     const columns = table.columns;
     const nRows = table.nRows;
@@ -20,18 +21,28 @@ export function extractRows(table: Table): RowData {
     for (const colName of columns) {
         const series = table.col(colName);
         const dtype = series.dtype;
+        const nullBitmap = series.nullBitmap;
         const values: any[] = [];
 
         if (dtype === 'sym') {
             const indices = series.indices;
             const dict = series.dictionary;
             for (let i = 0; i < nRows; i++) {
-                values.push(dict[indices[i]] ?? '');
+                if (nullBitmap && (nullBitmap[i >> 3] & (1 << (i & 7)))) {
+                    values.push(null);
+                } else {
+                    const val = dict[indices[i]];
+                    values.push(val === undefined ? null : val);
+                }
             }
         } else {
             const data = series.data;
             for (let i = 0; i < nRows; i++) {
-                values.push(Number(data[i]));
+                if (nullBitmap && (nullBitmap[i >> 3] & (1 << (i & 7)))) {
+                    values.push(null);
+                } else {
+                    values.push(Number(data[i]));
+                }
             }
         }
         colArrays.push(values);
@@ -66,9 +77,15 @@ export function materializeTable(data: RowData, ctx: any): Table {
     const tmpPath = tempCsvPath();
     try {
         const header = data.columns.join(',');
-        const lines = data.rows.map(row =>
-            row.map(v => {
-                if (v === null || v === undefined) return '';
+        // NOTE: NULL values are written as empty fields in the CSV. The C CSV reader
+        // will parse these as 0 (numeric) or empty symbol (string), losing null info.
+        // This is a known limitation pending C++ table-from-data bindings that would
+        // allow constructing tables with null bitmaps directly without CSV round-trip.
+        const lines = data.rows.map((row) =>
+            row.map((v) => {
+                if (v === null || v === undefined) {
+                    return '';
+                }
                 if (typeof v === 'string') return csvEscape(v);
                 // Force float representation to avoid i64/BigInt on CSV read
                 if (typeof v === 'number' && Number.isInteger(v)) return v.toFixed(1);

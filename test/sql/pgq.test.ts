@@ -329,5 +329,173 @@ describe('SQL Property Graphs (PGQ)', () => {
                 expect(result.graphTableRefs[0].graphName).toBe('social');
             }
         });
+
+        it('ignores GRAPH_TABLE inside string literals and parses the real one', () => {
+            const result = parsePgq(`
+                SELECT 'GRAPH_TABLE(fake)' AS label FROM GRAPH_TABLE(social,
+                    MATCH (a:Person)->(b:Person)
+                    COLUMNS (a.name AS person1, b.name AS person2)
+                )
+            `)!;
+            expect(result).not.toBeNull();
+            expect(result.type).toBe('graph_table_rewrite');
+            if (result.type === 'graph_table_rewrite') {
+                expect(result.graphTableRefs).toHaveLength(1);
+                expect(result.graphTableRefs[0].graphName).toBe('social');
+            }
+        });
+
+        it('does not treat quoted GRAPH_TABLE as a graph table reference', () => {
+            const result = parsePgq(`SELECT "GRAPH_TABLE(notreal)" AS col FROM t`);
+            expect(result).toBeNull();
+        });
+
+        it('ignores GRAPH_TABLE inside block comments', () => {
+            const result = parsePgq(`SELECT * FROM t /* GRAPH_TABLE(fake) */`);
+            expect(result).toBeNull();
+        });
+
+        it('ignores GRAPH_TABLE inside line comments', () => {
+            const result = parsePgq(`SELECT * FROM t -- GRAPH_TABLE(fake)`);
+            expect(result).toBeNull();
+        });
+
+        it('ignores GRAPH_TABLE inside escaped-quote string literals', () => {
+            const result = parsePgq(`SELECT 'it''s GRAPH_TABLE(fake)' AS label FROM t`);
+            expect(result).toBeNull();
+        });
+
+        it('ignores GRAPH_TABLE inside escaped-quote identifiers', () => {
+            const result = parsePgq(`SELECT "col""GRAPH_TABLE(fake)" AS c FROM t`);
+            expect(result).toBeNull();
+        });
+
+        it('parses real GRAPH_TABLE when escaped-quote literal also contains GRAPH_TABLE', () => {
+            const result = parsePgq(`
+                SELECT 'it''s GRAPH_TABLE(fake)' AS label FROM GRAPH_TABLE(social,
+                    MATCH (a:Person)->(b:Person)
+                    COLUMNS (a.name AS person1, b.name AS person2)
+                )
+            `)!;
+            expect(result).not.toBeNull();
+            expect(result.type).toBe('graph_table_rewrite');
+            if (result.type === 'graph_table_rewrite') {
+                expect(result.graphTableRefs).toHaveLength(1);
+                expect(result.graphTableRefs[0].graphName).toBe('social');
+            }
+        });
+
+        it('parses real GRAPH_TABLE when a comment also contains GRAPH_TABLE', () => {
+            const result = parsePgq(`
+                SELECT /* GRAPH_TABLE(fake) */ * FROM GRAPH_TABLE(social,
+                    MATCH (a:Person)->(b:Person)
+                    COLUMNS (a.name AS person1, b.name AS person2)
+                )
+            `)!;
+            expect(result).not.toBeNull();
+            expect(result.type).toBe('graph_table_rewrite');
+            if (result.type === 'graph_table_rewrite') {
+                expect(result.graphTableRefs).toHaveLength(1);
+                expect(result.graphTableRefs[0].graphName).toBe('social');
+            }
+        });
+
+        it('handles block comments inside CREATE PROPERTY GRAPH', () => {
+            const result = parsePgq(`
+                CREATE PROPERTY GRAPH /* my graph */ social
+                VERTEX TABLES (persons KEY (id))
+                EDGE TABLES (
+                    friendships SOURCE KEY (person1_id) REFERENCES persons
+                    DESTINATION KEY (person2_id) REFERENCES persons
+                )
+            `)!;
+            expect(result).not.toBeNull();
+            expect(result.type).toBe('create_property_graph');
+            if (result.type === 'create_property_graph') {
+                expect(result.name).toBe('social');
+                expect(result.vertexTables).toHaveLength(1);
+            }
+        });
+
+        it('handles line comments inside CREATE PROPERTY GRAPH', () => {
+            const result = parsePgq(`CREATE PROPERTY GRAPH social -- my graph
+                VERTEX TABLES (persons KEY (id))
+                EDGE TABLES (
+                    friendships SOURCE KEY (person1_id) REFERENCES persons
+                    DESTINATION KEY (person2_id) REFERENCES persons
+                )
+            `)!;
+            expect(result).not.toBeNull();
+            expect(result.type).toBe('create_property_graph');
+            if (result.type === 'create_property_graph') {
+                expect(result.name).toBe('social');
+            }
+        });
+
+        it('handles block comments inside GRAPH_TABLE body', () => {
+            const result = parsePgq(`
+                SELECT * FROM GRAPH_TABLE(social, /* traversal */
+                    MATCH (a:Person)->(b:Person)
+                    COLUMNS (a.name AS person1, b.name AS person2)
+                )
+            `)!;
+            expect(result).not.toBeNull();
+            expect(result.type).toBe('graph_table_rewrite');
+            if (result.type === 'graph_table_rewrite') {
+                expect(result.graphTableRefs).toHaveLength(1);
+                expect(result.graphTableRefs[0].graphName).toBe('social');
+            }
+        });
+
+        it('close-paren scan skips paren inside block comment', () => {
+            const result = parsePgq(`
+                SELECT * FROM GRAPH_TABLE(social, /* ) not a real close */
+                    MATCH (a:Person)->(b:Person)
+                    COLUMNS (a.name AS person1, b.name AS person2)
+                )
+            `)!;
+            expect(result).not.toBeNull();
+            expect(result.type).toBe('graph_table_rewrite');
+            if (result.type === 'graph_table_rewrite') {
+                expect(result.graphTableRefs).toHaveLength(1);
+                expect(result.graphTableRefs[0].graphName).toBe('social');
+            }
+        });
+    });
+
+    // ─── WALK mode regression ──────────────────────────────────────────
+
+    describe('WALK mode on cyclic graph', () => {
+        beforeEach(() => {
+            // Create a small cyclic graph: A -> B -> C -> A
+            ctx.executeSync(`CREATE TABLE wnodes (id INT, name VARCHAR(20))`);
+            ctx.executeSync(`INSERT INTO wnodes VALUES (1, 'A')`);
+            ctx.executeSync(`INSERT INTO wnodes VALUES (2, 'B')`);
+            ctx.executeSync(`INSERT INTO wnodes VALUES (3, 'C')`);
+            ctx.executeSync(`CREATE TABLE wedges (src INT, dst INT)`);
+            ctx.executeSync(`INSERT INTO wedges VALUES (1, 2)`);
+            ctx.executeSync(`INSERT INTO wedges VALUES (2, 3)`);
+            ctx.executeSync(`INSERT INTO wedges VALUES (3, 1)`);
+            ctx.executeSync(`
+                CREATE PROPERTY GRAPH cyclic
+                VERTEX TABLES (wnodes KEY (id))
+                EDGE TABLES (
+                    wedges SOURCE KEY (src) REFERENCES wnodes
+                    DESTINATION KEY (dst) REFERENCES wnodes
+                )
+            `);
+        });
+
+        it('WALK traversal on cyclic graph terminates and returns results', () => {
+            const result = ctx.executeSync(`
+                SELECT * FROM GRAPH_TABLE(cyclic,
+                    MATCH WALK (a:wnodes)->{1,5}(b:wnodes)
+                    COLUMNS (a.name AS start_name, b.name AS end_name)
+                )
+            `)!;
+            expect(result).not.toBeNull();
+            // Cyclic graph with depth 1-5 should produce multiple results
+            expect(result.nRows).toBeGreaterThan(0);
+        });
     });
 });

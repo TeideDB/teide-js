@@ -8,7 +8,7 @@ export interface PropertyGraph {
     vertexTables: any[];
     edgeTables: any[];
     nodeIndex: Map<string, Map<string | number, number>>;
-    nodeInfo: Map<number, { label: string; key: string | number; row: any[]; columns: string[] }>;
+    nodeInfo: Map<number, { label: string; tableName: string; key: string | number; row: any[]; columns: string[] }>;
     csr: CSR;
     undirectedCsr: CSR;
     nodeCount: number;
@@ -20,6 +20,7 @@ export interface CSR {
     offsets: number[];
     targets: number[];
     weights?: number[];
+    edgeIds?: number[]; // Maps CSR slot -> original edge insertion index
 }
 
 // Builder function type - set by pgq.ts at import time

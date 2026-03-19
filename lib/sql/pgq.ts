@@ -234,9 +234,15 @@ function expandEdge(
         if (quantifier) {
             // Variable-length path
             const paths = expandVariableLengthPath(
-                graph, currentNode, edgePattern, targetNodePattern, quantifier.min, quantifier.max,
+                graph, currentNode, edgePattern, targetNodePattern, quantifier.min, quantifier.max, pathMode,
             );
             for (const { endNode, depth } of paths) {
+                // Enforce already-bound variable: if variable was previously bound,
+                // the end node must match the existing binding (e.g., (n)-[*]->(n) = cycles only)
+                if (targetNodePattern?.variable) {
+                    const existing = binding.get(targetNodePattern.variable);
+                    if (existing !== undefined && existing !== endNode) continue;
+                }
                 const newBinding = new Map(binding);
                 if (targetNodePattern?.variable) newBinding.set(targetNodePattern.variable, endNode);
                 newBinding.set('_node', endNode);
@@ -259,6 +265,15 @@ function expandEdge(
                     if (!edgeData || !edgePattern.labels.some(l => l.toLowerCase() === edgeData.label.toLowerCase())) {
                         continue;
                     }
+                }
+                // Enforce already-bound variables: (n)-[:E]->(n) should only match self-loops
+                if (edgePattern.variable) {
+                    const existing = binding.get(edgePattern.variable);
+                    if (existing !== undefined && existing !== edgeIdx) continue;
+                }
+                if (targetNodePattern?.variable) {
+                    const existing = binding.get(targetNodePattern.variable);
+                    if (existing !== undefined && existing !== neighbor) continue;
                 }
                 const newBinding = new Map(binding);
                 if (edgePattern.variable) {
@@ -335,19 +350,23 @@ function expandVariableLengthPath(
     targetNodePattern: PatternElement | undefined,
     minDepth: number,
     maxDepth: number,
+    pathMode?: string,
 ): PathResult[] {
     const results: PathResult[] = [];
     const maxSteps = Math.min(maxDepth, 100); // Safety cap
     const MAX_RESULTS = 10000; // Prevent unbounded memory growth
+    const MAX_QUEUE_SIZE = 100000; // Prevent unbounded frontier growth in WALK mode
     const direction = edgePattern.direction || '->';
+    const isWalk = pathMode === 'walk';
 
-    // BFS
-    const queue: { node: number; depth: number; visited: Set<number> }[] = [
-        { node: startNode, depth: 0, visited: new Set([startNode]) },
+    // BFS - WALK mode allows revisiting nodes; simple path mode tracks visited set
+    const queue: { node: number; depth: number; visited: Set<number> | null }[] = [
+        { node: startNode, depth: 0, visited: isWalk ? null : new Set([startNode]) },
     ];
 
+    let truncated = false;
     while (queue.length > 0) {
-        if (results.length >= MAX_RESULTS) break;
+        if (results.length >= MAX_RESULTS) { truncated = true; break; }
         const { node, depth, visited } = queue.shift()!;
 
         if (depth >= minDepth) {
@@ -361,21 +380,29 @@ function expandVariableLengthPath(
 
         const entries = getCSREntries(graph, node, direction);
         for (const { target: neighbor, edgeId } of entries) {
-            if (!visited.has(neighbor)) {
-                // Check edge label if specified in the pattern
-                if (edgePattern.labels && edgePattern.labels.length > 0) {
-                    const edgeData = graph.edgeInfo.get(edgeId);
-                    if (!edgeData || !edgePattern.labels.some(l => l.toLowerCase() === edgeData.label.toLowerCase())) {
-                        continue;
-                    }
+            // In simple path mode, reject revisits; in WALK mode, allow all
+            if (visited && visited.has(neighbor)) continue;
+
+            // Check edge label if specified in the pattern
+            if (edgePattern.labels && edgePattern.labels.length > 0) {
+                const edgeData = graph.edgeInfo.get(edgeId);
+                if (!edgeData || !edgePattern.labels.some(l => l.toLowerCase() === edgeData.label.toLowerCase())) {
+                    continue;
                 }
-                const newVisited = new Set(visited);
-                newVisited.add(neighbor);
-                queue.push({ node: neighbor, depth: depth + 1, visited: newVisited });
             }
+            if (queue.length >= MAX_QUEUE_SIZE) { truncated = true; break; }
+            const newVisited = visited ? new Set(visited) : null;
+            if (newVisited) newVisited.add(neighbor);
+            queue.push({ node: neighbor, depth: depth + 1, visited: newVisited });
         }
     }
 
+    if (truncated) {
+        console.warn(
+            `[teide] variable-length path expansion truncated: results may be incomplete ` +
+            `(hit ${results.length >= MAX_RESULTS ? 'MAX_RESULTS' : 'MAX_QUEUE_SIZE'} limit)`
+        );
+    }
     return results;
 }
 
@@ -809,11 +836,15 @@ export function executeGraphAlgorithm(
 }
 
 function resolveNodeId(graph: PropertyGraph, arg: any): number {
-    if (typeof arg === 'number') return arg;
-    // Try to find by key across all vertex tables
+    // Always look up by key across all vertex tables first (handles both
+    // string and numeric business keys correctly).
     for (const [, labelMap] of graph.nodeIndex) {
         const id = labelMap.get(arg);
         if (id !== undefined) return id;
+    }
+    // Fallback for numeric args: treat as internal node ID if within range
+    if (typeof arg === 'number' && Number.isInteger(arg) && arg >= 0 && arg < graph.nodeCount) {
+        return arg;
     }
     throw new Error(`Node not found: ${arg}`);
 }
