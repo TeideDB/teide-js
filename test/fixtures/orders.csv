@@ -1,0 +1,7 @@
+order_id,customer_id,amount,product
+1,1,100.00,laptop
+2,2,50.00,phone
+3,1,75.50,tablet
+4,3,200.00,laptop
+5,2,30.00,case
+6,4,150.00,phone

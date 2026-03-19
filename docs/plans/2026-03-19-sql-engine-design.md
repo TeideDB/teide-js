@@ -231,11 +231,11 @@ test/
 - [x] Tests for core SELECT functionality
 
 ### Task 2: JOINs, Subqueries, Set Ops, Windows
-- [ ] JOIN planning (INNER, LEFT, CROSS)
-- [ ] Subquery support (IN, FROM, scalar, nested)
-- [ ] Set operations (UNION, EXCEPT, INTERSECT)
-- [ ] Window functions (ROW_NUMBER, RANK, DENSE_RANK, NTILE)
-- [ ] Tests for JOINs, subqueries, set ops, windows
+- [x] JOIN planning (INNER, LEFT, CROSS)
+- [x] Subquery support (IN, FROM, scalar, nested)
+- [x] Set operations (UNION, EXCEPT, INTERSECT)
+- [x] Window functions (ROW_NUMBER, RANK, DENSE_RANK, NTILE)
+- [x] Tests for JOINs, subqueries, set ops, windows
 
 ### Task 3: DDL & DML
 - [ ] CREATE TABLE (schema definition + CTAS)
