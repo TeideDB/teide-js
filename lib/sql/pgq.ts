@@ -276,7 +276,13 @@ function getNeighbors(graph: PropertyGraph, nodeId: number, direction: string): 
         return result;
     }
     if (direction === '<->') {
-        return getNeighbors(graph, nodeId, '->').concat(getNeighbors(graph, nodeId, '<-'));
+        const forward = getNeighbors(graph, nodeId, '->');
+        const reverse = getNeighbors(graph, nodeId, '<-');
+        const seen = new Set(forward);
+        for (const n of reverse) {
+            if (!seen.has(n)) forward.push(n);
+        }
+        return forward;
     }
     return [];
 }

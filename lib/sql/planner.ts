@@ -361,7 +361,7 @@ function nestedLoopJoin(
             }
         } else if (isLeft) {
             // LEFT JOIN: include left row with NULLs for right columns
-            const nullRight = right.columns.map(() => 0); // Use 0 for NULL (Teide limitation)
+            const nullRight = right.columns.map(() => null); // Use null for unmatched right columns
             rows.push([...lr, ...nullRight]);
         }
     }
@@ -1372,10 +1372,10 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     const op = node.operator;
 
     if (op === 'AND') {
-        return evaluateExprOnRow(node.left, row, columns) && evaluateExprOnRow(node.right, row, columns) ? 1 : 0;
+        return (evaluateExprOnRow(node.left, row, columns) && evaluateExprOnRow(node.right, row, columns)) ? 1 : 0;
     }
     if (op === 'OR') {
-        return evaluateExprOnRow(node.left, row, columns) || evaluateExprOnRow(node.right, row, columns) ? 1 : 0;
+        return (evaluateExprOnRow(node.left, row, columns) || evaluateExprOnRow(node.right, row, columns)) ? 1 : 0;
     }
     if (op === 'IS') {
         const left = evaluateExprOnRow(node.left, row, columns);
@@ -1438,11 +1438,32 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
 }
 
 function likeMatch(value: string, pattern: string): boolean {
-    // Convert SQL LIKE pattern to regex: % → .*, _ → .
-    const regex = new RegExp(
-        '^' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-            .replace(/%/g, '.*')
-            .replace(/_/g, '.') + '$',
-    );
-    return regex.test(value);
+    // Linear-time LIKE matcher (avoids regex backtracking / ReDoS)
+    let vi = 0;
+    let pi = 0;
+    let starIdx = -1;
+    let matchIdx = 0;
+
+    while (vi < value.length) {
+        if (pi < pattern.length && (pattern[pi] === '_' || pattern[pi] === value[vi])) {
+            vi++;
+            pi++;
+        } else if (pi < pattern.length && pattern[pi] === '%') {
+            starIdx = pi;
+            matchIdx = vi;
+            pi++;
+        } else if (starIdx !== -1) {
+            pi = starIdx + 1;
+            matchIdx++;
+            vi = matchIdx;
+        } else {
+            return false;
+        }
+    }
+
+    while (pi < pattern.length && pattern[pi] === '%') {
+        pi++;
+    }
+
+    return pi === pattern.length;
 }
