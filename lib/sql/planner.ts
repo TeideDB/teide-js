@@ -162,10 +162,10 @@ function planSelectWithSetOps(ast: any, session: Session, ctx: any): Table {
         resultRows = deduplicateRows(combined);
     } else if (setOp === 'except') {
         const rightSet = rowSet(rightData.rows);
-        resultRows = leftData.rows.filter(row => !rightSet.has(rowKey(row)));
+        resultRows = deduplicateRows(leftData.rows.filter(row => !rightSet.has(rowKey(row))));
     } else if (setOp === 'intersect') {
         const rightSet = rowSet(rightData.rows);
-        resultRows = leftData.rows.filter(row => rightSet.has(rowKey(row)));
+        resultRows = deduplicateRows(leftData.rows.filter(row => rightSet.has(rowKey(row))));
     } else {
         throw new Error(`Unsupported set operation: ${setOp}`);
     }
@@ -466,14 +466,19 @@ function planJoinSelect(ast: any, session: Session, ctx: any): Table {
             if (joinType.includes('RIGHT')) {
                 // RIGHT JOIN = swap sides, do LEFT JOIN, then swap columns back
                 const swapped = nestedLoopJoin(rightData, result, joinEntry.on, combinedAliases, true);
-                // Re-order columns: left columns first, then right columns
-                const leftColCount = result.columns.length;
+                // In the swapped result, columns are [rightData.cols..., prefixed(result.cols)...]
+                // Reorder to [result.cols..., rightData.cols...] (original left first)
                 const rightColCount = rightData.columns.length;
                 const reorderedRows = swapped.rows.map(row => [
                     ...row.slice(rightColCount),
                     ...row.slice(0, rightColCount),
                 ]);
-                result = { columns: [...result.columns, ...rightData.columns], rows: reorderedRows };
+                // Use actual column names from swapped result, reordered
+                const reorderedCols = [
+                    ...swapped.columns.slice(rightColCount),
+                    ...swapped.columns.slice(0, rightColCount),
+                ];
+                result = { columns: reorderedCols, rows: reorderedRows };
             } else {
                 const isLeft = joinType.includes('LEFT');
                 result = nestedLoopJoin(result, rightData, joinEntry.on, combinedAliases, isLeft);
@@ -1815,9 +1820,9 @@ function evaluateExprOnRow(node: any, row: any[], columns: string[]): any {
         case 'unary_expr': {
             const inner = evaluateExprOnRow(node.expr, row, columns);
             switch (node.operator) {
-                case '-': return -inner;
-                case '+': return +inner;
-                case 'NOT': return !inner ? 1 : 0;
+                case '-': return (inner === null || inner === undefined) ? null : -inner;
+                case '+': return (inner === null || inner === undefined) ? null : +inner;
+                case 'NOT': return (inner === null || inner === undefined) ? null : (!inner ? 1 : 0);
                 default: throw new Error(`Unsupported unary: ${node.operator}`);
             }
         }
@@ -1924,9 +1929,12 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     }
     if (op === 'IN' || op === 'NOT IN') {
         const left = evaluateExprOnRow(node.left, row, columns);
+        if (left === null || left === undefined) return null;
         const values = (node.right.value || []).map((v: any) => evaluateExprOnRow(v, row, columns));
         const found = values.some((v: any) => v === left);
-        return (op === 'IN' ? found : !found) ? 1 : 0;
+        const hasNull = values.some((v: any) => v === null || v === undefined);
+        if (op === 'IN') return found ? 1 : (hasNull ? null : 0);
+        return found ? 0 : (hasNull ? null : 1);
     }
     if (op === 'BETWEEN') {
         const val = evaluateExprOnRow(node.left, row, columns);
