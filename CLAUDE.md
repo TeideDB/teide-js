@@ -15,6 +15,7 @@ npm run build:native:release  # Native addon with -O3 optimizations
 npm run build:ts           # TypeScript compilation only
 npm test                   # Run all tests (vitest run)
 npx vitest run test/smoke.test.ts  # Run a single test file
+npx vitest run test/sql/           # Run all SQL engine tests
 npm run clean              # Remove build/ and dist/
 ```
 
@@ -42,6 +43,17 @@ A dedicated **Teide thread** owns the C heap and runs all Teide operations. The 
 
 `NativeSeries` exposes C heap memory directly as JS TypedArrays via `napi_create_external_typed_array`. No data is copied. The `heap_alive_` atomic flag prevents use-after-free when GC runs Series destructors after heap teardown.
 
+### SQL Execution Pipeline
+
+The SQL engine runs in TypeScript (no C++ changes), using `node-sql-parser` for parsing and a custom PGQ pre-parser for graph/vector DDL.
+
+1. **PGQ Pre-parse** (`lib/sql/pgq-parser.ts`): Intercepts CREATE/DROP PROPERTY GRAPH, CREATE/DROP VECTOR INDEX, and GRAPH_TABLE references before standard SQL parsing.
+2. **Parse** (`lib/sql/parser.ts`): `node-sql-parser` produces an AST.
+3. **Plan** (`lib/sql/planner.ts`): Routes by statement type. Simple SELECTs compile to Teide Query/Expr trees and execute via the native C++ path. JOINs, window functions, set operations, and DML use a JS-level row-oriented evaluator with CSV round-trip materialization (`lib/sql/js-table.ts`).
+4. **Session** (`lib/sql/session.ts`): In-memory table registry with graph catalog and vector index registry.
+
+The JS-level row evaluator (`materializeTable`) round-trips through temp CSV files to create native Tables. This is a known performance limitation pending C++ table-from-data bindings.
+
 ### C++ Header Inclusion Order (Critical)
 
 `src/compat.h` provides a C-atomic shim (`_Atomic(T)` → `volatile T` + GCC builtins) so C17 Teide headers compile in C++ mode. **NAPI and C++ standard headers must be included before `compat.h`** to avoid `<atomic>` / `<stdatomic.h>` conflicts.
@@ -63,8 +75,20 @@ A dedicated **Teide thread** owns the C heap and runs all Teide operations. The 
 | NAPI | `src/compat.h` | C-atomic shim for C++/C17 interop |
 | NAPI | `src/addon.cpp` | Module init, exports `collectSync`/`collect` |
 | C Core | `vendor/teide/include/teide/td.h` | Teide public API + type/opcode definitions |
+| SQL Engine | `lib/sql/session.ts` | Session: in-memory table registry |
+| SQL Engine | `lib/sql/parser.ts` | SQL parsing via node-sql-parser |
+| SQL Engine | `lib/sql/planner.ts` | SQL planner: AST to execution (core logic) |
+| SQL Engine | `lib/sql/expr.ts` | AST expression to Teide Expr compilation |
+| SQL Engine | `lib/sql/functions.ts` | SQL function registry (math, aggregates) |
+| SQL Engine | `lib/sql/js-table.ts` | Row extraction and CSV round-trip materialization |
+| SQL Engine | `lib/sql/pgq-parser.ts` | PGQ pre-parser for graph/vector DDL |
+| SQL Engine | `lib/sql/pgq.ts` | Property graph: CSR, MATCH, graph algorithms |
+| SQL Engine | `lib/sql/graph-catalog.ts` | Graph catalog with invalidation on table mutation |
+| SQL Engine | `lib/sql/vector.ts` | Vector similarity, HNSW index, KNN fast-path |
+| SQL Engine | `lib/sql/index.ts` | SQL module barrel exports |
 | Tests | `test/*.test.ts` | Vitest: smoke, table, expr (unit), e2e |
-| Fixtures | `test/fixtures/` | CSV test data (`small.csv`, `sales.csv`) |
+| Tests | `test/sql/*.test.ts` | SQL engine tests: select, join, dml, pgq, vector |
+| Fixtures | `test/fixtures/` | CSV test data (`small.csv`, `sales.csv`, `customers.csv`, `orders.csv`) |
 
 ## Conventions
 
@@ -73,3 +97,5 @@ A dedicated **Teide thread** owns the C heap and runs all Teide operations. The 
 - **NAPI classes**: Inherit `Napi::ObjectWrap<T>`, register via `DefineClass()`. Use `Napi::External<T>` for opaque C pointers.
 - **Memory**: `td_retain()`/`td_release()` for C object lifetime; skip release if `heap_alive_` is false.
 - **Addon path**: Loaded at runtime from `build/Release/teidedb_addon.node` (relative to `dist/`).
+- **SQL parsing**: Two-stage: `pgq-parser.ts` intercepts non-standard SQL (graph DDL, vector index DDL, GRAPH_TABLE) via regex before `node-sql-parser` handles standard SQL. New non-standard SQL extensions should follow this pre-parser pattern.
+- **Runtime dependency**: `node-sql-parser` for SQL parsing in the SQL engine layer.

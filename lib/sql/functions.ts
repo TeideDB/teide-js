@@ -31,6 +31,9 @@ registry.set('LOG', unop('log'));
 registry.set('EXP', unop('exp'));
 
 // ROUND(x) → floor(x + 0.5) approximation (single-arg only)
+// Note: Uses "round half up" semantics. For negative numbers, this rounds toward
+// positive infinity (e.g., ROUND(-0.5) = 0), which differs from SQL standard
+// "round half away from zero". A proper round opcode is not yet available in the C layer.
 registry.set('ROUND', (args) => {
     if (args.length !== 1) throw new Error('ROUND() with precision not yet supported');
     return new Expr('unop', { op: 'floor', arg: args[0].add(lit(0.5)) });
@@ -70,6 +73,3 @@ export function resolveFunction(name: string): ExprBuilder {
     return builder;
 }
 
-export function hasFunction(name: string): boolean {
-    return registry.has(name.toUpperCase());
-}

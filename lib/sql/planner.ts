@@ -12,10 +12,6 @@ import path from 'path';
 
 const addon = require(path.join(__dirname, '..', '..', 'build', 'Release', 'teidedb_addon.node'));
 
-export interface PlanResult {
-    table: Table | null;
-}
-
 export function planAndExecuteSync(sql: string, session: Session, ctx: any): Table | null {
     // PGQ pre-parser: intercept graph DDL and GRAPH_TABLE before standard SQL parsing
     const pgqResult = parsePgq(sql);
@@ -505,15 +501,6 @@ function planWindowSelect(ast: any, session: Session, ctx: any): Table {
     // Apply WHERE filter if present
     let rows = baseData.rows;
     if (ast.where) {
-        // Execute with WHERE via the native engine, then extract
-        const filteredAst = { ...ast, columns: '*', orderby: null, limit: null };
-        delete filteredAst.columns;
-        // Use the simpler approach: just execute a SELECT * with WHERE
-        const tmpName = `_wbase_${Date.now()}`;
-        session.register(tmpName, stored.table);
-        const filterQuery = `SELECT * FROM ${tmpName}` +
-            (ast.where ? ` WHERE ${reconstructWhereClause(ast.where)}` : '');
-        // Actually, we can't easily reconstruct SQL. Instead, use the fluent API.
         let query = new Query(stored.nativeTable, ctx);
         const filterExpr = compileExpr(ast.where);
         query = query.filter(filterExpr);
@@ -580,15 +567,10 @@ function computeWindowFunction(expr: any, rows: any[][], columns: string[]): num
     // Build partition groups
     const partitions = buildPartitions(rows, columns, partitionBy);
 
-    // Sort within each partition
-    const sortedPartitions = partitions.map(partition =>
-        sortPartition(partition, columns, orderBy)
-    );
-
     // Compute window values
     const result = new Array<number>(rows.length);
 
-    for (const partition of sortedPartitions) {
+    for (const partition of partitions) {
         const sortedRows = partition.map(idx => rows[idx]);
         const values = computeWindowValues(funcName, sortedRows, partition.length, columns, expr);
 
@@ -631,21 +613,6 @@ function buildPartitions(rows: any[][], columns: string[], partitionBy: any[] | 
     return Array.from(groups.values());
 }
 
-function sortPartition(indices: number[], columns: string[], orderBy: any[] | null): number[] {
-    if (!orderBy || orderBy.length === 0) return indices;
-
-    const sortCols = orderBy.map((ob: any) => {
-        const name = resolveColName(ob.expr);
-        const idx = columns.indexOf(name);
-        if (idx === -1) throw new Error(`ORDER BY column not found: ${name}`);
-        const desc = ob.type === 'DESC';
-        return { idx, desc };
-    });
-
-    // We need access to the actual row data - passed via closure
-    // This is called from computeWindowFunction which has rows
-    return indices; // Sorting is done in computeWindowFunction
-}
 
 function computeWindowValues(
     funcName: string,
@@ -1086,15 +1053,10 @@ function sortRowData(data: RowData, orderBy: any[]): RowData {
     return data;
 }
 
-function reconstructWhereClause(_node: any): string {
-    // Not used - keeping for reference
-    return '';
-}
-
 // ─── Set operation helpers ──────────────────────────────────────────────────
 
 function rowKey(row: any[]): string {
-    return row.map(v => String(v)).join('|');
+    return JSON.stringify(row);
 }
 
 function rowSet(rows: any[][]): Set<string> {
@@ -1144,14 +1106,12 @@ function planCreate(ast: any, session: Session, ctx: any): Table | null {
     }
 
     const columns: string[] = [];
-    const colTypes: string[] = [];
     for (const def of ast.create_definitions) {
         if (def.resource !== 'column') continue;
         const colName = typeof def.column.column === 'string'
             ? def.column.column
             : def.column.column?.expr?.value;
         columns.push(colName);
-        colTypes.push(mapSqlType(def.definition?.dataType));
     }
 
     if (columns.length === 0) {
@@ -1165,15 +1125,6 @@ function planCreate(ast: any, session: Session, ctx: any): Table | null {
     return null;
 }
 
-function mapSqlType(dataType: string | undefined): string {
-    if (!dataType) return 'f64';
-    const dt = dataType.toUpperCase();
-    if (['INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT'].includes(dt)) return 'f64';
-    if (['FLOAT', 'DOUBLE', 'REAL', 'DECIMAL', 'NUMERIC'].includes(dt)) return 'f64';
-    if (['VARCHAR', 'CHAR', 'TEXT', 'STRING'].includes(dt)) return 'sym';
-    if (['BOOLEAN', 'BOOL'].includes(dt)) return 'f64';
-    return 'f64';
-}
 
 function planDrop(ast: any, session: Session): Table | null {
     if (ast.keyword !== 'table') {
@@ -1395,7 +1346,7 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     if (op === 'IN' || op === 'NOT IN') {
         const left = evaluateExprOnRow(node.left, row, columns);
         const values = (node.right.value || []).map((v: any) => evaluateExprOnRow(v, row, columns));
-        const found = values.some((v: any) => v == left);
+        const found = values.some((v: any) => v === left);
         return (op === 'IN' ? found : !found) ? 1 : 0;
     }
     if (op === 'BETWEEN') {
@@ -1425,8 +1376,8 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     const right = evaluateExprOnRow(node.right, row, columns);
 
     switch (op) {
-        case '=': case '==': return (left == right) ? 1 : 0;
-        case '!=': case '<>': return (left != right) ? 1 : 0;
+        case '=': case '==': return (left === right) ? 1 : 0;
+        case '!=': case '<>': return (left !== right) ? 1 : 0;
         case '<': return (left < right) ? 1 : 0;
         case '<=': return (left <= right) ? 1 : 0;
         case '>': return (left > right) ? 1 : 0;
@@ -1446,7 +1397,6 @@ function likeMatch(value: string, pattern: string): boolean {
         '^' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
             .replace(/%/g, '.*')
             .replace(/_/g, '.') + '$',
-        'i'
     );
     return regex.test(value);
 }

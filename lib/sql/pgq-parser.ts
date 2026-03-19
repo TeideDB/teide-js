@@ -122,22 +122,14 @@ class Lexer {
                 i += 2;
                 continue;
             }
-            if (s[i] === '<' && s[i + 1] === '-') {
-                if (s[i + 2] === '.' && s[i + 3] === '.') {
-                    // <-..-> bidirectional
-                    if (s[i + 4] === '-' && s[i + 5] === '>') {
-                        this.tokens.push({ type: 'punct', value: '<->>' });
-                        i += 6;
-                        continue;
-                    }
-                }
-                this.tokens.push({ type: 'punct', value: '<-' });
-                i += 2;
-                continue;
-            }
             if (s[i] === '<' && s[i + 1] === '-' && s[i + 2] === '>') {
                 this.tokens.push({ type: 'punct', value: '<->' });
                 i += 3;
+                continue;
+            }
+            if (s[i] === '<' && s[i + 1] === '-') {
+                this.tokens.push({ type: 'punct', value: '<-' });
+                i += 2;
                 continue;
             }
 
@@ -191,8 +183,14 @@ class Lexer {
                 continue;
             }
 
-            // Skip anything else
-            i++;
+            // Comparison operators
+            if ('>=<'.includes(s[i])) {
+                this.tokens.push({ type: 'punct', value: s[i] });
+                i++;
+                continue;
+            }
+
+            throw new Error(`Unexpected character in PGQ SQL: '${s[i]}' at position ${i}`);
         }
     }
 

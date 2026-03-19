@@ -1,7 +1,7 @@
 export { Session } from './session';
 export { parse } from './parser';
 export { compileExpr, containsAggregate } from './expr';
-export { resolveFunction, hasFunction } from './functions';
+export { resolveFunction } from './functions';
 export { planAndExecuteSync, planAndExecute } from './planner';
 export { extractRows, materializeTable } from './js-table';
 export { parsePgq } from './pgq-parser';

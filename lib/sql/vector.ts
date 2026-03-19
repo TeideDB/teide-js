@@ -310,8 +310,8 @@ function extractArrayLiteral(node: any): number[] | null {
             if (v.type === 'unary_expr' && v.operator === '-' && v.expr?.type === 'number') {
                 return -v.expr.value;
             }
-            return null;
-        }).filter((v: any) => v !== null);
+            throw new Error(`Non-numeric value in vector literal: ${JSON.stringify(v)}`);
+        });
     }
 
     // Handle array constructor: {type: 'array', value: [...]}
