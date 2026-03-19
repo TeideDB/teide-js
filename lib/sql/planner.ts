@@ -1925,12 +1925,14 @@ function evaluateBinaryOnRow(node: any, row: any[], columns: string[]): any {
     const left = evaluateExprOnRow(node.left, row, columns);
     const right = evaluateExprOnRow(node.right, row, columns);
 
-    // SQL NULL semantics: comparisons with NULL return 0 (unknown/false)
+    // SQL NULL semantics: NULL propagates through comparisons and arithmetic
     if ((left === null || left === undefined) || (right === null || right === undefined)) {
         switch (op) {
             case '=': case '==': case '!=': case '<>':
             case '<': case '<=': case '>': case '>=':
                 return 0;
+            case '+': case '-': case '*': case '/': case '%':
+                return null;
         }
     }
 
