@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TeideDB Web Console</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <style>
 :root {
     --bg: #0e1b24;
@@ -135,6 +136,7 @@ body {
 .rail-btn:hover  { background: var(--selection); color: var(--fg); }
 .rail-btn.active { background: var(--selection); color: var(--accent); }
 .rail-btn svg { width: 17px; height: 17px; pointer-events: none; }
+.rail-btn i { font-size: 15px; pointer-events: none; }
 
 /* expandable panel */
 .sidebar-panel {
@@ -192,16 +194,18 @@ body {
 .tree-item-row:hover { background: var(--selection); }
 .tree-item-row.expanded { background: rgba(22,42,54,0.7); }
 .tree-chevron {
-    width: 10px;
-    height: 10px;
+    font-size: 9px;
+    width: 12px;
+    text-align: center;
     flex-shrink: 0;
     color: var(--type-dim);
     transition: transform 0.15s;
 }
 .tree-chevron.open { transform: rotate(90deg); }
 .tree-tbl-icon {
-    width: 13px;
-    height: 13px;
+    font-size: 11px;
+    width: 14px;
+    text-align: center;
     flex-shrink: 0;
     color: var(--accent);
     opacity: 0.7;
@@ -651,18 +655,10 @@ body {
         <!-- Icon rail -->
         <div class="sidebar-rail">
             <button class="rail-btn active" id="rail-tables" title="Tables">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <line x1="3" y1="9" x2="21" y2="9"/>
-                    <line x1="3" y1="15" x2="21" y2="15"/>
-                    <line x1="9" y1="9" x2="9" y2="21"/>
-                </svg>
+                <i class="fa-solid fa-table"></i>
             </button>
             <button class="rail-btn" id="rail-history" title="History">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="9"/>
-                    <polyline points="12 7 12 12 15 15"/>
-                </svg>
+                <i class="fa-solid fa-clock-rotate-left"></i>
             </button>
         </div>
 
@@ -685,8 +681,8 @@ body {
     <div class="content">
         <!-- Tab bar -->
         <div class="tab-bar">
-            <div class="tab active">SQL 1</div>
-            <button class="tab-add" title="New tab">+</button>
+            <div class="tab active"><i class="fa-solid fa-code" style="margin-right:6px;font-size:11px;opacity:0.7"></i>SQL 1</div>
+            <button class="tab-add" title="New tab"><i class="fa-solid fa-plus" style="font-size:12px"></i></button>
         </div>
 
         <!-- Editor section (resizable) -->
@@ -694,7 +690,7 @@ body {
             <div id="editor-container"></div>
             <div class="run-btn-wrap">
                 <button class="run-btn" id="run-btn">
-                    <span class="run-btn-label">Run query</span>
+                    <span class="run-btn-label"><i class="fa-solid fa-play" style="font-size:10px;margin-right:5px"></i>Run query</span>
                     <span class="run-btn-kbd">Ctrl &#9166;</span>
                 </button>
             </div>
@@ -721,12 +717,12 @@ body {
                 <div class="result-row-count" id="result-row-count"></div>
                 <div class="export-wrap">
                     <button class="export-btn" id="export-btn">
-                        Download CSV <span class="export-caret">&#9660;</span>
+                        <i class="fa-solid fa-download" style="font-size:11px;margin-right:4px"></i>Download CSV <span class="export-caret"><i class="fa-solid fa-caret-down" style="font-size:10px"></i></span>
                     </button>
                     <div class="export-dropdown" id="export-dropdown">
-                        <button id="export-csv">Download CSV</button>
-                        <button id="export-json">Download JSON</button>
-                        <button id="export-clip">Copy as TSV</button>
+                        <button id="export-csv"><i class="fa-solid fa-file-csv" style="width:16px;margin-right:6px;opacity:0.6"></i>Download CSV</button>
+                        <button id="export-json"><i class="fa-solid fa-file-code" style="width:16px;margin-right:6px;opacity:0.6"></i>Download JSON</button>
+                        <button id="export-clip"><i class="fa-regular fa-clipboard" style="width:16px;margin-right:6px;opacity:0.6"></i>Copy as TSV</button>
                     </div>
                 </div>
             </div>
@@ -734,7 +730,7 @@ body {
             <!-- Result / empty area -->
             <div class="table-outer" id="result-area">
                 <div class="empty-state" id="empty-state">
-                    <span class="empty-state-icon">&#9783;</span>
+                    <i class="fa-solid fa-database" style="font-size:28px;opacity:0.2"></i>
                     Type a SQL query and press Ctrl+Enter
                 </div>
             </div>
@@ -1192,7 +1188,7 @@ function clearResults() {
     resultArea.style.display = '';
     const es = document.createElement('div');
     es.className = 'empty-state';
-    es.innerHTML = '<span class="empty-state-icon">&#9783;</span>Type a SQL query and press Ctrl+Enter';
+    es.innerHTML = '<i class="fa-solid fa-database" style="font-size:28px;opacity:0.2"></i>Type a SQL query and press Ctrl+Enter';
     resultArea.appendChild(es);
     setLog('idle', 'Ready', '');
     resultToolbar.style.display = 'none';
@@ -1211,33 +1207,11 @@ function updateMeta(msg) {
         const rowEl = document.createElement('div');
         rowEl.className = 'tree-item-row';
 
-        const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        chevron.setAttribute('viewBox', '0 0 24 24');
-        chevron.setAttribute('fill', 'none');
-        chevron.setAttribute('stroke', 'currentColor');
-        chevron.setAttribute('stroke-width', '2.5');
-        chevron.setAttribute('stroke-linecap', 'round');
-        chevron.setAttribute('stroke-linejoin', 'round');
-        chevron.classList.add('tree-chevron');
-        const chevPath = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-        chevPath.setAttribute('points', '9 18 15 12 9 6');
-        chevron.appendChild(chevPath);
+        const chevron = document.createElement('i');
+        chevron.className = 'fa-solid fa-chevron-right tree-chevron';
 
-        const tblIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        tblIcon.setAttribute('viewBox', '0 0 24 24');
-        tblIcon.setAttribute('fill', 'none');
-        tblIcon.setAttribute('stroke', 'currentColor');
-        tblIcon.setAttribute('stroke-width', '1.8');
-        tblIcon.setAttribute('stroke-linecap', 'round');
-        tblIcon.setAttribute('stroke-linejoin', 'round');
-        tblIcon.classList.add('tree-tbl-icon');
-        const r1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        r1.setAttribute('x', '3'); r1.setAttribute('y', '3'); r1.setAttribute('width', '18'); r1.setAttribute('height', '18'); r1.setAttribute('rx', '2');
-        const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        l1.setAttribute('x1', '3'); l1.setAttribute('y1', '9'); l1.setAttribute('x2', '21'); l1.setAttribute('y2', '9');
-        const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        l2.setAttribute('x1', '3'); l2.setAttribute('y1', '15'); l2.setAttribute('x2', '21'); l2.setAttribute('y2', '15');
-        tblIcon.appendChild(r1); tblIcon.appendChild(l1); tblIcon.appendChild(l2);
+        const tblIcon = document.createElement('i');
+        tblIcon.className = 'fa-solid fa-table-cells tree-tbl-icon';
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'tree-name';
