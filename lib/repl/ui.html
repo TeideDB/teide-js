@@ -390,6 +390,19 @@ body {
     line-height: 1;
 }
 .tab-add:hover { color: var(--fg); }
+.tab-icon { margin-right: 6px; font-size: 11px; opacity: 0.7; }
+.tab-label { cursor: default; }
+.tab-label-input {
+    background: var(--bg-light);
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 0 4px;
+    width: 80px;
+    outline: none;
+}
 
 /* editor section */
 .editor-section {
@@ -843,7 +856,10 @@ body {
     <div class="content">
         <!-- Tab bar -->
         <div class="tab-bar">
-            <div class="tab active"><i class="fa-solid fa-code" style="margin-right:6px;font-size:11px;opacity:0.7"></i>SQL 1</div>
+            <div class="tab active" id="sql-tab-1">
+                <i class="fa-solid fa-code tab-icon"></i>
+                <span class="tab-label" data-tab-id="1">SQL 1</span>
+            </div>
             <button class="tab-add" title="New tab"><i class="fa-solid fa-plus" style="font-size:12px"></i></button>
         </div>
 
@@ -1045,6 +1061,31 @@ document.addEventListener('mouseup', () => {
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
     }
+});
+
+// ─── Renameable top tabs ────────────────────
+document.addEventListener('dblclick', (e) => {
+    const label = e.target.closest('.tab-label');
+    if (!label) return;
+    const currentText = label.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tab-label-input';
+    input.value = currentText;
+    label.textContent = '';
+    label.appendChild(input);
+    input.focus();
+    input.select();
+
+    function commit() {
+        const newName = input.value.trim() || currentText;
+        label.textContent = newName;
+    }
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { commit(); ev.preventDefault(); }
+        if (ev.key === 'Escape') { label.textContent = currentText; ev.preventDefault(); }
+    });
 });
 
 // ─── Bottom tab switching ────────────────────
