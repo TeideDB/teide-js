@@ -9,6 +9,21 @@ import { parsePgq } from './pgq-parser';
 import { executeGraphTable, executeGraphAlgorithm } from './pgq';
 import { detectKnnQuery, hnswSearch, computeVectorSimilarity, parseVector, KnnQuery } from './vector';
 
+// Pre-parse: intercept read_csv(...) in FROM clause, load the CSV, register as temp table,
+// and rewrite the SQL to reference the temp table instead.
+function preParseReadCsv(sql: string, session: Session, ctx: any): string {
+    // Match read_csv('file') or read_csv('file', 'types') in FROM position
+    const re = /\bread_csv\s*\(\s*'([^']+)'(?:\s*,\s*'([^']+)')?\s*\)/gi;
+    return sql.replace(re, (_match, file: string, types?: string) => {
+        const opts: { columnTypes?: string[] } = {};
+        if (types) opts.columnTypes = types.split(',').map(t => t.trim());
+        const table = new Table(ctx.readCsvSync(file, Object.keys(opts).length > 0 ? opts : undefined), ctx);
+        const name = tempName('csv', session);
+        registerTempTable(name, table, session);
+        return name;
+    });
+}
+
 function tempName(prefix: string, session: Session): string {
     return `__teide_tmp_${prefix}_${++session.tempTableCounter}`;
 }
@@ -63,7 +78,10 @@ function planAndExecuteSyncInner(sql: string, session: Session, ctx: any): Table
         return handlePgqResult(pgqResult, session, ctx);
     }
 
-    const ast = parse(sql);
+    // Pre-parse: intercept read_csv() calls, load CSV into temp tables, rewrite SQL
+    const rewritten = preParseReadCsv(sql, session, ctx);
+
+    const ast = parse(rewritten);
     switch (ast.type) {
         case 'select':
             return planSelectWithSetOps(ast, session, ctx);

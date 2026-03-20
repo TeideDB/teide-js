@@ -174,18 +174,29 @@ export function startServer(opts?: { port?: number; noOpen?: boolean }): void {
             case '.load': {
                 const args = parts.slice(1);
                 if (args.length === 0) {
-                    send(ws, { type: 'print', text: 'Usage: .load <file.csv> [as <name>]' });
+                    send(ws, { type: 'print', text: 'Usage: .load <file.csv> [as <name>] [types <t1,t2,...>]' });
                     return;
                 }
                 const filePath = args[0];
                 let tableName: string;
-                if (args.length >= 3 && args[1].toLowerCase() === 'as') {
-                    tableName = args[2];
+                const csvOpts: { columnTypes?: string[] } = {};
+
+                // Parse: .load file [as name] [types t1,t2,...]
+                let i = 1;
+                if (i < args.length && args[i].toLowerCase() === 'as') {
+                    tableName = args[i + 1] || path.basename(filePath, path.extname(filePath));
+                    i += 2;
                 } else {
                     tableName = path.basename(filePath, path.extname(filePath));
                 }
+                if (i < args.length && args[i].toLowerCase() === 'types') {
+                    const typesStr = args[i + 1];
+                    if (typesStr) csvOpts.columnTypes = typesStr.split(',').map(t => t.trim());
+                    i += 2;
+                }
+
                 try {
-                    const table = ctx.readCsvSync(filePath);
+                    const table = ctx.readCsvSync(filePath, Object.keys(csvOpts).length > 0 ? csvOpts : undefined);
                     ctx.registerTable(tableName, table);
                     send(ws, { type: 'ok', id: '', message: `Loaded ${filePath} as '${tableName}' (${table.nRows} rows, ${table.nCols} cols)`, elapsed: 0 });
                     handleMeta(ws);
