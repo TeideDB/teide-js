@@ -98,9 +98,24 @@ node bin/teide.js  # start server + auto-open browser</code></pre>
     <pre><code class="language-text">.load /path/to/sales.csv
 .load /path/to/data.csv as mydata</code></pre>
 
-    <p>You can also load data using SQL:</p>
+    <p>You can also load data using SQL with <code>read_csv()</code>:</p>
 
-    <pre><code class="language-sql">CREATE TABLE sales AS SELECT * FROM read_csv('/path/to/sales.csv');</code></pre>
+    <pre><code class="language-sql">SELECT * FROM read_csv('/path/to/sales.csv');
+CREATE TABLE sales AS SELECT * FROM read_csv('/path/to/sales.csv');</code></pre>
+
+    <h3>Specifying Column Types</h3>
+
+    <p>By default, column types are auto-detected. To override them, pass a comma-separated type list as a second argument:</p>
+
+    <pre><code class="language-text">.load data.csv types i32,sym,f64,i64
+.load data.csv as sales types i32,sym,f64,i64</code></pre>
+
+    <p>Or in SQL:</p>
+
+    <pre><code class="language-sql">SELECT * FROM read_csv('data.csv', 'i32,sym,f64,i64');
+CREATE TABLE t AS SELECT * FROM read_csv('data.csv', 'i32,sym,f64,i64');</code></pre>
+
+    <p>Valid types: <code>bool</code>, <code>u8</code>, <code>i16</code>, <code>i32</code>, <code>i64</code>, <code>f64</code>, <code>sym</code>, <code>date</code>, <code>time</code>, <code>timestamp</code>. The type list must match the number of columns in the CSV.</p>
 
     <!-- ─── Section 4: Running Queries ─── -->
     <h2 id="running-queries">Running Queries</h2>
@@ -134,7 +149,7 @@ LIMIT 10;</code></pre>
         <tr><td><code>.help</code></td><td>Show available dot-commands and usage information.</td></tr>
         <tr><td><code>.tables</code></td><td>List all tables currently loaded in the session.</td></tr>
         <tr><td><code>.schema [table]</code></td><td>Show the column names and types for a table, or all tables if no argument is given.</td></tr>
-        <tr><td><code>.load &lt;path&gt; [as name]</code></td><td>Load a CSV file into a table.</td></tr>
+        <tr><td><code>.load &lt;path&gt; [as name] [types t1,t2,...]</code></td><td>Load a CSV file into a table, optionally specifying column types.</td></tr>
         <tr><td><code>.save &lt;table&gt; &lt;path&gt;</code></td><td>Export a table to a CSV file on disk.</td></tr>
         <tr><td><code>.timer</code></td><td>Toggle query execution timing display.</td></tr>
         <tr><td><code>.clear</code></td><td>Clear the output pane.</td></tr>

@@ -111,6 +111,11 @@ npm run build</code></pre>
     <pre><code>.load path/to/sales.csv
 SELECT category, SUM(price) FROM sales GROUP BY category;</code></pre>
 
+    <p>To specify column types explicitly, use <code>types</code> or <code>read_csv()</code>:</p>
+
+    <pre><code>.load data.csv types i32,sym,f64
+SELECT * FROM read_csv('data.csv', 'i32,sym,f64');</code></pre>
+
     <p>Press <strong>Ctrl+Enter</strong> to execute. See the <a href="../guides/web-repl.html">Web REPL guide</a> for the full interface reference.</p>
 
     <!-- Quick Start (Node.js) -->

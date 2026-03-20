@@ -26,7 +26,14 @@ npm run build
 node bin/teide.js
 ```
 
-Opens a browser-based SQL console at http://127.0.0.1:3141. Load CSV files with `.load`, query with SQL.
+Opens a browser-based SQL console at http://127.0.0.1:3141. Load CSV files with `.load`, query with SQL. Specify column types explicitly with `types` or `read_csv()`:
+
+```
+.load data.csv types i32,sym,f64
+SELECT * FROM read_csv('data.csv', 'i32,sym,f64');
+```
+
+Valid types: `bool`, `u8`, `i16`, `i32`, `i64`, `f64`, `sym`, `date`, `time`, `timestamp`.
 
 ### Node.js API
 
