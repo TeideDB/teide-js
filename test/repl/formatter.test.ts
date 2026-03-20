@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Context } from '../../lib';
+import { Context } from '../../lib/context';
 import { Table } from '../../lib/table';
-import { formatTable, formatCsv, formatJson, stripAnsi } from '../../lib/repl/formatter';
+import { formatTable, formatCsv, formatJson } from '../../lib/repl/formatter';
 import path from 'path';
+
+function stripAnsi(s: string): string {
+    return s.replace(/\x1b\[[0-9;]*m/g, '');
+}
 
 describe('formatter', () => {
     let ctx: Context;

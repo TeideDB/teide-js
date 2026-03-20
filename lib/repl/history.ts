@@ -16,6 +16,8 @@ export class History {
 
     get length(): number { return this.entries.length; }
 
+    getAll(): string[] { return [...this.entries]; }
+
     add(entry: string): void {
         const trimmed = entry.trim();
         if (trimmed.length === 0) return;

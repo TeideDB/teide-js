@@ -16,7 +16,7 @@
     "build": "npm run build:native && npm run build:ts",
     "prepublishOnly": "npm run sync-vendor && npm run build:ts",
     "test": "vitest run",
-    "repl": "node dist/repl/index.js",
+    "repl": "node dist/repl/server.js",
     "clean": "cmake-js clean && rm -rf dist vendor/teide"
   },
   "files": [
@@ -38,10 +38,12 @@
   "dependencies": {
     "cmake-js": "^7.3.0",
     "node-addon-api": "^8.3.0",
-    "node-sql-parser": "^5.4.0"
+    "node-sql-parser": "^5.4.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },

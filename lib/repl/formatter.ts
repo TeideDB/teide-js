@@ -2,7 +2,6 @@ import { Table } from '../table';
 import { Series } from '../series';
 import * as theme from './theme';
 
-export { stripAnsi } from './highlight';
 
 interface FormatOpts {
     maxRows?: number;
@@ -12,7 +11,7 @@ interface FormatOpts {
 const HEAD_ROWS = 20;
 const TAIL_ROWS = 20;
 
-function getCellValue(series: Series, row: number): string | null {
+export function getCellValue(series: Series, row: number): string | null {
     const bitmap = series.nullBitmap;
     if (bitmap) {
         const byteIdx = row >> 3;
@@ -61,7 +60,7 @@ function getCellValue(series: Series, row: number): string | null {
     }
 }
 
-function isNumericType(dtype: string): boolean {
+export function isNumericType(dtype: string): boolean {
     return ['i16', 'i32', 'i64', 'f64', 'u8', 'bool'].includes(dtype);
 }
 
