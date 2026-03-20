@@ -189,20 +189,25 @@ body {
 .table-header {
     display: flex;
     background: var(--bg-surface);
-    border-bottom: 2px solid var(--border);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     overflow: hidden;
 }
 .table-header .th {
-    padding: 6px 12px;
-    font-weight: 600;
+    padding: 8px 12px 6px;
     color: var(--header);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     flex-shrink: 0;
+    border-right: 1px dashed var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
 }
-.table-header .th .dtype { color: var(--type-dim); font-weight: 400; font-size: 11px; margin-left: 4px; }
+.table-header .th:last-child { border-right: none; }
+.table-header .th .col-name { font-weight: 600; font-size: 13px; }
+.table-header .th .dtype { color: var(--type-dim); font-weight: 400; font-size: 11px; }
 .scroll-viewport {
     overflow-y: auto;
     overflow-x: hidden;
@@ -215,7 +220,9 @@ body {
     position: absolute;
     width: 100%;
     left: 0;
+    border-bottom: 1px solid #1a1a2e;
 }
+.table-row:nth-child(odd) { background: rgba(49, 50, 68, 0.15); }
 .table-row:hover { background: var(--selection); }
 .table-row .td {
     padding: 4px 12px;
@@ -223,9 +230,11 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     flex-shrink: 0;
-    height: 28px;
-    line-height: 20px;
+    height: 32px;
+    line-height: 24px;
+    border-right: 1px dashed rgba(69, 71, 90, 0.4);
 }
+.table-row .td:last-child { border-right: none; }
 .td.numeric { text-align: right; color: var(--number); }
 .td.null-val { color: var(--null); font-style: italic; }
 
@@ -322,7 +331,7 @@ import { highlightSelectionMatches, searchKeymap } from 'https://esm.sh/@codemir
 let ws = null;
 let currentResult = null;  // { columns, rows, nrows }
 let colWidths = [];
-const ROW_HEIGHT = 28;
+const ROW_HEIGHT = 32;
 const BUFFER_ROWS = 20;
 let pendingComplete = null;
 
@@ -521,7 +530,7 @@ function renderTable() {
         const th = document.createElement('div');
         th.className = 'th';
         th.style.width = colWidths[i] + 'px';
-        th.innerHTML = `${esc(col.name)}<span class="dtype">${esc(col.dtype)}</span>`;
+        th.innerHTML = `<span class="col-name">${esc(col.name)}</span><span class="dtype">${esc(col.dtype)}</span>`;
         headerDiv.appendChild(th);
     });
     resultArea.appendChild(headerDiv);
