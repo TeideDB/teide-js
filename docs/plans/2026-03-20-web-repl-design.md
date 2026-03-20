@@ -2,7 +2,7 @@
 
 ## Overview
 
-A browser-based SQL REPL for teide-js. Single self-contained HTML page served by a lightweight Node.js HTTP server. CodeMirror 6 for SQL editing with autocomplete, WebSocket for query execution, virtual-scrolling HTML tables for results.
+A browser-based SQL console for teide-js, inspired by QuestDB's web console. Single self-contained HTML page served by a lightweight Node.js HTTP server. CodeMirror 6 for SQL editing with autocomplete, WebSocket for query execution, virtual-scrolling HTML tables for results.
 
 Replaces the terminal REPL entirely. Invoked via `teide` or `npx teidedb`.
 
@@ -12,20 +12,15 @@ Replaces the terminal REPL entirely. Invoked via `teide` or `npx teidedb`.
 bin/teide.js              — entry point: starts server, opens browser
 lib/repl/server.ts        — HTTP server (serves UI) + WebSocket (query execution)
 lib/repl/protocol.ts      — WebSocket message types
+lib/repl/serialize.ts     — Table → JSON serialization for WebSocket results
+lib/repl/autocomplete.ts  — Server-side SQL autocomplete (fuzzy matching)
 lib/repl/ui.html          — self-contained HTML page (CodeMirror + result viewer)
 ```
 
 Reuses existing modules:
-- `lib/repl/formatter.ts`  — server-side cell value extraction for JSON results
-- `lib/repl/theme.ts`      — shared color palette (CSS variables mirror ANSI theme)
+- `lib/repl/formatter.ts`  — server-side cell value extraction (`getCellValue`)
+- `lib/repl/theme.ts`      — shared color palette
 - `lib/repl/history.ts`    — persistent query history (~/.teidedb_history)
-
-Removes (terminal-specific, no longer needed):
-- `lib/repl/input.ts`
-- `lib/repl/suggestions.ts`
-- `lib/repl/highlight.ts` (CodeMirror handles this)
-- `lib/repl/completer.ts` (autocomplete moves to server → WebSocket → CodeMirror)
-- `lib/repl/validator.ts` (CodeMirror handles multi-line)
 
 ## Server (`server.ts`)
 
@@ -35,7 +30,7 @@ Lightweight HTTP + WebSocket server using Node.js built-in `http` module and `ws
 
 | Route | Purpose |
 |-------|---------|
-| `GET /` | Serves `ui.html` (inlined, no external files) |
+| `GET /` | Serves `ui.html` with `__VERSION__` replaced |
 
 ### WebSocket protocol (`protocol.ts`)
 
@@ -49,154 +44,129 @@ Client → Server:
 
 Server → Client:
 ```typescript
-{ type: 'result', id: string, columns: Column[], rows: any[][], nrows: number, elapsed: number }
+{ type: 'result', id: string, columns: Column[], rows: (string|null)[][], nrows: number, elapsed: number }
 { type: 'error', id: string, message: string }
-{ type: 'ok', id: string, message: string, elapsed: number }  // DDL result
+{ type: 'ok', id: string, message: string, elapsed: number }
 { type: 'completions', items: { value: string, description: string }[] }
-{ type: 'meta', tables: { name: string, nrows: number, ncols: number, columns: Column[] }[] }
-{ type: 'print', text: string }  // dot-command output
+{ type: 'meta', tables: { name: string, nrows: number, ncols: number, columns: Column[] }[], history: string[] }
+{ type: 'print', text: string }
 ```
 
 Where `Column = { name: string, dtype: string }`.
 
 ### Startup flow
 
-1. Find a free port (default 3141, auto-increment if busy)
+1. Find a free port (default 3141, auto-increment on EADDRINUSE up to +10)
 2. Create `Context` and `Session`
-3. Start HTTP + WebSocket server
-4. Open browser to `http://localhost:<port>`
-5. Print URL to terminal for manual access
-6. On WebSocket close (last client disconnects) + Ctrl+C → cleanup and exit
+3. Start HTTP + WebSocket server on 127.0.0.1
+4. Open browser (xdg-open/open/start) unless `noOpen` option
+5. Print URL to terminal
+6. Graceful shutdown on SIGINT/SIGTERM: save history, close WS, close HTTP, destroy context
 
 ## Frontend (`ui.html`)
 
-Single self-contained HTML file with all CSS and JS inlined. No build step. CDN imports for CodeMirror and virtual scroller.
+Single self-contained HTML page with all CSS and JS inlined. No build step. CDN imports for CodeMirror 6 and Font Awesome 6.
 
-### Layout
+### Layout (QuestDB-inspired)
 
 ```
-┌──────────────────────────────────────────────────┐
-│  TeideDB   v0.1.1                    [.tables ▼] │
-├──────────────────────────────────────────────────┤
-│                                                  │
-│  CodeMirror SQL editor                           │
-│  (multi-line, syntax highlighting, autocomplete) │
-│                                         [Run ▶]  │
-├──────────────────────────────────────────────────┤
-│  ┌────────┬─────┬──────────┐                     │
-│  │ name   │ age │ city     │  ← virtual-scroll   │
-│  ├────────┼─────┼──────────┤     result table     │
-│  │ Alice  │  30 │ Seattle  │                     │
-│  │ Bob    │  25 │ Portland │                     │
-│  │ ...    │     │          │                     │
-│  └────────┴─────┴──────────┘                     │
-│  3 rows × 3 columns · 0.42ms           [Export ▼]│
-├──────────────────────────────────────────────────┤
-│  History: SELECT * FROM t  │  .load sales.csv    │
-└──────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ [Teide logo] TeideDB v0.1.1           [? Help] [✕ Clear] ⌨ │  ← top bar
+├──┬──────────────────────────────────────────────────────────┤
+│  │ [</> SQL 1]  [+]                                         │  ← tab bar (renameable)
+│S │                                                          │
+│I │  CodeMirror editor (SQL, one-dark, autocomplete)         │  ← editor (~55% height)
+│D │                                                          │
+│E │                                        [▶ Run query Ctrl↵]│
+│B ├══════════════════════════════════════════════════════════╡  ← draggable splitter
+│A │ [Output] [Log] [Console]            N rows [Download CSV▾]│  ← bottom tab bar
+│R ├──────────────────────────────────────────────────────────┤
+│  │ col1    ┊ col2    ┊ col3     ┊ col4                      │
+│  │ type    ┊ type    ┊ type     ┊ type                      │  ← virtual-scroll table
+│  │─────────┼─────────┼──────────┼───────                    │
+│  │ val     ┊ val     ┊    12.34 ┊ text                      │
+├──┴──────────────────────────────────────────────────────────┤
+│                                       ● Connected  v0.1.1  │  ← footer
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Components
+### Top bar
+- Left: Teide mountain SVG logo, "TeideDB" brand, version
+- Right: Help button (runs .help), Clear button, keyboard shortcut icon
 
-**Editor pane:**
-- CodeMirror 6 with `@codemirror/lang-sql` for syntax highlighting
-- SQL autocomplete via `@codemirror/autocomplete` — completions fetched from server over WebSocket
-- Ctrl+Enter / Cmd+Enter to execute (or click Run button)
-- Multi-line input with proper indentation
-- Dark theme matching the Teide color palette
+### Left sidebar
+- Icon rail (44px): tables icon, history icon — toggles panel
+- Expandable panel (224px): filter input + refresh button, expandable table tree with columns, or query history list
 
-**Result pane:**
-- Virtual-scrolling table for large results
-- Column headers with type badge (dim, like the terminal formatter)
-- Numbers right-aligned, strings left-aligned, NULLs styled dim/italic
-- Row count + column count + elapsed time in footer
-- Export dropdown: CSV, JSON, copy to clipboard
+### Editor section
+- CodeMirror 6 with individual extensions (not basicSetup — esm.sh incompatible)
+- SQL syntax highlighting, one-dark theme
+- Autocomplete: `activateOnTyping: true`, 2-char minimum, Tab to accept, fetched via WebSocket
+- Ctrl+Enter / Cmd+Enter to execute (highest-precedence keymap)
+- Green "Run query | Ctrl ↵" button overlaid bottom-right
+- Resizable via draggable splitter between editor and results
 
-**Sidebar/status:**
-- Table list (clickable to insert table name or show schema)
-- Query history (clickable to re-run)
+### SQL tabs
+- Tab bar with active tab indicator (accent bottom border)
+- Double-click tab label to rename inline (Enter to save, Escape to cancel)
 
-### CSS theme
+### Bottom pane (tabbed)
+Three tabs below the splitter:
 
-Dark theme with CSS variables mirroring the terminal ANSI palette:
+**Output** — Query result table with virtual scrolling
+- Two-line column headers (name bold + dtype dim), dashed column separators
+- Numbers right-aligned (blue), strings left-aligned, nulls dim italic
+- Row count + Download CSV dropdown (CSV, JSON, Copy as TSV)
+
+**Log** — Scrollable query history
+- Append-only log entries with timestamp, status icon (✓/✗), message, timing
+- Persists across queries within the session
+
+**Console** — JavaScript REPL
+- Client-side `eval()` with echo of input, formatted results, error display
+- Input history via up/down arrow keys
+
+### Color theme (teidelum)
 ```css
 :root {
-    --bg: #1e1e2e;
-    --fg: #cdd6f4;
-    --border: #45475a;
-    --header: #89dceb;
-    --type-dim: #6c7086;
-    --null: #6c7086;
-    --string: #a6e3a1;
-    --number: #89b4fa;
-    --keyword: #cba6f7;
-    --error: #f38ba8;
-    --success: #a6e3a1;
-    --selection: #313244;
+    --bg: #0e1b24;          /* navy background */
+    --bg-surface: #0a1319;  /* darker surface */
+    --bg-light: #162a36;    /* lighter surface */
+    --fg: #e2e8f0;          /* body text */
+    --border: #2a3e4b;      /* borders */
+    --header: #8ba8b8;      /* column headers */
+    --primary: #4b6777;     /* primary brand */
+    --primary-light: #6b8a9e;
+    --accent: #6b8a9e;      /* active elements */
+    --success: #4ade80;     /* green */
+    --error: #f87171;       /* red */
 }
 ```
 
-### Virtual scroller
+### CDN dependencies
+- CodeMirror 6 packages from `esm.sh` (view, state, lang-sql, theme-one-dark, commands, autocomplete, language, search)
+- Font Awesome 6 from `cdnjs.cloudflare.com`
 
-For handling large result sets (100K+ rows), use a simple custom virtual scroller:
-- Container has `overflow-y: auto` with a fixed height
-- A spacer div sets the total scroll height (`rowCount * rowHeight`)
-- On scroll, compute which rows are visible and render only those
-- Row height is fixed (monospace font, single line per cell)
-- Renders ~50 rows at a time with buffer above/below viewport
+### Fonts
+- UI: Inter (sans-serif)
+- Code/editor: JetBrains Mono (monospace)
 
-### CDN dependencies (loaded in `ui.html`)
-
-- `codemirror` + `@codemirror/lang-sql` + `@codemirror/autocomplete` — editor
-- `@codemirror/theme-one-dark` — dark theme base
-
-All loaded from esm.sh or unpkg CDN via `<script type="module">`.
-
-## Server-side dependencies
-
-- `ws` — WebSocket server (lightweight, 0 deps)
-
-## Entry point (`bin/teide.js`)
-
-```javascript
-#!/usr/bin/env node
-require('../dist/repl/server').startServer();
-```
-
-The `startServer()` function:
-1. Parses args (--port, --no-open)
-2. Creates Context + Session
-3. Starts HTTP server
-4. Opens browser via `open` (child_process)
-5. Handles shutdown (Ctrl+C, SIGTERM)
-
-## Dot-commands (via WebSocket)
-
-Same set as designed for terminal, but executed via WebSocket messages:
+## Dot-commands
 
 | Command | Behavior |
 |---------|----------|
 | `.help` | Returns help text as `print` message |
 | `.tables` | Returns table list via `meta` message |
-| `.schema <table>` | Returns column info via `meta` message |
-| `.load <file.csv> [as <name>]` | Loads CSV, returns `ok` message |
+| `.schema <table>` | Returns column info as `print` message |
+| `.load <file.csv> [as <name>]` | Loads CSV, returns `ok` message + meta refresh |
 | `.save <table> <file.csv>` | Exports table, returns `ok` message |
 | `.timer on\|off` | Toggles timing display |
-| `.clear` | Clears result pane (client-side) |
-
-`.mode`, `.limit`, `.width` are no longer needed — the browser UI handles display formatting.
-
-## Migration from terminal REPL
-
-- Remove: `lib/repl/input.ts`, `lib/repl/suggestions.ts`, `lib/repl/highlight.ts`, `lib/repl/completer.ts`, `lib/repl/validator.ts`
-- Keep: `lib/repl/formatter.ts` (reuse `getCellValue` for JSON serialization), `lib/repl/history.ts`, `lib/repl/theme.ts`
-- Rewrite: `lib/repl/index.ts` → `lib/repl/server.ts`
-- Update: `bin/teide.js`, `package.json`, `lib/index.ts`
+| `.clear` | Sends `__CLEAR__` sentinel to clear result pane |
 
 ## Non-goals
 
 - No authentication (local use only, binds to 127.0.0.1)
-- No multiple simultaneous sessions
+- No multiple simultaneous sessions (single Context)
 - No query cancellation (executeSync is blocking)
-- No saved queries / workspaces
+- No saved queries / workspaces (beyond history)
 - No chart/visualization

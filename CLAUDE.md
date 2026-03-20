@@ -125,9 +125,19 @@ These classes own their `td_t*` pointers and follow the same `td_retain()`/`td_r
 | SQL Engine | `lib/sql/graph-catalog.ts` | Graph catalog with invalidation on table mutation |
 | SQL Engine | `lib/sql/vector.ts` | Vector similarity, HNSW index, KNN fast-path |
 | SQL Engine | `lib/sql/index.ts` | SQL module barrel exports |
+| Web REPL | `lib/repl/server.ts` | HTTP + WebSocket server: query execution, autocomplete, dot-commands, metadata |
+| Web REPL | `lib/repl/ui.html` | Self-contained HTML UI: CodeMirror 6, virtual-scroll table, QuestDB-style layout |
+| Web REPL | `lib/repl/protocol.ts` | WebSocket message types (client↔server) |
+| Web REPL | `lib/repl/serialize.ts` | Table → JSON serialization for WebSocket results |
+| Web REPL | `lib/repl/autocomplete.ts` | Server-side SQL autocomplete with fuzzy matching |
+| Web REPL | `lib/repl/formatter.ts` | Cell value extraction (`getCellValue`, `isNumericType`) |
+| Web REPL | `lib/repl/history.ts` | Persistent query history (~/.teidedb_history) |
+| Web REPL | `lib/repl/theme.ts` | Shared color palette constants |
 | Tests | `test/*.test.ts` | Vitest: smoke, table, expr, e2e, io, low-level, query-extended, table-builder, graph |
 | Tests | `test/sql/*.test.ts` | SQL engine tests: select, join, dml, pgq, vector |
+| Tests | `test/repl/*.test.ts` | REPL tests: theme, history, formatter, protocol, serialize, autocomplete |
 | Fixtures | `test/fixtures/` | CSV test data (`small.csv`, `sales.csv`, `customers.csv`, `orders.csv`, `nodes.csv`, `edges.csv`, `trades.csv`, `quotes.csv`) |
+| Config | `vitest.config.ts` | Test config: pool=forks, maxForks=4 (required for native addon) |
 
 ## Conventions
 
@@ -143,3 +153,6 @@ These classes own their `td_t*` pointers and follow the same `td_retain()`/`td_r
 - **Addon path**: Loaded at runtime from `build/Release/teidedb_addon.node` (relative to `dist/`).
 - **SQL parsing**: Two-stage: `pgq-parser.ts` intercepts non-standard SQL (graph DDL, vector index DDL, GRAPH_TABLE) via regex before `node-sql-parser` handles standard SQL. New non-standard SQL extensions should follow this pre-parser pattern.
 - **Runtime dependency**: `node-sql-parser` for SQL parsing in the SQL engine layer.
+- **Web REPL**: `lib/repl/ui.html` is a self-contained HTML page (CSS + JS inlined, CDN imports for CodeMirror 6 and Font Awesome 6). The `build:ts` script copies it to `dist/repl/ui.html`. Server injects version via `__VERSION__` placeholder replacement (`replaceAll`). Uses teidelum color theme (#0e1b24 navy palette).
+- **Test runner**: Must use `pool: 'forks'` in vitest (configured in `vitest.config.ts`) — worker threads cause native addon heap corruption. Max 4 forks to avoid CPU saturation.
+- **Runtime dependency**: `ws` for WebSocket server in the web REPL layer.
