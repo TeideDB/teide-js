@@ -4,6 +4,9 @@
   "description": "Zero-copy Node.js bindings for the Teide columnar dataframe engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "teide": "bin/teide.js"
+  },
   "scripts": {
     "sync-vendor": "bash scripts/sync-vendor.sh",
     "install": "npm run sync-vendor && cmake-js compile --release",
@@ -13,9 +16,11 @@
     "build": "npm run build:native && npm run build:ts",
     "prepublishOnly": "npm run sync-vendor && npm run build:ts",
     "test": "vitest run",
+    "repl": "node dist/repl/index.js",
     "clean": "cmake-js clean && rm -rf dist vendor/teide"
   },
   "files": [
+    "bin/",
     "dist/",
     "src/",
     "scripts/",

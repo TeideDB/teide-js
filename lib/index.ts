@@ -14,3 +14,4 @@ export { Vector } from './vector';
 export { Atom } from './atom';
 export { List } from './list';
 export { Selection } from './selection';
+export { startRepl } from './repl/index';
