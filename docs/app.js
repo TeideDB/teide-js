@@ -131,9 +131,9 @@
     [
       { re: /\/\/[^\n]*/g, cls: 'cm' },
       { re: /\/\*[\s\S]*?\*\//g, cls: 'cm' },
+      { re: /`(?:[^`\\]|\\.)*`/g, cls: 'str' },
       { re: /"(?:[^"\\]|\\.)*"/g, cls: 'str' },
-      { re: /'(?:[^'\\]|\\.)*'/g, cls: 'str' },
-      { re: /`(?:[^`\\]|\\.)*`/g, cls: 'str' }
+      { re: /'(?:[^'\\]|\\.)*'/g, cls: 'str' }
     ],
     [
       { re: new RegExp('\\b(' + JS_TYPES.join('|') + ')\\b', 'g'), tpl: '<span class="ty">$1</span>' },
