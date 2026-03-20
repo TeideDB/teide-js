@@ -76,13 +76,42 @@ body {
     color: var(--type-dim);
     font-weight: 400;
 }
-.topbar-conn {
+.topbar-actions {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
-    color: var(--type-dim);
 }
+.topbar-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    transition: color 0.1s, border-color 0.1s;
+}
+.topbar-btn:hover { color: var(--fg); border-color: var(--primary-light); }
+.topbar-btn i { font-size: 12px; }
+.topbar-sep {
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+    margin: 0 4px;
+}
+.topbar-kbd {
+    color: var(--type-dim);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: color 0.1s;
+}
+.topbar-kbd:hover { color: var(--fg); }
 .conn-dot {
     width: 8px;
     height: 8px;
@@ -155,6 +184,58 @@ body {
     min-height: 0;
     overflow: hidden;
 }
+
+/* panel toolbar (filter + actions) */
+.panel-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px 4px;
+    flex-shrink: 0;
+}
+.panel-filter-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.panel-filter-icon {
+    position: absolute;
+    left: 7px;
+    font-size: 10px;
+    color: var(--type-dim);
+    pointer-events: none;
+}
+.panel-filter {
+    width: 100%;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 4px 8px 4px 24px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.panel-filter:focus { border-color: var(--primary-light); }
+.panel-filter::placeholder { color: var(--type-dim); }
+.panel-action-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--type-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 11px;
+    transition: color 0.1s, border-color 0.1s;
+}
+.panel-action-btn:hover { color: var(--fg); border-color: var(--primary-light); }
 .panel-section + .panel-section {
     border-top: 1px solid var(--border);
     flex: 0 0 auto;
@@ -641,9 +722,11 @@ body {
         <span class="topbar-name">TeideDB</span>
         <span class="topbar-version">v__VERSION__</span>
     </div>
-    <div class="topbar-conn">
-        <span class="conn-dot disconnected" id="conn-dot"></span>
-        <span id="conn-label">Connecting...</span>
+    <div class="topbar-actions">
+        <button class="topbar-btn" id="btn-help" title="Show help (.help)"><i class="fa-regular fa-circle-question"></i> Help</button>
+        <button class="topbar-btn" id="btn-clear" title="Clear results"><i class="fa-solid fa-eraser"></i> Clear</button>
+        <span class="topbar-sep"></span>
+        <span class="topbar-kbd" title="Keyboard shortcuts"><i class="fa-regular fa-keyboard"></i></span>
     </div>
 </div>
 
@@ -666,6 +749,13 @@ body {
         <div class="sidebar-panel" id="sidebar-panel">
             <!-- Tables section -->
             <div class="panel-section" id="panel-tables">
+                <div class="panel-toolbar">
+                    <div class="panel-filter-wrap">
+                        <i class="fa-solid fa-magnifying-glass panel-filter-icon"></i>
+                        <input type="text" class="panel-filter" id="table-filter" placeholder="Filter..." />
+                    </div>
+                    <button class="panel-action-btn" id="btn-refresh-tables" title="Refresh tables"><i class="fa-solid fa-arrows-rotate"></i></button>
+                </div>
                 <div class="panel-header" id="tables-header">Tables (0)</div>
                 <ul class="tree-list" id="table-list"></ul>
             </div>
@@ -767,8 +857,6 @@ const BUFFER_ROWS = 20;
 let pendingComplete = null;
 
 // ─── DOM refs ────────────────────────────────
-const connDot         = document.getElementById('conn-dot');
-const connLabel       = document.getElementById('conn-label');
 const footerConnDot   = document.getElementById('footer-conn-dot');
 const footerConnLabel = document.getElementById('footer-conn-label');
 const tableList       = document.getElementById('table-list');
@@ -815,6 +903,33 @@ exportBtn.addEventListener('click', (e) => {
     exportDropdown.classList.toggle('open');
 });
 document.addEventListener('click', () => exportDropdown.classList.remove('open'));
+
+// ─── Top bar buttons ────────────────────────
+document.getElementById('btn-help').addEventListener('click', () => {
+    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: '.help' } });
+    executeQuery();
+});
+document.getElementById('btn-clear').addEventListener('click', () => {
+    clearResults();
+    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: '' } });
+    editor.focus();
+});
+
+// ─── Table filter ───────────────────────────
+const tableFilter = document.getElementById('table-filter');
+tableFilter.addEventListener('input', () => {
+    const q = tableFilter.value.toLowerCase();
+    const items = tableList.querySelectorAll('.tree-item');
+    items.forEach(li => {
+        const name = li.querySelector('.tree-name')?.textContent?.toLowerCase() || '';
+        li.style.display = name.includes(q) ? '' : 'none';
+    });
+});
+
+// ─── Refresh tables ─────────────────────────
+document.getElementById('btn-refresh-tables').addEventListener('click', () => {
+    wsSend({ type: 'meta' });
+});
 
 // ─── Splitter drag ───────────────────────────
 const splitter      = document.getElementById('splitter');
@@ -956,16 +1071,12 @@ function connect() {
     ws = new WebSocket(`${proto}//${location.host}`);
 
     ws.onopen = () => {
-        connDot.className = 'conn-dot connected';
-        connLabel.textContent = 'Connected';
         footerConnDot.className = 'conn-dot connected';
         footerConnLabel.textContent = 'Connected';
         setLog('ok', 'Connected', '');
     };
 
     ws.onclose = () => {
-        connDot.className = 'conn-dot disconnected';
-        connLabel.textContent = 'Disconnected';
         footerConnDot.className = 'conn-dot disconnected';
         footerConnLabel.textContent = 'Disconnected';
         setLog('error', 'Connection lost. Reconnecting...', '');
