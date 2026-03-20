@@ -309,13 +309,14 @@ body {
 </div>
 
 <script type="module">
-import { EditorView, keymap, placeholder } from 'https://esm.sh/@codemirror/view@6?bundle';
-import { EditorState } from 'https://esm.sh/@codemirror/state@6?bundle';
-import { sql } from 'https://esm.sh/@codemirror/lang-sql@6?bundle';
-import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6?bundle';
-import { defaultKeymap, history, historyKeymap } from 'https://esm.sh/@codemirror/commands@6?bundle';
-import { autocompletion } from 'https://esm.sh/@codemirror/autocomplete@6?bundle';
-import { basicSetup } from 'https://esm.sh/codemirror@6?bundle';
+import { EditorView, keymap, placeholder, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightActiveLine } from 'https://esm.sh/@codemirror/view@6';
+import { EditorState } from 'https://esm.sh/@codemirror/state@6';
+import { sql } from 'https://esm.sh/@codemirror/lang-sql@6';
+import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from 'https://esm.sh/@codemirror/commands@6';
+import { autocompletion, closeBrackets, closeBracketsKeymap } from 'https://esm.sh/@codemirror/autocomplete@6';
+import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap, indentOnInput } from 'https://esm.sh/@codemirror/language@6';
+import { highlightSelectionMatches, searchKeymap } from 'https://esm.sh/@codemirror/search@6';
 
 // ─── State ───────────────────────────────────
 let ws = null;
@@ -377,7 +378,30 @@ const editor = new EditorView({
     state: EditorState.create({
         doc: '',
         extensions: [
-            basicSetup,
+            lineNumbers(),
+            highlightActiveLineGutter(),
+            highlightSpecialChars(),
+            history(),
+            foldGutter(),
+            drawSelection(),
+            dropCursor(),
+            EditorState.allowMultipleSelections.of(true),
+            indentOnInput(),
+            syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+            bracketMatching(),
+            closeBrackets(),
+            rectangularSelection(),
+            crosshairCursor(),
+            highlightActiveLine(),
+            highlightSelectionMatches(),
+            keymap.of([
+                ...closeBracketsKeymap,
+                ...defaultKeymap,
+                ...searchKeymap,
+                ...historyKeymap,
+                ...foldKeymap,
+                indentWithTab,
+            ]),
             sql(),
             oneDark,
             runKeymap,
