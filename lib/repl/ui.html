@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TeideDB</title>
+<title>TeideDB Web Console</title>
 <style>
 :root {
     --bg: #1e1e2e;
@@ -20,6 +20,9 @@
     --success: #a6e3a1;
     --selection: #313244;
     --accent: #89b4fa;
+    --run-btn-bg: #a6e3a1;
+    --rail-width: 44px;
+    --panel-width: 224px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -32,159 +35,491 @@ body {
     flex-direction: column;
     overflow: hidden;
 }
-/* Header */
-.header {
+
+/* ── Top bar ─────────────────────────────────────────────── */
+.topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 16px;
+    height: 40px;
+    padding: 0 16px 0 12px;
     border-bottom: 1px solid var(--border);
     background: var(--bg-surface);
     flex-shrink: 0;
+    z-index: 10;
 }
-.header h1 { font-size: 14px; font-weight: 600; color: var(--header); }
-.header h1 span { color: var(--type-dim); font-weight: 400; margin-left: 8px; font-size: 12px; }
-.header-actions { display: flex; gap: 8px; }
-.header-actions button {
-    background: var(--selection);
-    border: 1px solid var(--border);
-    color: var(--fg);
-    padding: 4px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: inherit;
+.topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.topbar-icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+.topbar-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+}
+.topbar-version {
+    font-size: 11px;
+    color: var(--type-dim);
+    font-weight: 400;
+}
+.topbar-conn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 12px;
+    color: var(--type-dim);
 }
-.header-actions button:hover { background: var(--border); }
+.conn-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+.conn-dot.connected    { background: var(--success); box-shadow: 0 0 4px var(--success); }
+.conn-dot.disconnected { background: var(--error); }
 
-/* Main layout */
+/* ── Main layout ─────────────────────────────────────────── */
 .main {
     display: flex;
     flex: 1;
     min-height: 0;
 }
+
+/* ── Left sidebar (icon rail + expandable panel) ─────────── */
 .sidebar {
-    width: 220px;
+    display: flex;
+    flex-shrink: 0;
     border-right: 1px solid var(--border);
     background: var(--bg-surface);
+}
+
+/* icon rail */
+.sidebar-rail {
+    width: var(--rail-width);
     display: flex;
     flex-direction: column;
+    align-items: center;
+    padding-top: 6px;
+    gap: 2px;
+    border-right: 1px solid var(--border);
     flex-shrink: 0;
-    overflow: hidden;
 }
-.sidebar-section {
-    border-bottom: 1px solid var(--border);
+.rail-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    background: none;
+    color: var(--type-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.1s, color 0.1s;
+}
+.rail-btn:hover  { background: var(--selection); color: var(--fg); }
+.rail-btn.active { background: var(--selection); color: var(--accent); }
+.rail-btn svg { width: 17px; height: 17px; pointer-events: none; }
+
+/* expandable panel */
+.sidebar-panel {
+    width: var(--panel-width);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.sidebar-panel.collapsed { width: 0; }
+
+.panel-section {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
+    overflow: hidden;
 }
-.sidebar-section h2 {
+.panel-section + .panel-section {
+    border-top: 1px solid var(--border);
+    flex: 0 0 auto;
+    max-height: 40%;
+}
+
+.panel-header {
     font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.6px;
     color: var(--type-dim);
-    padding: 8px 12px 4px;
+    padding: 8px 12px 6px;
     flex-shrink: 0;
+    white-space: nowrap;
 }
-.sidebar-list {
+
+/* table tree */
+.tree-list {
     list-style: none;
     overflow-y: auto;
     flex: 1;
     min-height: 0;
 }
-.sidebar-list li {
-    padding: 4px 12px;
+.tree-item {
+    user-select: none;
+}
+.tree-item-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.tree-item-row:hover { background: var(--selection); }
+.tree-item-row.expanded { background: rgba(49,50,68,0.5); }
+.tree-chevron {
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+    color: var(--type-dim);
+    transition: transform 0.15s;
+}
+.tree-chevron.open { transform: rotate(90deg); }
+.tree-tbl-icon {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    color: var(--accent);
+    opacity: 0.7;
+}
+.tree-name {
+    font-size: 12px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tree-meta {
+    font-size: 10px;
+    color: var(--type-dim);
+    flex-shrink: 0;
+}
+
+/* column sub-list */
+.tree-cols {
+    list-style: none;
+    display: none;
+    background: rgba(24,24,37,0.6);
+}
+.tree-cols.open { display: block; }
+.tree-col-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px 2px 30px;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.tree-col-name { color: var(--fg); flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.tree-col-type { color: var(--type-dim); flex-shrink: 0; }
+
+/* history list */
+.hist-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+.hist-item {
+    padding: 4px 10px;
+    font-size: 11px;
     cursor: pointer;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 12px;
+    color: var(--type-dim);
+    border-bottom: 1px solid rgba(69,71,90,0.25);
 }
-.sidebar-list li:hover { background: var(--selection); }
-.sidebar-list li .dim { color: var(--type-dim); margin-left: 6px; }
+.hist-item:hover { background: var(--selection); color: var(--fg); }
 
-/* Content area */
+/* ── Content area ────────────────────────────────────────── */
 .content {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 0;
+    overflow: hidden;
 }
 
-/* Editor */
-.editor-pane {
-    border-bottom: 1px solid var(--border);
+/* editor tab bar */
+.tab-bar {
     display: flex;
-    flex-direction: column;
+    align-items: stretch;
+    height: 34px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-surface);
     flex-shrink: 0;
+    padding-left: 2px;
 }
-.editor-toolbar {
+.tab {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    padding: 4px 8px;
-    gap: 8px;
-    background: var(--bg-surface);
-    border-bottom: 1px solid var(--border);
-}
-.editor-toolbar .hint { color: var(--type-dim); font-size: 11px; }
-.run-btn {
-    background: var(--accent);
-    color: var(--bg);
-    border: none;
-    padding: 4px 14px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: inherit;
+    padding: 0 14px;
     font-size: 12px;
-    font-weight: 600;
+    cursor: pointer;
+    border-right: 1px solid var(--border);
+    color: var(--type-dim);
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
 }
-.run-btn:hover { opacity: 0.9; }
-#editor-container { height: 160px; overflow: hidden; }
+.tab.active {
+    color: var(--fg);
+    background: var(--bg);
+    border-bottom-color: var(--accent);
+}
+.tab-add {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 16px;
+    cursor: pointer;
+    color: var(--type-dim);
+    background: transparent;
+    border: none;
+    font-family: inherit;
+    line-height: 1;
+}
+.tab-add:hover { color: var(--fg); }
+
+/* editor section */
+.editor-section {
+    display: flex;
+    flex-direction: column;
+    /* height set by JS splitter; fallback */
+    height: 55%;
+    flex-shrink: 0;
+    min-height: 80px;
+    position: relative;
+}
+
+#editor-container {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
 #editor-container .cm-editor { height: 100%; }
 #editor-container .cm-scroller { overflow: auto; }
 
-/* Result pane */
-.result-pane {
+/* run button overlay (bottom-right of editor) */
+.run-btn-wrap {
+    position: absolute;
+    bottom: 8px;
+    right: 10px;
+    z-index: 5;
+}
+.run-btn {
+    background: var(--run-btn-bg);
+    color: #11111b;
+    border: none;
+    padding: 0;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow: hidden;
+    height: 30px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    transition: opacity 0.1s;
+}
+.run-btn:hover { opacity: 0.88; }
+.run-btn-label {
+    padding: 0 10px;
+}
+.run-btn-kbd {
+    padding: 0 8px;
+    background: rgba(0,0,0,0.18);
+    font-size: 10px;
+    font-weight: 600;
+    border-left: 1px solid rgba(0,0,0,0.22);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    color: rgba(17,17,27,0.75);
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+
+/* splitter handle */
+.splitter {
+    height: 5px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    cursor: row-resize;
+    flex-shrink: 0;
+    transition: background 0.1s;
+    position: relative;
+}
+.splitter::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border);
+}
+.splitter:hover { background: var(--selection); }
+.splitter:hover::after { background: var(--accent); }
+
+/* results section */
+.results-section {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
 }
-.status-bar {
+
+/* log bar */
+.log-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 12px;
+    padding: 0 12px;
+    height: 28px;
+    background: #11111b;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    gap: 16px;
+    overflow: hidden;
+}
+.log-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.log-ts {
+    color: var(--type-dim);
+}
+.log-check {
+    color: var(--success);
+    font-size: 12px;
+}
+.log-check.error { color: var(--error); }
+.log-check.waiting { color: var(--type-dim); }
+.log-msg {
+    color: var(--fg);
+}
+.log-bar-right {
+    font-size: 11px;
+    color: var(--type-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    flex: 1;
+    min-width: 0;
+}
+.log-stat {
+    margin-left: 10px;
+}
+
+/* result toolbar */
+.result-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    height: 32px;
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border);
-    font-size: 12px;
     flex-shrink: 0;
-    min-height: 28px;
 }
-.status-bar .info { color: var(--type-dim); }
-.status-bar .error-msg { color: var(--error); }
-.status-bar .success-msg { color: var(--success); }
-.export-actions { display: flex; gap: 6px; }
-.export-actions button {
-    background: none;
-    border: 1px solid var(--border);
+.result-row-count {
+    font-size: 12px;
     color: var(--type-dim);
-    padding: 2px 8px;
-    border-radius: 3px;
+}
+.result-row-count strong {
+    color: var(--fg);
+    font-weight: 600;
+}
+.export-wrap {
+    position: relative;
+}
+.export-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--selection);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    padding: 3px 10px;
+    border-radius: 4px;
     cursor: pointer;
     font-family: inherit;
     font-size: 11px;
+    font-weight: 500;
+    transition: border-color 0.1s;
 }
-.export-actions button:hover { color: var(--fg); border-color: var(--fg); }
+.export-btn:hover { border-color: var(--accent); }
+.export-caret {
+    font-size: 9px;
+    color: var(--type-dim);
+}
+.export-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 3px);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    min-width: 130px;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.export-dropdown.open { display: block; }
+.export-dropdown button {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 12px;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.export-dropdown button:hover { background: var(--selection); }
 
-/* Virtual scroll table */
-.table-container {
+/* table container */
+.table-outer {
     flex: 1;
-    overflow: hidden;
-    position: relative;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
+    overflow: hidden;
 }
 .table-header {
     display: flex;
@@ -194,20 +529,20 @@ body {
     overflow: hidden;
 }
 .table-header .th {
-    padding: 8px 12px 6px;
+    padding: 6px 12px 4px;
     color: var(--header);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     flex-shrink: 0;
-    border-right: 1px dashed var(--border);
+    border-right: 1px dashed rgba(69,71,90,0.5);
     display: flex;
     flex-direction: column;
     gap: 1px;
 }
 .table-header .th:last-child { border-right: none; }
-.table-header .th .col-name { font-weight: 600; font-size: 13px; }
-.table-header .th .dtype { color: var(--type-dim); font-weight: 400; font-size: 11px; }
+.table-header .th .col-name { font-weight: 700; font-size: 12px; }
+.table-header .th .dtype { color: var(--type-dim); font-weight: 400; font-size: 10px; }
 .scroll-viewport {
     overflow-y: auto;
     overflow-x: hidden;
@@ -220,9 +555,9 @@ body {
     position: absolute;
     width: 100%;
     left: 0;
-    border-bottom: 1px solid #1a1a2e;
+    border-bottom: 1px solid rgba(26,26,46,0.7);
 }
-.table-row:nth-child(odd) { background: rgba(49, 50, 68, 0.15); }
+.table-row:nth-child(odd) { background: rgba(49,50,68,0.10); }
 .table-row:hover { background: var(--selection); }
 .table-row .td {
     padding: 4px 12px;
@@ -232,89 +567,186 @@ body {
     flex-shrink: 0;
     height: 32px;
     line-height: 24px;
-    border-right: 1px dashed rgba(69, 71, 90, 0.4);
+    border-right: 1px dashed rgba(69,71,90,0.28);
 }
 .table-row .td:last-child { border-right: none; }
-.td.numeric { text-align: right; color: var(--number); }
+.td.numeric  { text-align: right; color: var(--number); }
 .td.null-val { color: var(--null); font-style: italic; }
 
-/* Print output */
+/* print output */
 .print-output {
     padding: 12px 16px;
     white-space: pre-wrap;
     font-size: 13px;
     overflow-y: auto;
     flex: 1;
+    line-height: 1.6;
 }
 
-/* Empty state */
+/* empty state */
 .empty-state {
     flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 8px;
     color: var(--type-dim);
-    font-size: 14px;
+    font-size: 13px;
+}
+.empty-state-icon {
+    font-size: 28px;
+    opacity: 0.3;
 }
 
-/* Connection indicator */
-.conn-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 6px;
+/* footer */
+.footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 0 16px;
+    height: 26px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-surface);
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--type-dim);
 }
-.conn-dot.connected { background: var(--success); }
-.conn-dot.disconnected { background: var(--error); }
+.footer-conn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
 </style>
 </head>
 <body>
 
-<div class="header">
-    <h1>TeideDB<span>v__VERSION__</span></h1>
-    <div class="header-actions">
-        <span><span class="conn-dot disconnected" id="conn-dot"></span><span id="conn-label">connecting...</span></span>
+<!-- Top bar -->
+<div class="topbar">
+    <div class="topbar-brand">
+        <svg class="topbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M3 5v5c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+            <path d="M3 10v5c0 1.66 4.03 3 9 3s9-1.34 9-3v-5"/>
+            <path d="M3 15v4c0 1.66 4.03 3 9 3s9-1.34 9-3v-4"/>
+        </svg>
+        <span class="topbar-name">TeideDB</span>
+        <span class="topbar-version">v__VERSION__</span>
+    </div>
+    <div class="topbar-conn">
+        <span class="conn-dot disconnected" id="conn-dot"></span>
+        <span id="conn-label">Connecting...</span>
     </div>
 </div>
 
+<!-- Main -->
 <div class="main">
+
+    <!-- Left sidebar -->
     <div class="sidebar">
-        <div class="sidebar-section">
-            <h2>Tables</h2>
-            <ul class="sidebar-list" id="table-list"></ul>
+        <!-- Icon rail -->
+        <div class="sidebar-rail">
+            <button class="rail-btn active" id="rail-tables" title="Tables">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="9" x2="9" y2="21"/>
+                </svg>
+            </button>
+            <button class="rail-btn" id="rail-history" title="History">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/>
+                    <polyline points="12 7 12 12 15 15"/>
+                </svg>
+            </button>
         </div>
-        <div class="sidebar-section">
-            <h2>History</h2>
-            <ul class="sidebar-list" id="history-list"></ul>
+
+        <!-- Expandable panel -->
+        <div class="sidebar-panel" id="sidebar-panel">
+            <!-- Tables section -->
+            <div class="panel-section" id="panel-tables">
+                <div class="panel-header" id="tables-header">Tables (0)</div>
+                <ul class="tree-list" id="table-list"></ul>
+            </div>
+            <!-- History section -->
+            <div class="panel-section" id="panel-history" style="display:none">
+                <div class="panel-header">History</div>
+                <ul class="hist-list" id="history-list"></ul>
+            </div>
         </div>
     </div>
 
+    <!-- Content area -->
     <div class="content">
-        <div class="editor-pane">
+        <!-- Tab bar -->
+        <div class="tab-bar">
+            <div class="tab active">SQL 1</div>
+            <button class="tab-add" title="New tab">+</button>
+        </div>
+
+        <!-- Editor section (resizable) -->
+        <div class="editor-section" id="editor-section">
             <div id="editor-container"></div>
-            <div class="editor-toolbar">
-                <span class="hint">Ctrl+Enter to run</span>
-                <button class="run-btn" id="run-btn">Run &#9654;</button>
+            <div class="run-btn-wrap">
+                <button class="run-btn" id="run-btn">
+                    <span class="run-btn-label">Run query</span>
+                    <span class="run-btn-kbd">Ctrl &#9166;</span>
+                </button>
             </div>
         </div>
 
-        <div class="result-pane">
-            <div class="status-bar" id="status-bar">
-                <span class="info" id="status-text">Ready</span>
-                <div class="export-actions" id="export-actions" style="display:none">
-                    <button id="export-csv">CSV</button>
-                    <button id="export-json">JSON</button>
-                    <button id="export-clip">Copy</button>
+        <!-- Splitter -->
+        <div class="splitter" id="splitter"></div>
+
+        <!-- Results section -->
+        <div class="results-section" id="results-section">
+
+            <!-- Log bar -->
+            <div class="log-bar" id="log-bar">
+                <div class="log-bar-left">
+                    <span class="log-ts" id="log-ts">--:--:--</span>
+                    <span class="log-check waiting" id="log-icon">&#9711;</span>
+                    <span class="log-msg" id="log-msg">Ready</span>
+                </div>
+                <div class="log-bar-right" id="log-right"></div>
+            </div>
+
+            <!-- Result toolbar -->
+            <div class="result-toolbar" id="result-toolbar" style="display:none">
+                <div class="result-row-count" id="result-row-count"></div>
+                <div class="export-wrap">
+                    <button class="export-btn" id="export-btn">
+                        Download CSV <span class="export-caret">&#9660;</span>
+                    </button>
+                    <div class="export-dropdown" id="export-dropdown">
+                        <button id="export-csv">Download CSV</button>
+                        <button id="export-json">Download JSON</button>
+                        <button id="export-clip">Copy as TSV</button>
+                    </div>
                 </div>
             </div>
-            <div id="result-area">
+
+            <!-- Result / empty area -->
+            <div class="table-outer" id="result-area">
                 <div class="empty-state" id="empty-state">
+                    <span class="empty-state-icon">&#9783;</span>
                     Type a SQL query and press Ctrl+Enter
                 </div>
             </div>
+
         </div>
     </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+    <div class="footer-conn">
+        <span class="conn-dot disconnected" id="footer-conn-dot"></span>
+        <span id="footer-conn-label">Disconnected</span>
+    </div>
+    <span id="footer-version">v__VERSION__</span>
 </div>
 
 <script type="module">
@@ -336,15 +768,108 @@ const BUFFER_ROWS = 20;
 let pendingComplete = null;
 
 // ─── DOM refs ────────────────────────────────
-const connDot = document.getElementById('conn-dot');
-const connLabel = document.getElementById('conn-label');
-const tableList = document.getElementById('table-list');
-const historyList = document.getElementById('history-list');
-const statusText = document.getElementById('status-text');
-const exportActions = document.getElementById('export-actions');
-const resultArea = document.getElementById('result-area');
-const emptyState = document.getElementById('empty-state');
-const runBtn = document.getElementById('run-btn');
+const connDot         = document.getElementById('conn-dot');
+const connLabel       = document.getElementById('conn-label');
+const footerConnDot   = document.getElementById('footer-conn-dot');
+const footerConnLabel = document.getElementById('footer-conn-label');
+const tableList       = document.getElementById('table-list');
+const tablesHeader    = document.getElementById('tables-header');
+const historyList     = document.getElementById('history-list');
+const resultArea      = document.getElementById('result-area');
+const emptyState      = document.getElementById('empty-state');
+const runBtn          = document.getElementById('run-btn');
+const logTs           = document.getElementById('log-ts');
+const logIcon         = document.getElementById('log-icon');
+const logMsg          = document.getElementById('log-msg');
+const logRight        = document.getElementById('log-right');
+const resultToolbar   = document.getElementById('result-toolbar');
+const resultRowCount  = document.getElementById('result-row-count');
+
+// ─── Sidebar panel toggle ────────────────────
+const railTables  = document.getElementById('rail-tables');
+const railHistory = document.getElementById('rail-history');
+const panelTables = document.getElementById('panel-tables');
+const panelHistory= document.getElementById('panel-history');
+
+railTables.addEventListener('click', () => {
+    const already = railTables.classList.contains('active');
+    railTables.classList.toggle('active', !already);
+    railHistory.classList.remove('active');
+    panelTables.style.display  = already ? 'none' : 'flex';
+    panelHistory.style.display = 'none';
+});
+
+railHistory.addEventListener('click', () => {
+    const already = railHistory.classList.contains('active');
+    railHistory.classList.toggle('active', !already);
+    railTables.classList.remove('active');
+    panelHistory.style.display = already ? 'none' : 'flex';
+    panelTables.style.display  = 'none';
+});
+
+// ─── Export dropdown ─────────────────────────
+const exportBtn      = document.getElementById('export-btn');
+const exportDropdown = document.getElementById('export-dropdown');
+
+exportBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    exportDropdown.classList.toggle('open');
+});
+document.addEventListener('click', () => exportDropdown.classList.remove('open'));
+
+// ─── Splitter drag ───────────────────────────
+const splitter      = document.getElementById('splitter');
+const editorSection = document.getElementById('editor-section');
+let dragActive = false;
+let dragStartY = 0;
+let dragStartH = 0;
+
+splitter.addEventListener('mousedown', (e) => {
+    dragActive = true;
+    dragStartY = e.clientY;
+    dragStartH = editorSection.getBoundingClientRect().height;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+});
+document.addEventListener('mousemove', (e) => {
+    if (!dragActive) return;
+    const delta = e.clientY - dragStartY;
+    const newH = Math.max(80, dragStartH + delta);
+    editorSection.style.height = newH + 'px';
+    editorSection.style.flex = 'none';
+});
+document.addEventListener('mouseup', () => {
+    if (dragActive) {
+        dragActive = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    }
+});
+
+// ─── Log bar helpers ─────────────────────────
+function nowTs() {
+    return new Date().toTimeString().slice(0, 8);
+}
+
+function setLog(state, message, rightText) {
+    logTs.textContent = nowTs();
+    logMsg.textContent = message;
+    logRight.textContent = rightText || '';
+    if (state === 'ok') {
+        logIcon.className = 'log-check';
+        logIcon.textContent = '\u2713';
+    } else if (state === 'error') {
+        logIcon.className = 'log-check error';
+        logIcon.textContent = '\u2717';
+    } else if (state === 'running') {
+        logIcon.className = 'log-check waiting';
+        logIcon.textContent = '\u25cb';
+    } else {
+        logIcon.className = 'log-check waiting';
+        logIcon.textContent = '\u25cb';
+    }
+}
 
 // ─── CodeMirror ──────────────────────────────
 const sqlCompletion = autocompletion({
@@ -433,12 +958,18 @@ function connect() {
 
     ws.onopen = () => {
         connDot.className = 'conn-dot connected';
-        connLabel.textContent = 'connected';
+        connLabel.textContent = 'Connected';
+        footerConnDot.className = 'conn-dot connected';
+        footerConnLabel.textContent = 'Connected';
+        setLog('ok', 'Connected', '');
     };
 
     ws.onclose = () => {
         connDot.className = 'conn-dot disconnected';
-        connLabel.textContent = 'disconnected';
+        connLabel.textContent = 'Disconnected';
+        footerConnDot.className = 'conn-dot disconnected';
+        footerConnLabel.textContent = 'Disconnected';
+        setLog('error', 'Connection lost. Reconnecting...', '');
         setTimeout(connect, 2000);
     };
 
@@ -484,13 +1015,15 @@ function handleServerMessage(msg) {
 
 // ─── Query execution ─────────────────────────
 let queryId = 0;
+let lastSql = '';
+
 function executeQuery() {
     const sqlText = editor.state.doc.toString().trim();
     if (!sqlText) return;
+    lastSql = sqlText;
     const id = String(++queryId);
-    statusText.className = 'info';
-    statusText.textContent = 'Running...';
-    exportActions.style.display = 'none';
+    setLog('running', 'Running...', truncate(sqlText, 80));
+    resultToolbar.style.display = 'none';
     wsSend({ type: 'query', id, sql: sqlText });
 }
 
@@ -500,9 +1033,17 @@ runBtn.addEventListener('click', executeQuery);
 function showResult(msg) {
     currentResult = msg;
     const elapsed = msg.elapsed.toFixed(2);
-    statusText.className = 'info';
-    statusText.textContent = `${msg.nrows} rows × ${msg.columns.length} columns · ${elapsed}ms`;
-    exportActions.style.display = 'flex';
+    const rowsLabel = `${msg.nrows} row${msg.nrows !== 1 ? 's' : ''}`;
+
+    // Log bar
+    setLog('ok',
+        `${rowsLabel} in ${elapsed}ms`,
+        `Execute: ${(msg.elapsed * 1000).toFixed(0)}\u03bcs  \u00b7  Total: ${elapsed}ms`
+    );
+
+    // Result toolbar
+    resultToolbar.style.display = 'flex';
+    resultRowCount.innerHTML = `<strong>${msg.nrows}</strong> row${msg.nrows !== 1 ? 's' : ''}`;
 
     // Calculate column widths
     colWidths = msg.columns.map((col, i) => {
@@ -612,16 +1153,21 @@ function isNumericDtype(dtype) {
 }
 
 function showError(message) {
-    statusText.className = 'error-msg';
-    statusText.textContent = message;
-    exportActions.style.display = 'none';
+    setLog('error', message, truncate(lastSql, 80));
+    resultToolbar.style.display = 'none';
+    // Clear table area but leave empty state visible
+    resultArea.innerHTML = '';
+    resultArea.style.display = '';
+    const es = document.createElement('div');
+    es.className = 'empty-state';
+    es.innerHTML = `<span style="color:var(--error);font-size:13px">\u26a0 ${esc(message)}</span>`;
+    resultArea.appendChild(es);
 }
 
 function showOk(message, elapsed) {
-    const elapsedStr = elapsed > 0 ? ` · ${elapsed.toFixed(2)}ms` : '';
-    statusText.className = 'success-msg';
-    statusText.textContent = message + elapsedStr;
-    exportActions.style.display = 'none';
+    const elapsedStr = elapsed > 0 ? `  \u00b7  ${elapsed.toFixed(2)}ms` : '';
+    setLog('ok', message, elapsed > 0 ? `Total: ${elapsed.toFixed(2)}ms` : '');
+    resultToolbar.style.display = 'none';
     // Refresh meta after DDL
     wsSend({ type: 'meta' });
 }
@@ -633,47 +1179,114 @@ function showPrint(text) {
     pre.className = 'print-output';
     pre.textContent = text;
     resultArea.appendChild(pre);
-    statusText.className = 'info';
-    statusText.textContent = '';
-    exportActions.style.display = 'none';
+    setLog('ok', 'Output', '');
+    resultToolbar.style.display = 'none';
 }
 
 function clearResults() {
     currentResult = null;
     resultArea.innerHTML = '';
     resultArea.style.display = '';
-    if (!emptyState.parentNode) {
-        const es = document.createElement('div');
-        es.className = 'empty-state';
-        es.textContent = 'Type a SQL query and press Ctrl+Enter';
-        resultArea.appendChild(es);
-    }
-    statusText.className = 'info';
-    statusText.textContent = 'Ready';
-    exportActions.style.display = 'none';
+    const es = document.createElement('div');
+    es.className = 'empty-state';
+    es.innerHTML = '<span class="empty-state-icon">&#9783;</span>Type a SQL query and press Ctrl+Enter';
+    resultArea.appendChild(es);
+    setLog('idle', 'Ready', '');
+    resultToolbar.style.display = 'none';
 }
 
-// ─── Sidebar ─────────────────────────────────
+// ─── Sidebar: tables tree ─────────────────────
 function updateMeta(msg) {
-    // Tables
+    // Tables tree
     tableList.innerHTML = '';
+    tablesHeader.textContent = `Tables (${msg.tables.length})`;
+
     for (const t of msg.tables) {
         const li = document.createElement('li');
-        li.innerHTML = `${esc(t.name)}<span class="dim">${t.nrows}×${t.ncols}</span>`;
-        li.addEventListener('click', () => {
-            const doc = editor.state.doc.toString();
+        li.className = 'tree-item';
+
+        const rowEl = document.createElement('div');
+        rowEl.className = 'tree-item-row';
+
+        const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        chevron.setAttribute('viewBox', '0 0 24 24');
+        chevron.setAttribute('fill', 'none');
+        chevron.setAttribute('stroke', 'currentColor');
+        chevron.setAttribute('stroke-width', '2.5');
+        chevron.setAttribute('stroke-linecap', 'round');
+        chevron.setAttribute('stroke-linejoin', 'round');
+        chevron.classList.add('tree-chevron');
+        const chevPath = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        chevPath.setAttribute('points', '9 18 15 12 9 6');
+        chevron.appendChild(chevPath);
+
+        const tblIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        tblIcon.setAttribute('viewBox', '0 0 24 24');
+        tblIcon.setAttribute('fill', 'none');
+        tblIcon.setAttribute('stroke', 'currentColor');
+        tblIcon.setAttribute('stroke-width', '1.8');
+        tblIcon.setAttribute('stroke-linecap', 'round');
+        tblIcon.setAttribute('stroke-linejoin', 'round');
+        tblIcon.classList.add('tree-tbl-icon');
+        const r1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        r1.setAttribute('x', '3'); r1.setAttribute('y', '3'); r1.setAttribute('width', '18'); r1.setAttribute('height', '18'); r1.setAttribute('rx', '2');
+        const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l1.setAttribute('x1', '3'); l1.setAttribute('y1', '9'); l1.setAttribute('x2', '21'); l1.setAttribute('y2', '9');
+        const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l2.setAttribute('x1', '3'); l2.setAttribute('y1', '15'); l2.setAttribute('x2', '21'); l2.setAttribute('y2', '15');
+        tblIcon.appendChild(r1); tblIcon.appendChild(l1); tblIcon.appendChild(l2);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'tree-name';
+        nameSpan.textContent = t.name;
+
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'tree-meta';
+        metaSpan.textContent = t.nrows + 'r';
+
+        rowEl.appendChild(chevron);
+        rowEl.appendChild(tblIcon);
+        rowEl.appendChild(nameSpan);
+        rowEl.appendChild(metaSpan);
+
+        // Columns sub-list (lazy populated on expand)
+        const colsUl = document.createElement('ul');
+        colsUl.className = 'tree-cols';
+
+        // Build column rows if available
+        if (t.columns && t.columns.length) {
+            for (const col of t.columns) {
+                const cli = document.createElement('li');
+                cli.className = 'tree-col-row';
+                cli.innerHTML = `<span class="tree-col-name">${esc(col.name)}</span><span class="tree-col-type">${esc(col.dtype)}</span>`;
+                colsUl.appendChild(cli);
+            }
+        }
+
+        // Click on row: expand/collapse columns; double-click inserts table name
+        rowEl.addEventListener('click', () => {
+            const isOpen = colsUl.classList.toggle('open');
+            chevron.classList.toggle('open', isOpen);
+            rowEl.classList.toggle('expanded', isOpen);
+        });
+        rowEl.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
             const pos = editor.state.selection.main.head;
             editor.dispatch({ changes: { from: pos, insert: t.name } });
             editor.focus();
         });
+
+        li.appendChild(rowEl);
+        li.appendChild(colsUl);
         tableList.appendChild(li);
     }
 
-    // History
+    // History list
     historyList.innerHTML = '';
     const hist = (msg.history || []).slice(-50).reverse();
     for (const h of hist) {
         const li = document.createElement('li');
+        li.className = 'hist-item';
         li.textContent = h.length > 60 ? h.slice(0, 57) + '...' : h;
         li.title = h;
         li.addEventListener('click', () => {
@@ -689,6 +1302,7 @@ function updateMeta(msg) {
 // ─── Export ──────────────────────────────────
 document.getElementById('export-csv').addEventListener('click', () => {
     if (!currentResult) return;
+    exportDropdown.classList.remove('open');
     const lines = [];
     lines.push(currentResult.columns.map(c => csvEscape(c.name)).join(','));
     for (const row of currentResult.rows) {
@@ -699,6 +1313,7 @@ document.getElementById('export-csv').addEventListener('click', () => {
 
 document.getElementById('export-json').addEventListener('click', () => {
     if (!currentResult) return;
+    exportDropdown.classList.remove('open');
     const objs = currentResult.rows.map(row => {
         const obj = {};
         currentResult.columns.forEach((col, i) => { obj[col.name] = row[i]; });
@@ -709,13 +1324,14 @@ document.getElementById('export-json').addEventListener('click', () => {
 
 document.getElementById('export-clip').addEventListener('click', () => {
     if (!currentResult) return;
+    exportDropdown.classList.remove('open');
     const lines = [];
     lines.push(currentResult.columns.map(c => c.name).join('\t'));
     for (const row of currentResult.rows) {
         lines.push(row.map(v => v === null ? 'null' : v).join('\t'));
     }
     navigator.clipboard.writeText(lines.join('\n'));
-    statusText.textContent += ' (copied!)';
+    setLog('ok', 'Copied to clipboard', '');
 });
 
 // ─── Helpers ─────────────────────────────────
@@ -735,6 +1351,10 @@ function download(content, filename, mime) {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+}
+
+function truncate(s, n) {
+    return s.length > n ? s.slice(0, n - 1) + '\u2026' : s;
 }
 
 // ─── Init ────────────────────────────────────

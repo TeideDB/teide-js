@@ -31,7 +31,7 @@ export function startServer(opts?: { port?: number; noOpen?: boolean }): void {
 
     // Inject version
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
-    uiHtml = uiHtml.replace('__VERSION__', pkg.version);
+    uiHtml = uiHtml.replaceAll('__VERSION__', pkg.version);
 
     const server = http.createServer((req, res) => {
         if (req.url === '/' || req.url === '/index.html') {
