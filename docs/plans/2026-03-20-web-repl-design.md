@@ -6,6 +6,17 @@ A browser-based SQL console for teide-js. Single self-contained HTML page served
 
 Replaces the terminal REPL entirely. Invoked via `teide` or `npx teidedb`.
 
+## Quick Start
+
+```bash
+npm run build              # Build native addon + TypeScript + copy ui.html
+npm run repl               # Start server at http://127.0.0.1:3141
+# or
+node bin/teide.js          # Start server and auto-open browser
+```
+
+Once open, use `.load <file.csv>` to load data, then query with SQL (Ctrl+Enter to execute). Type `.help` for all available commands.
+
 ## Architecture
 
 ```
