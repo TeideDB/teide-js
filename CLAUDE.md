@@ -18,9 +18,21 @@ npx vitest run test/smoke.test.ts  # Run a single test file
 npx vitest run test/sql/           # Run all SQL engine tests
 npm run clean              # Remove build/, dist/, and vendor/teide/
 npm run sync-vendor        # Clone vendor/teide from GitHub (skips if present)
+npm run repl               # Start web REPL server (http://127.0.0.1:3141)
+node bin/teide.js          # Same as above, opens browser automatically
 ```
 
 The `install` script runs `sync-vendor` + native compile automatically on `npm install`.
+
+### Web REPL
+
+```bash
+npm run build              # Build first (native + TypeScript + copy ui.html)
+npm run repl               # Start server without auto-open
+node bin/teide.js          # Start server and open browser
+```
+
+The web REPL serves a browser-based SQL console at `http://127.0.0.1:3141` (auto-increments port if busy). Use `.load <file.csv>` to load data, then query with SQL. See `.help` for all commands.
 
 Requires: CMake ≥ 3.15, a C17/C++17 compiler, Node.js ≥ 18, git (for vendor sync).
 
