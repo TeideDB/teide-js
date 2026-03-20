@@ -313,8 +313,8 @@ import { EditorView, keymap, placeholder, lineNumbers, highlightActiveLineGutter
 import { EditorState } from 'https://esm.sh/@codemirror/state@6';
 import { sql } from 'https://esm.sh/@codemirror/lang-sql@6';
 import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from 'https://esm.sh/@codemirror/commands@6';
-import { autocompletion, closeBrackets, closeBracketsKeymap } from 'https://esm.sh/@codemirror/autocomplete@6';
+import { defaultKeymap, history, historyKeymap } from 'https://esm.sh/@codemirror/commands@6';
+import { autocompletion, closeBrackets, closeBracketsKeymap, acceptCompletion } from 'https://esm.sh/@codemirror/autocomplete@6';
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap, indentOnInput } from 'https://esm.sh/@codemirror/language@6';
 import { highlightSelectionMatches, searchKeymap } from 'https://esm.sh/@codemirror/search@6';
 
@@ -339,9 +339,10 @@ const runBtn = document.getElementById('run-btn');
 
 // ─── CodeMirror ──────────────────────────────
 const sqlCompletion = autocompletion({
+    activateOnTyping: true,
     override: [async (ctx) => {
         const word = ctx.matchBefore(/[\w.]+/);
-        if (!word) return null;
+        if (!word || word.text.length < 2) return null;
         const prefix = word.text;
         const fullText = ctx.state.doc.toString();
 
@@ -396,12 +397,12 @@ const editor = new EditorView({
             highlightActiveLine(),
             highlightSelectionMatches(),
             keymap.of([
+                { key: 'Tab', run: acceptCompletion },
                 ...closeBracketsKeymap,
                 ...defaultKeymap,
                 ...searchKeymap,
                 ...historyKeymap,
                 ...foldKeymap,
-                indentWithTab,
             ]),
             sql(),
             oneDark,
