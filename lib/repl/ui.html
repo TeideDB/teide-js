@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TeideDB</title>
+<style>
+:root {
+    --bg: #1e1e2e;
+    --bg-surface: #181825;
+    --fg: #cdd6f4;
+    --border: #45475a;
+    --header: #89dceb;
+    --type-dim: #6c7086;
+    --null: #6c7086;
+    --string: #a6e3a1;
+    --number: #89b4fa;
+    --keyword: #cba6f7;
+    --error: #f38ba8;
+    --success: #a6e3a1;
+    --selection: #313244;
+    --accent: #89b4fa;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--fg);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-surface);
+    flex-shrink: 0;
+}
+.header h1 { font-size: 14px; font-weight: 600; color: var(--header); }
+.header h1 span { color: var(--type-dim); font-weight: 400; margin-left: 8px; font-size: 12px; }
+.header-actions { display: flex; gap: 8px; }
+.header-actions button {
+    background: var(--selection);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+}
+.header-actions button:hover { background: var(--border); }
+
+/* Main layout */
+.main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+.sidebar {
+    width: 220px;
+    border-right: 1px solid var(--border);
+    background: var(--bg-surface);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+.sidebar-section {
+    border-bottom: 1px solid var(--border);
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.sidebar-section h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--type-dim);
+    padding: 8px 12px 4px;
+    flex-shrink: 0;
+}
+.sidebar-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+.sidebar-list li {
+    padding: 4px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+}
+.sidebar-list li:hover { background: var(--selection); }
+.sidebar-list li .dim { color: var(--type-dim); margin-left: 6px; }
+
+/* Content area */
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Editor */
+.editor-pane {
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+.editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 4px 8px;
+    gap: 8px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+}
+.editor-toolbar .hint { color: var(--type-dim); font-size: 11px; }
+.run-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 4px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+}
+.run-btn:hover { opacity: 0.9; }
+#editor-container { height: 160px; overflow: hidden; }
+#editor-container .cm-editor { height: 100%; }
+#editor-container .cm-scroller { overflow: auto; }
+
+/* Result pane */
+.result-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 12px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    flex-shrink: 0;
+    min-height: 28px;
+}
+.status-bar .info { color: var(--type-dim); }
+.status-bar .error-msg { color: var(--error); }
+.status-bar .success-msg { color: var(--success); }
+.export-actions { display: flex; gap: 6px; }
+.export-actions button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--type-dim);
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+}
+.export-actions button:hover { color: var(--fg); border-color: var(--fg); }
+
+/* Virtual scroll table */
+.table-container {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    min-height: 0;
+}
+.table-header {
+    display: flex;
+    background: var(--bg-surface);
+    border-bottom: 2px solid var(--border);
+    flex-shrink: 0;
+    overflow: hidden;
+}
+.table-header .th {
+    padding: 6px 12px;
+    font-weight: 600;
+    color: var(--header);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+}
+.table-header .th .dtype { color: var(--type-dim); font-weight: 400; font-size: 11px; margin-left: 4px; }
+.scroll-viewport {
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    position: relative;
+}
+.scroll-spacer { position: relative; width: 100%; }
+.table-row {
+    display: flex;
+    position: absolute;
+    width: 100%;
+    left: 0;
+}
+.table-row:hover { background: var(--selection); }
+.table-row .td {
+    padding: 4px 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+    height: 28px;
+    line-height: 20px;
+}
+.td.numeric { text-align: right; color: var(--number); }
+.td.null-val { color: var(--null); font-style: italic; }
+
+/* Print output */
+.print-output {
+    padding: 12px 16px;
+    white-space: pre-wrap;
+    font-size: 13px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Empty state */
+.empty-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--type-dim);
+    font-size: 14px;
+}
+
+/* Connection indicator */
+.conn-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+}
+.conn-dot.connected { background: var(--success); }
+.conn-dot.disconnected { background: var(--error); }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>TeideDB<span>v__VERSION__</span></h1>
+    <div class="header-actions">
+        <span><span class="conn-dot disconnected" id="conn-dot"></span><span id="conn-label">connecting...</span></span>
+    </div>
+</div>
+
+<div class="main">
+    <div class="sidebar">
+        <div class="sidebar-section">
+            <h2>Tables</h2>
+            <ul class="sidebar-list" id="table-list"></ul>
+        </div>
+        <div class="sidebar-section">
+            <h2>History</h2>
+            <ul class="sidebar-list" id="history-list"></ul>
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="editor-pane">
+            <div id="editor-container"></div>
+            <div class="editor-toolbar">
+                <span class="hint">Ctrl+Enter to run</span>
+                <button class="run-btn" id="run-btn">Run &#9654;</button>
+            </div>
+        </div>
+
+        <div class="result-pane">
+            <div class="status-bar" id="status-bar">
+                <span class="info" id="status-text">Ready</span>
+                <div class="export-actions" id="export-actions" style="display:none">
+                    <button id="export-csv">CSV</button>
+                    <button id="export-json">JSON</button>
+                    <button id="export-clip">Copy</button>
+                </div>
+            </div>
+            <div id="result-area">
+                <div class="empty-state" id="empty-state">
+                    Type a SQL query and press Ctrl+Enter
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import { EditorView, keymap, placeholder } from 'https://esm.sh/@codemirror/view@6?bundle';
+import { EditorState } from 'https://esm.sh/@codemirror/state@6?bundle';
+import { sql } from 'https://esm.sh/@codemirror/lang-sql@6?bundle';
+import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6?bundle';
+import { defaultKeymap, history, historyKeymap } from 'https://esm.sh/@codemirror/commands@6?bundle';
+import { autocompletion } from 'https://esm.sh/@codemirror/autocomplete@6?bundle';
+import { basicSetup } from 'https://esm.sh/codemirror@6?bundle';
+
+// ─── State ───────────────────────────────────
+let ws = null;
+let currentResult = null;  // { columns, rows, nrows }
+let colWidths = [];
+const ROW_HEIGHT = 28;
+const BUFFER_ROWS = 20;
+let pendingComplete = null;
+
+// ─── DOM refs ────────────────────────────────
+const connDot = document.getElementById('conn-dot');
+const connLabel = document.getElementById('conn-label');
+const tableList = document.getElementById('table-list');
+const historyList = document.getElementById('history-list');
+const statusText = document.getElementById('status-text');
+const exportActions = document.getElementById('export-actions');
+const resultArea = document.getElementById('result-area');
+const emptyState = document.getElementById('empty-state');
+const runBtn = document.getElementById('run-btn');
+
+// ─── CodeMirror ──────────────────────────────
+const sqlCompletion = autocompletion({
+    override: [async (ctx) => {
+        const word = ctx.matchBefore(/[\w.]+/);
+        if (!word) return null;
+        const prefix = word.text;
+        const fullText = ctx.state.doc.toString();
+
+        return new Promise((resolve) => {
+            pendingComplete = (items) => {
+                resolve({
+                    from: word.from,
+                    options: items.map(i => ({
+                        label: i.value,
+                        detail: i.description,
+                        type: i.description === 'keyword' ? 'keyword' : 'variable',
+                    })),
+                });
+                pendingComplete = null;
+            };
+            wsSend({ type: 'complete', prefix, context: fullText });
+            // Timeout fallback
+            setTimeout(() => {
+                if (pendingComplete) {
+                    pendingComplete([]);
+                }
+            }, 500);
+        });
+    }],
+});
+
+const runKeymap = keymap.of([{
+    key: 'Ctrl-Enter',
+    mac: 'Cmd-Enter',
+    run: () => { executeQuery(); return true; },
+}]);
+
+const editor = new EditorView({
+    state: EditorState.create({
+        doc: '',
+        extensions: [
+            basicSetup,
+            sql(),
+            oneDark,
+            runKeymap,
+            sqlCompletion,
+            placeholder('SELECT * FROM ...'),
+            EditorView.theme({
+                '&': { fontSize: '13px' },
+                '.cm-content': { fontFamily: "'SF Mono', 'Cascadia Code', 'Fira Code', monospace" },
+            }),
+        ],
+    }),
+    parent: document.getElementById('editor-container'),
+});
+
+// ─── WebSocket ───────────────────────────────
+function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}`);
+
+    ws.onopen = () => {
+        connDot.className = 'conn-dot connected';
+        connLabel.textContent = 'connected';
+    };
+
+    ws.onclose = () => {
+        connDot.className = 'conn-dot disconnected';
+        connLabel.textContent = 'disconnected';
+        setTimeout(connect, 2000);
+    };
+
+    ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        handleServerMessage(msg);
+    };
+}
+
+function wsSend(obj) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(obj));
+    }
+}
+
+// ─── Message handling ────────────────────────
+function handleServerMessage(msg) {
+    switch (msg.type) {
+        case 'result':
+            showResult(msg);
+            break;
+        case 'error':
+            showError(msg.message);
+            break;
+        case 'ok':
+            showOk(msg.message, msg.elapsed);
+            break;
+        case 'completions':
+            if (pendingComplete) pendingComplete(msg.items);
+            break;
+        case 'meta':
+            updateMeta(msg);
+            break;
+        case 'print':
+            if (msg.text === '__CLEAR__') {
+                clearResults();
+            } else {
+                showPrint(msg.text);
+            }
+            break;
+    }
+}
+
+// ─── Query execution ─────────────────────────
+let queryId = 0;
+function executeQuery() {
+    const sqlText = editor.state.doc.toString().trim();
+    if (!sqlText) return;
+    const id = String(++queryId);
+    statusText.className = 'info';
+    statusText.textContent = 'Running...';
+    exportActions.style.display = 'none';
+    wsSend({ type: 'query', id, sql: sqlText });
+}
+
+runBtn.addEventListener('click', executeQuery);
+
+// ─── Result rendering ────────────────────────
+function showResult(msg) {
+    currentResult = msg;
+    const elapsed = msg.elapsed.toFixed(2);
+    statusText.className = 'info';
+    statusText.textContent = `${msg.nrows} rows × ${msg.columns.length} columns · ${elapsed}ms`;
+    exportActions.style.display = 'flex';
+
+    // Calculate column widths
+    colWidths = msg.columns.map((col, i) => {
+        let max = col.name.length + (col.dtype.length + 2); // +2 for dtype badge
+        for (let r = 0; r < Math.min(msg.rows.length, 100); r++) {
+            const cell = msg.rows[r][i];
+            if (cell !== null) max = Math.max(max, cell.length);
+        }
+        return Math.min(Math.max(max * 8 + 24, 80), 400);
+    });
+
+    renderTable();
+}
+
+function renderTable() {
+    const msg = currentResult;
+    if (!msg) return;
+
+    resultArea.innerHTML = '';
+
+    // Header
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'table-header';
+    msg.columns.forEach((col, i) => {
+        const th = document.createElement('div');
+        th.className = 'th';
+        th.style.width = colWidths[i] + 'px';
+        th.innerHTML = `${esc(col.name)}<span class="dtype">${esc(col.dtype)}</span>`;
+        headerDiv.appendChild(th);
+    });
+    resultArea.appendChild(headerDiv);
+
+    // Scroll viewport
+    const viewport = document.createElement('div');
+    viewport.className = 'scroll-viewport';
+    viewport.style.flex = '1';
+
+    const spacer = document.createElement('div');
+    spacer.className = 'scroll-spacer';
+    spacer.style.height = (msg.rows.length * ROW_HEIGHT) + 'px';
+    viewport.appendChild(spacer);
+    resultArea.appendChild(viewport);
+
+    // Track rendered range
+    let renderedStart = -1;
+    let renderedEnd = -1;
+    const rowPool = [];
+
+    function renderVisibleRows() {
+        const scrollTop = viewport.scrollTop;
+        const viewHeight = viewport.clientHeight;
+        const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER_ROWS);
+        const end = Math.min(msg.rows.length, Math.ceil((scrollTop + viewHeight) / ROW_HEIGHT) + BUFFER_ROWS);
+
+        if (start === renderedStart && end === renderedEnd) return;
+        renderedStart = start;
+        renderedEnd = end;
+
+        // Remove old rows
+        while (rowPool.length > 0) {
+            const el = rowPool.pop();
+            el.remove();
+        }
+
+        // Determine which columns are numeric
+        const numericCols = msg.columns.map(c => isNumericDtype(c.dtype));
+
+        for (let r = start; r < end; r++) {
+            const row = msg.rows[r];
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'table-row';
+            rowDiv.style.top = (r * ROW_HEIGHT) + 'px';
+
+            for (let c = 0; c < row.length; c++) {
+                const td = document.createElement('div');
+                td.className = 'td';
+                td.style.width = colWidths[c] + 'px';
+                const val = row[c];
+                if (val === null) {
+                    td.classList.add('null-val');
+                    td.textContent = 'null';
+                } else {
+                    if (numericCols[c]) td.classList.add('numeric');
+                    td.textContent = val;
+                }
+                rowDiv.appendChild(td);
+            }
+
+            spacer.appendChild(rowDiv);
+            rowPool.push(rowDiv);
+        }
+    }
+
+    viewport.addEventListener('scroll', renderVisibleRows);
+    // Initial render
+    requestAnimationFrame(renderVisibleRows);
+
+    // Make result area a flex column
+    resultArea.style.display = 'flex';
+    resultArea.style.flexDirection = 'column';
+    resultArea.style.flex = '1';
+    resultArea.style.minHeight = '0';
+}
+
+function isNumericDtype(dtype) {
+    return /^(i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|int|float|double|decimal)/.test(dtype);
+}
+
+function showError(message) {
+    statusText.className = 'error-msg';
+    statusText.textContent = message;
+    exportActions.style.display = 'none';
+}
+
+function showOk(message, elapsed) {
+    const elapsedStr = elapsed > 0 ? ` · ${elapsed.toFixed(2)}ms` : '';
+    statusText.className = 'success-msg';
+    statusText.textContent = message + elapsedStr;
+    exportActions.style.display = 'none';
+    // Refresh meta after DDL
+    wsSend({ type: 'meta' });
+}
+
+function showPrint(text) {
+    resultArea.innerHTML = '';
+    resultArea.style.display = '';
+    const pre = document.createElement('div');
+    pre.className = 'print-output';
+    pre.textContent = text;
+    resultArea.appendChild(pre);
+    statusText.className = 'info';
+    statusText.textContent = '';
+    exportActions.style.display = 'none';
+}
+
+function clearResults() {
+    currentResult = null;
+    resultArea.innerHTML = '';
+    resultArea.style.display = '';
+    if (!emptyState.parentNode) {
+        const es = document.createElement('div');
+        es.className = 'empty-state';
+        es.textContent = 'Type a SQL query and press Ctrl+Enter';
+        resultArea.appendChild(es);
+    }
+    statusText.className = 'info';
+    statusText.textContent = 'Ready';
+    exportActions.style.display = 'none';
+}
+
+// ─── Sidebar ─────────────────────────────────
+function updateMeta(msg) {
+    // Tables
+    tableList.innerHTML = '';
+    for (const t of msg.tables) {
+        const li = document.createElement('li');
+        li.innerHTML = `${esc(t.name)}<span class="dim">${t.nrows}×${t.ncols}</span>`;
+        li.addEventListener('click', () => {
+            const doc = editor.state.doc.toString();
+            const pos = editor.state.selection.main.head;
+            editor.dispatch({ changes: { from: pos, insert: t.name } });
+            editor.focus();
+        });
+        tableList.appendChild(li);
+    }
+
+    // History
+    historyList.innerHTML = '';
+    const hist = (msg.history || []).slice(-50).reverse();
+    for (const h of hist) {
+        const li = document.createElement('li');
+        li.textContent = h.length > 60 ? h.slice(0, 57) + '...' : h;
+        li.title = h;
+        li.addEventListener('click', () => {
+            editor.dispatch({
+                changes: { from: 0, to: editor.state.doc.length, insert: h },
+            });
+            editor.focus();
+        });
+        historyList.appendChild(li);
+    }
+}
+
+// ─── Export ──────────────────────────────────
+document.getElementById('export-csv').addEventListener('click', () => {
+    if (!currentResult) return;
+    const lines = [];
+    lines.push(currentResult.columns.map(c => csvEscape(c.name)).join(','));
+    for (const row of currentResult.rows) {
+        lines.push(row.map(v => v === null ? '' : csvEscape(v)).join(','));
+    }
+    download(lines.join('\n'), 'result.csv', 'text/csv');
+});
+
+document.getElementById('export-json').addEventListener('click', () => {
+    if (!currentResult) return;
+    const objs = currentResult.rows.map(row => {
+        const obj = {};
+        currentResult.columns.forEach((col, i) => { obj[col.name] = row[i]; });
+        return obj;
+    });
+    download(JSON.stringify(objs, null, 2), 'result.json', 'application/json');
+});
+
+document.getElementById('export-clip').addEventListener('click', () => {
+    if (!currentResult) return;
+    const lines = [];
+    lines.push(currentResult.columns.map(c => c.name).join('\t'));
+    for (const row of currentResult.rows) {
+        lines.push(row.map(v => v === null ? 'null' : v).join('\t'));
+    }
+    navigator.clipboard.writeText(lines.join('\n'));
+    statusText.textContent += ' (copied!)';
+});
+
+// ─── Helpers ─────────────────────────────────
+function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function csvEscape(s) {
+    if (/[,"\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+}
+
+function download(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+// ─── Init ────────────────────────────────────
+connect();
+editor.focus();
+</script>
+</body>
+</html>

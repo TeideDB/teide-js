@@ -12,7 +12,7 @@
     "install": "npm run sync-vendor && cmake-js compile --release",
     "build:native": "npm run sync-vendor && cmake-js compile",
     "build:native:release": "npm run sync-vendor && cmake-js compile --release",
-    "build:ts": "tsc",
+    "build:ts": "tsc && cp lib/repl/ui.html dist/repl/ui.html",
     "build": "npm run build:native && npm run build:ts",
     "prepublishOnly": "npm run sync-vendor && npm run build:ts",
     "test": "vitest run",
