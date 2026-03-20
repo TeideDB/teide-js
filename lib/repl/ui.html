@@ -378,6 +378,7 @@ const editor = new EditorView({
     state: EditorState.create({
         doc: '',
         extensions: [
+            runKeymap,
             lineNumbers(),
             highlightActiveLineGutter(),
             highlightSpecialChars(),
@@ -404,7 +405,6 @@ const editor = new EditorView({
             ]),
             sql(),
             oneDark,
-            runKeymap,
             sqlCompletion,
             placeholder('SELECT * FROM ...'),
             EditorView.theme({
