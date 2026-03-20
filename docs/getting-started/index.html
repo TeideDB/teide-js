@@ -99,8 +99,22 @@ npm run build</code></pre>
 
     <pre><code class="language-bash">npm test</code></pre>
 
-    <!-- Quick Start -->
-    <h2>Quick Start</h2>
+    <!-- Web REPL -->
+    <h2>Web REPL</h2>
+
+    <p>The fastest way to start exploring data is the built-in browser-based SQL console:</p>
+
+    <pre><code class="language-bash">node bin/teide.js</code></pre>
+
+    <p>This opens a SQL console at <code>http://127.0.0.1:3141</code> with a CodeMirror editor, autocomplete, and virtual-scrolling result tables. Load a CSV file and start querying:</p>
+
+    <pre><code>.load path/to/sales.csv
+SELECT category, SUM(price) FROM sales GROUP BY category;</code></pre>
+
+    <p>Press <strong>Ctrl+Enter</strong> to execute. See the <a href="../guides/web-repl.html">Web REPL guide</a> for the full interface reference.</p>
+
+    <!-- Quick Start (Node.js) -->
+    <h2>Node.js API</h2>
 
     <p>Create a new file called <code>demo.js</code> and add the following:</p>
 
@@ -175,6 +189,10 @@ ctx.destroy();</code></pre>
     <h2>What's Next</h2>
 
     <div class="card-grid">
+      <a href="../guides/web-repl.html" class="card" style="text-decoration:none;">
+        <h3>Web REPL</h3>
+        <p>Browser-based SQL console with autocomplete, virtual-scrolling tables, query log, and JavaScript console.</p>
+      </a>
       <a href="../tutorial/" class="card" style="text-decoration:none;">
         <h3>Tutorial</h3>
         <p>Learn Teide JS in 10 minutes with a hands-on walkthrough covering SQL, aggregations, joins, and the fluent API.</p>
