@@ -6,27 +6,33 @@
 <title>TeideDB Web Console</title>
 <style>
 :root {
-    --bg: #1e1e2e;
-    --bg-surface: #181825;
-    --fg: #cdd6f4;
-    --border: #45475a;
-    --header: #89dceb;
-    --type-dim: #6c7086;
-    --null: #6c7086;
-    --string: #a6e3a1;
-    --number: #89b4fa;
-    --keyword: #cba6f7;
-    --error: #f38ba8;
-    --success: #a6e3a1;
-    --selection: #313244;
-    --accent: #89b4fa;
-    --run-btn-bg: #a6e3a1;
+    --bg: #0e1b24;
+    --bg-surface: #0a1319;
+    --bg-light: #162a36;
+    --bg-mid: #1d3545;
+    --fg: #e2e8f0;
+    --border: #2a3e4b;
+    --header: #8ba8b8;
+    --type-dim: #64748b;
+    --null: #64748b;
+    --string: #6b8a9e;
+    --number: #8ba8b8;
+    --keyword: #c4b5fd;
+    --error: #f87171;
+    --success: #4ade80;
+    --selection: #1d3545;
+    --accent: #6b8a9e;
+    --primary: #4b6777;
+    --primary-light: #6b8a9e;
+    --primary-lighter: #8ba8b8;
+    --text-muted: #94a3b8;
+    --run-btn-bg: #4ade80;
     --rail-width: 44px;
     --panel-width: 224px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 13px;
     background: var(--bg);
     color: var(--fg);
@@ -83,8 +89,8 @@ body {
     display: inline-block;
     flex-shrink: 0;
 }
-.conn-dot.connected    { background: var(--success); box-shadow: 0 0 4px var(--success); }
-.conn-dot.disconnected { background: var(--error); }
+.conn-dot.connected    { background: var(--success); box-shadow: 0 0 6px rgba(74, 222, 128, 0.4); }
+.conn-dot.disconnected { background: var(--error); box-shadow: 0 0 4px rgba(248, 113, 113, 0.3); }
 
 /* ── Main layout ─────────────────────────────────────────── */
 .main {
@@ -184,7 +190,7 @@ body {
     overflow: hidden;
 }
 .tree-item-row:hover { background: var(--selection); }
-.tree-item-row.expanded { background: rgba(49,50,68,0.5); }
+.tree-item-row.expanded { background: rgba(22,42,54,0.7); }
 .tree-chevron {
     width: 10px;
     height: 10px;
@@ -216,7 +222,7 @@ body {
 .tree-cols {
     list-style: none;
     display: none;
-    background: rgba(24,24,37,0.6);
+    background: rgba(10,19,25,0.6);
 }
 .tree-cols.open { display: block; }
 .tree-col-row {
@@ -246,7 +252,7 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--type-dim);
-    border-bottom: 1px solid rgba(69,71,90,0.25);
+    border-bottom: 1px solid rgba(42,62,75,0.25);
 }
 .hist-item:hover { background: var(--selection); color: var(--fg); }
 
@@ -403,7 +409,7 @@ body {
     justify-content: space-between;
     padding: 0 12px;
     height: 28px;
-    background: #11111b;
+    background: #081017;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     gap: 16px;
@@ -535,7 +541,7 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     flex-shrink: 0;
-    border-right: 1px dashed rgba(69,71,90,0.5);
+    border-right: 1px dashed rgba(42,62,75,0.5);
     display: flex;
     flex-direction: column;
     gap: 1px;
@@ -555,9 +561,9 @@ body {
     position: absolute;
     width: 100%;
     left: 0;
-    border-bottom: 1px solid rgba(26,26,46,0.7);
+    border-bottom: 1px solid rgba(14,27,36,0.7);
 }
-.table-row:nth-child(odd) { background: rgba(49,50,68,0.10); }
+.table-row:nth-child(odd) { background: rgba(22,42,54,0.15); }
 .table-row:hover { background: var(--selection); }
 .table-row .td {
     padding: 4px 12px;
@@ -567,7 +573,7 @@ body {
     flex-shrink: 0;
     height: 32px;
     line-height: 24px;
-    border-right: 1px dashed rgba(69,71,90,0.28);
+    border-right: 1px dashed rgba(42,62,75,0.28);
 }
 .table-row .td:last-child { border-right: none; }
 .td.numeric  { text-align: right; color: var(--number); }
@@ -625,11 +631,8 @@ body {
 <!-- Top bar -->
 <div class="topbar">
     <div class="topbar-brand">
-        <svg class="topbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)">
-            <ellipse cx="12" cy="5" rx="9" ry="3"/>
-            <path d="M3 5v5c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
-            <path d="M3 10v5c0 1.66 4.03 3 9 3s9-1.34 9-3v-5"/>
-            <path d="M3 15v4c0 1.66 4.03 3 9 3s9-1.34 9-3v-4"/>
+        <svg class="topbar-icon" viewBox="0 0 48 32" fill="none" style="width:28px;height:19px">
+            <path d="M0 31 L19.2 4.2 L22.3 7.7 L32.6 0 L37.4 6.4 L40 4.6 L47.7 17.6 L39.3 7.5 L37.1 9 L32.5 2.9 L30.7 15.7 L28.3 12.4 L23 22.3 L21.1 16.7 L13.8 24 L12.6 20.6 Z" fill="var(--primary-light)"/>
         </svg>
         <span class="topbar-name">TeideDB</span>
         <span class="topbar-version">v__VERSION__</span>
@@ -944,7 +947,7 @@ const editor = new EditorView({
             placeholder('SELECT * FROM ...'),
             EditorView.theme({
                 '&': { fontSize: '13px' },
-                '.cm-content': { fontFamily: "'SF Mono', 'Cascadia Code', 'Fira Code', monospace" },
+                '.cm-content': { fontFamily: "'JetBrains Mono', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, monospace" },
             }),
         ],
     }),
