@@ -13,10 +13,32 @@ public:
     TeideThread& thread() { return *thread_; }
     void check_alive(Napi::Env env);
 
+    Napi::Value GetThreadExternal(const Napi::CallbackInfo& info);
+
 private:
     Napi::Value Destroy(const Napi::CallbackInfo& info);
     Napi::Value ReadCsvSync(const Napi::CallbackInfo& info);
     Napi::Value ReadCsv(const Napi::CallbackInfo& info);
+    Napi::Value WriteCsvSync(const Napi::CallbackInfo& info);
+    Napi::Value WriteCsv(const Napi::CallbackInfo& info);
+    Napi::Value SaveTableSync(const Napi::CallbackInfo& info);
+    Napi::Value LoadTableSync(const Napi::CallbackInfo& info);
+    Napi::Value LoadColSync(const Napi::CallbackInfo& info);
+    Napi::Value MmapColSync(const Napi::CallbackInfo& info);
+    Napi::Value ReadPartedSync(const Napi::CallbackInfo& info);
+    Napi::Value ReadParted(const Napi::CallbackInfo& info);
+    Napi::Value SaveSymbolsSync(const Napi::CallbackInfo& info);
+    Napi::Value SaveSymbols(const Napi::CallbackInfo& info);
+    Napi::Value LoadSymbolsSync(const Napi::CallbackInfo& info);
+    Napi::Value LoadSymbols(const Napi::CallbackInfo& info);
+    Napi::Value SaveMetaSync(const Napi::CallbackInfo& info);
+    Napi::Value SaveMeta(const Napi::CallbackInfo& info);
+    Napi::Value LoadMetaSync(const Napi::CallbackInfo& info);
+    Napi::Value LoadMeta(const Napi::CallbackInfo& info);
+    Napi::Value SymIntern(const Napi::CallbackInfo& info);
+    Napi::Value SymFind(const Napi::CallbackInfo& info);
+    Napi::Value SymStr(const Napi::CallbackInfo& info);
+    Napi::Value SymCount(const Napi::CallbackInfo& info);
 
     std::unique_ptr<TeideThread> thread_;
     bool destroyed_ = false;

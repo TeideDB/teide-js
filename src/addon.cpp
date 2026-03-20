@@ -6,14 +6,36 @@
 #include "series.h"
 #include "table.h"
 #include "query.h"
+#include "rel.h"
+#include "graph_ops.h"
+#include "vector.h"
+#include "atom.h"
+#include "list.h"
+#include "selection.h"
 #include "compat.h"
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     NativeContext::Init(env, exports);
     NativeSeries::Init(env, exports);
     NativeTable::Init(env, exports);
+    NativeRel::Init(env, exports);
+    NativeVector::Init(env, exports);
+    NativeAtom::Init(env, exports);
+    NativeList::Init(env, exports);
+    NativeSelection::Init(env, exports);
     exports.Set("collectSync", Napi::Function::New(env, QueryCollectSync));
     exports.Set("collect", Napi::Function::New(env, QueryCollect));
+    exports.Set("graphExpandSync", Napi::Function::New(env, GraphExpandSync));
+    exports.Set("graphExpand", Napi::Function::New(env, GraphExpand));
+    exports.Set("graphVarExpandSync", Napi::Function::New(env, GraphVarExpandSync));
+    exports.Set("graphVarExpand", Napi::Function::New(env, GraphVarExpand));
+    exports.Set("graphShortestPathSync", Napi::Function::New(env, GraphShortestPathSync));
+    exports.Set("graphShortestPath", Napi::Function::New(env, GraphShortestPath));
+    exports.Set("graphWcoJoinSync", Napi::Function::New(env, GraphWcoJoinSync));
+    exports.Set("graphWcoJoin", Napi::Function::New(env, GraphWcoJoin));
+    exports.Set("tableFromArraysSync", Napi::Function::New(env, TableFromArraysSync));
+    exports.Set("tableFromArrays", Napi::Function::New(env, TableFromArrays));
+    exports.Set("tableNewSync", Napi::Function::New(env, TableNewSync));
     return exports;
 }
 

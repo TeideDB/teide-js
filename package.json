@@ -5,18 +5,20 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "install": "cmake-js compile --release",
-    "build:native": "cmake-js compile",
-    "build:native:release": "cmake-js compile --release",
+    "sync-vendor": "bash scripts/sync-vendor.sh",
+    "install": "npm run sync-vendor && cmake-js compile --release",
+    "build:native": "npm run sync-vendor && cmake-js compile",
+    "build:native:release": "npm run sync-vendor && cmake-js compile --release",
     "build:ts": "tsc",
     "build": "npm run build:native && npm run build:ts",
-    "prepublishOnly": "npm run build:ts",
+    "prepublishOnly": "npm run sync-vendor && npm run build:ts",
     "test": "vitest run",
-    "clean": "cmake-js clean && rm -rf dist"
+    "clean": "cmake-js clean && rm -rf dist vendor/teide"
   },
   "files": [
     "dist/",
     "src/",
+    "scripts/",
     "vendor/teide/src/",
     "vendor/teide/include/",
     "CMakeLists.txt"

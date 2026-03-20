@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { col, lit, Expr } from '../lib/expr';
+import { col, lit, Expr, type DateField } from '../lib/expr';
 
 describe('Expr tree', () => {
   it('builds column reference', () => {
@@ -50,5 +50,109 @@ describe('Expr tree', () => {
     const e = col('x').neg();
     expect(e.kind).toBe('unop');
     expect(e.params.op).toBe('neg');
+  });
+
+  it('builds countDistinct aggregation', () => {
+    const e = col('x').countDistinct();
+    expect(e.kind).toBe('agg');
+    expect(e.params.op).toBe(58); // OP_COUNT_DISTINCT
+  });
+
+
+  it('builds upper unary op', () => {
+    const e = col('name').upper();
+    expect(e.kind).toBe('unop');
+    expect(e.params.op).toBe('upper');
+  });
+
+  it('builds lower unary op', () => {
+    const e = col('name').lower();
+    expect(e.kind).toBe('unop');
+    expect(e.params.op).toBe('lower');
+  });
+
+  it('builds strlen unary op', () => {
+    const e = col('name').strlen();
+    expect(e.kind).toBe('unop');
+    expect(e.params.op).toBe('strlen');
+  });
+
+  it('builds trim unary op', () => {
+    const e = col('name').trim();
+    expect(e.kind).toBe('unop');
+    expect(e.params.op).toBe('trim');
+  });
+
+  it('builds like binop', () => {
+    const e = col('name').like('%alpha%');
+    expect(e.kind).toBe('binop');
+    expect(e.params.op).toBe('like');
+  });
+
+  it('builds ilike binop', () => {
+    const e = col('name').ilike('%ALPHA%');
+    expect(e.kind).toBe('binop');
+    expect(e.params.op).toBe('ilike');
+  });
+
+  it('builds min2 binop', () => {
+    const e = col('a').min2(col('b'));
+    expect(e.kind).toBe('binop');
+    expect(e.params.op).toBe('min2');
+  });
+
+  it('builds max2 binop', () => {
+    const e = col('a').max2(col('b'));
+    expect(e.kind).toBe('binop');
+    expect(e.params.op).toBe('max2');
+  });
+
+  // N-ary ops
+  it('builds substr naryop', () => {
+    const e = col('name').substr(lit(0), lit(3));
+    expect(e.kind).toBe('naryop');
+    expect(e.params.op).toBe('substr');
+    expect((e.params.args as Expr[]).length).toBe(3); // str, start, len
+  });
+
+  it('builds replace naryop', () => {
+    const e = col('name').replace('old', 'new');
+    expect(e.kind).toBe('naryop');
+    expect(e.params.op).toBe('replace');
+  });
+
+  it('builds concat naryop', () => {
+    const e = col('first').concat(lit(' '), col('last'));
+    expect(e.kind).toBe('naryop');
+    expect(e.params.op).toBe('concat');
+    expect((e.params.args as Expr[]).length).toBe(3);
+  });
+
+  it('builds cast', () => {
+    const e = col('x').cast('f64');
+    expect(e.kind).toBe('cast');
+    expect(e.params.targetType).toBe('f64');
+  });
+
+  it('builds Expr.if', () => {
+    const e = Expr.if(col('x').gt(0), col('x'), lit(0));
+    expect(e.kind).toBe('naryop');
+    expect(e.params.op).toBe('if');
+    expect((e.params.args as Expr[]).length).toBe(3);
+  });
+
+  // Date/time ops
+  it('builds extract dateop', () => {
+    const e = col('ts').extract('year');
+    expect(e.kind).toBe('dateop');
+    expect(e.params.op).toBe('extract');
+    expect(e.params.field).toBe('year');
+  });
+
+  it('builds dateTrunc dateop', () => {
+    const e = col('ts').dateTrunc('month');
+    expect(e.kind).toBe('dateop');
+    expect(e.params.op).toBe('date_trunc');
+    expect(e.params.field).toBe('month');
   });
 });

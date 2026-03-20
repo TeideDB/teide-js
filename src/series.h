@@ -17,10 +17,14 @@ public:
     static Napi::Object Create(Napi::Env env, td_t* vec, const std::string& name,
                                int8_t dtype, TeideThread* thread);
     NativeSeries(const Napi::CallbackInfo& info);
+    ~NativeSeries();
 
     td_t* ptr() const { return vec_; }
+    TeideThread* thread() const { return thread_; }
+    int8_t dtype() const { return dtype_; }
 
 private:
+    Napi::Value SaveColSync(const Napi::CallbackInfo& info);
     Napi::Value GetDtype(const Napi::CallbackInfo& info);
     Napi::Value GetLength(const Napi::CallbackInfo& info);
     Napi::Value GetName(const Napi::CallbackInfo& info);

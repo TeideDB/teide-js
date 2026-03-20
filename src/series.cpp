@@ -16,6 +16,7 @@ Napi::Object NativeSeries::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor("nullBitmap", &NativeSeries::GetNullBitmap, nullptr),
         InstanceAccessor("indices", &NativeSeries::GetIndices, nullptr),
         InstanceAccessor("dictionary", &NativeSeries::GetDictionary, nullptr),
+        InstanceMethod("saveColSync", &NativeSeries::SaveColSync),
     });
 
     constructor_ = Napi::Persistent(func);
@@ -56,6 +57,10 @@ NativeSeries::NativeSeries(const Napi::CallbackInfo& info)
 
     // Retain the vector for the lifetime of this wrapper
     td_retain(vec_);
+}
+
+NativeSeries::~NativeSeries() {
+    if (vec_ && heap_alive_ && heap_alive_->load()) td_release(vec_);
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +116,7 @@ Napi::Value NativeSeries::GetData(const Napi::CallbackInfo& info) {
             break;
         case TD_I32:
         case TD_DATE:
+        case TD_TIME:
             arr_type = napi_int32_array;
             elem_size = 4;
             break;
@@ -275,6 +281,30 @@ Napi::Value NativeSeries::CreateZeroCopyArray(
     }
 
     return Napi::Value(env, typed_arr);
+}
+
+Napi::Value NativeSeries::SaveColSync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "saveColSync(path)").ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+
+    std::string path = info[0].As<Napi::String>().Utf8Value();
+    td_t* vec = vec_;
+
+    void* result = thread_->dispatch_sync([vec, path]() -> void* {
+        td_err_t err = td_col_save(vec, path.c_str());
+        return (void*)(uintptr_t)err;
+    });
+
+    td_err_t err = (td_err_t)(uintptr_t)result;
+    if (err != TD_OK) {
+        Napi::Error::New(env, std::string("Failed to save column: ") + td_err_str(err))
+            .ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
 }
 
 void* NativeSeries::ResolveDataPtr(td_t* vec, int8_t dtype) {

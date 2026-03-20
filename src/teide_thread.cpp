@@ -48,6 +48,8 @@ void TeideThread::thread_main() {
 }
 
 void* TeideThread::dispatch_sync(std::function<void*()> work) {
+    if (shutdown_.load()) return nullptr;
+
     auto item = std::make_shared<WorkItem>();
     item->work = std::move(work);
 
@@ -65,6 +67,17 @@ void* TeideThread::dispatch_sync(std::function<void*()> work) {
 void TeideThread::dispatch_async(std::function<void*()> work,
                                   Napi::ThreadSafeFunction tsfn,
                                   std::function<void(Napi::Env, void*)> js_callback) {
+    if (shutdown_.load()) {
+        // Thread is shutting down — invoke callback with nullptr so the
+        // Promise gets rejected instead of hanging forever.
+        auto cb = std::make_shared<std::function<void(Napi::Env, void*)>>(std::move(js_callback));
+        tsfn.BlockingCall((void*)nullptr, [cb](Napi::Env env, Napi::Function, void* data) {
+            (*cb)(env, data);
+        });
+        tsfn.Release();
+        return;
+    }
+
     auto cb = std::make_shared<std::function<void(Napi::Env, void*)>>(std::move(js_callback));
     auto item = std::make_shared<WorkItem>();
     item->work = std::move(work);

@@ -1,5 +1,16 @@
 export { Context } from './context';
+export type { CsvReadOpts } from './context';
 export { Expr, col, lit } from './expr';
+export type { ExprKind, DateField } from './expr';
 export { Table } from './table';
 export { Series } from './series';
 export { Query } from './query';
+export { Rel } from './rel';
+export type { RelFromEdgesOpts, RelBuildOpts } from './rel';
+export { Graph } from './graph';
+export type { Direction, VarExpandOpts, ShortestPathOpts, WcoJoinOpts } from './graph';
+export type { WindowFunc, WindowFuncKind, FrameBound, WindowOpts, JoinOpts, WindowJoinOpts } from './types';
+export { Vector } from './vector';
+export { Atom } from './atom';
+export { List } from './list';
+export { Selection } from './selection';

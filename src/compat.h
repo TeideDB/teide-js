@@ -11,6 +11,8 @@
 // so the C header's struct layouts are ABI-compatible.
 #ifdef __cplusplus
 #  define _STDATOMIC_H          // prevent GCC's C <stdatomic.h>
+#  define __CLANG_STDATOMIC_H   // prevent Clang's builtin <stdatomic.h>
+#  define _LIBCPP_STDATOMIC_H   // prevent libc++ C++ <stdatomic.h> wrapper
 #  define _Atomic(T) volatile T // same size/alignment as C _Atomic
 
 // memory-order constants (used by td_atomic_* helper macros in td.h)

@@ -1,4 +1,6 @@
-export type ExprKind = 'col' | 'lit' | 'binop' | 'unop' | 'agg' | 'alias';
+export type ExprKind = 'col' | 'lit' | 'binop' | 'unop' | 'agg' | 'alias' | 'naryop' | 'cast' | 'dateop';
+
+export type DateField = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'dow' | 'doy' | 'epoch';
 
 // Agg opcodes (must match C defines in td.h)
 export const OP_SUM = 50;
@@ -9,6 +11,11 @@ export const OP_COUNT = 54;
 export const OP_AVG = 55;
 export const OP_FIRST = 56;
 export const OP_LAST = 57;
+export const OP_COUNT_DISTINCT = 58;
+export const OP_STDDEV = 59;
+export const OP_STDDEV_POP = 73;
+export const OP_VAR = 74;
+export const OP_VAR_POP = 75;
 
 export class Expr {
     constructor(
@@ -35,6 +42,14 @@ export class Expr {
     and(other: Expr): Expr { return binop('and', this, other); }
     or(other: Expr): Expr { return binop('or', this, other); }
 
+    // String binary
+    like(pattern: Expr | string): Expr { return binop('like', this, wrap(pattern)); }
+    ilike(pattern: Expr | string): Expr { return binop('ilike', this, wrap(pattern)); }
+
+    // Element-wise min/max
+    min2(other: Expr | number): Expr { return binop('min2', this, wrap(other)); }
+    max2(other: Expr | number): Expr { return binop('max2', this, wrap(other)); }
+
     // Unary
     not(): Expr { return new Expr('unop', { op: 'not', arg: this }); }
     neg(): Expr { return new Expr('unop', { op: 'neg', arg: this }); }
@@ -46,6 +61,12 @@ export class Expr {
     floor(): Expr { return new Expr('unop', { op: 'floor', arg: this }); }
     isNull(): Expr { return new Expr('unop', { op: 'isnull', arg: this }); }
 
+    // String unary
+    upper(): Expr { return new Expr('unop', { op: 'upper', arg: this }); }
+    lower(): Expr { return new Expr('unop', { op: 'lower', arg: this }); }
+    strlen(): Expr { return new Expr('unop', { op: 'strlen', arg: this }); }
+    trim(): Expr { return new Expr('unop', { op: 'trim', arg: this }); }
+
     // Aggregations
     sum(): Expr { return new Expr('agg', { op: OP_SUM, arg: this }); }
     mean(): Expr { return new Expr('agg', { op: OP_AVG, arg: this }); }
@@ -54,9 +75,42 @@ export class Expr {
     count(): Expr { return new Expr('agg', { op: OP_COUNT, arg: this }); }
     first(): Expr { return new Expr('agg', { op: OP_FIRST, arg: this }); }
     last(): Expr { return new Expr('agg', { op: OP_LAST, arg: this }); }
+    prod(): Expr { return new Expr('agg', { op: OP_PROD, arg: this }); }
+    countDistinct(): Expr { return new Expr('agg', { op: OP_COUNT_DISTINCT, arg: this }); }
+    // stddev, stddevPop, variance, variancePop: opcodes defined in td.h
+    // but no C core builder functions yet. Uncomment when available.
+
+    // N-ary ops
+    substr(start: Expr | number, len: Expr | number): Expr {
+        return new Expr('naryop', { op: 'substr', args: [this, wrap(start), wrap(len)] });
+    }
+    replace(from: Expr | string, to: Expr | string): Expr {
+        return new Expr('naryop', { op: 'replace', args: [this, wrap(from), wrap(to)] });
+    }
+    concat(...others: (Expr | string)[]): Expr {
+        return new Expr('naryop', { op: 'concat', args: [this, ...others.map(wrap)] });
+    }
+
+    // Cast
+    cast(targetType: string): Expr {
+        return new Expr('cast', { targetType, arg: this });
+    }
+
+    // Date/time ops
+    extract(field: DateField): Expr {
+        return new Expr('dateop', { op: 'extract', field, arg: this });
+    }
+    dateTrunc(field: DateField): Expr {
+        return new Expr('dateop', { op: 'date_trunc', field, arg: this });
+    }
 
     // Rename
     alias(name: string): Expr { return new Expr('alias', { name, arg: this }); }
+
+    // Static: conditional
+    static if(cond: Expr, thenVal: Expr | number | string, elseVal: Expr | number | string): Expr {
+        return new Expr('naryop', { op: 'if', args: [cond, wrap(thenVal), wrap(elseVal)] });
+    }
 }
 
 export function col(name: string): Expr {
