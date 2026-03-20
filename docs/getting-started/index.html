@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started - Teide JS</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<div class="sidebar-overlay"></div>
+<button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+<nav class="sidebar">
+  <a href="../" class="sidebar-logo">
+    <img src="../assets/teide-logo.svg" alt="Teide">
+    <span>Teide JS</span>
+    <span class="docs-badge">Docs</span>
+  </a>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Overview</div>
+    <a href="../" class="sidebar-link">Home</a>
+    <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+    <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Guides</div>
+    <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+    <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+    <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+    <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+    <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">SQL Reference</div>
+    <a href="../sql/" class="sidebar-link">Overview</a>
+    <a href="../sql/data-types.html" class="sidebar-link">Data Types</a>
+    <a href="../sql/ddl.html" class="sidebar-link">DDL</a>
+    <a href="../sql/dml.html" class="sidebar-link">DML</a>
+    <a href="../sql/queries.html" class="sidebar-link">Queries</a>
+    <a href="../sql/filtering.html" class="sidebar-link">Filtering</a>
+    <a href="../sql/expressions.html" class="sidebar-link">Expressions</a>
+    <a href="../sql/aggregation.html" class="sidebar-link">Aggregation</a>
+    <a href="../sql/joins.html" class="sidebar-link">Joins</a>
+    <a href="../sql/window-functions.html" class="sidebar-link">Window Functions</a>
+    <a href="../sql/sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+    <a href="../sql/set-operations.html" class="sidebar-link">Set Operations</a>
+    <a href="../sql/subqueries.html" class="sidebar-link">Subqueries</a>
+    <a href="../sql/functions.html" class="sidebar-link">Scalar Functions</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Developer</div>
+    <a href="../api/" class="sidebar-link">TypeScript API</a>
+    <a href="../architecture/" class="sidebar-link">Architecture</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Graph &amp; Vector</div>
+    <a href="../sql/pgq.html" class="sidebar-link">SQL/PGQ</a>
+    <a href="../sql/graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+    <a href="../sql/vector-search.html" class="sidebar-link">Vector Search</a>
+  </div>
+</nav>
+
+<div class="main">
+  <main class="content">
+
+    <p class="section-label">Overview</p>
+    <h1>Getting Started</h1>
+    <p class="lead">Install Teide JS, set up your environment, and run your first query in under five minutes.</p>
+
+    <!-- Prerequisites -->
+    <h2>Prerequisites</h2>
+
+    <ul>
+      <li><strong>Node.js</strong> &ge; 18</li>
+      <li><strong>CMake</strong> &ge; 3.15</li>
+      <li>A <strong>C17/C++17</strong> compatible compiler (GCC 9+, Clang 10+, or MSVC 2019+)</li>
+    </ul>
+
+    <!-- Installation -->
+    <h2>Installation</h2>
+
+    <h3>From npm</h3>
+
+    <pre><code class="language-bash">npm install teidedb</code></pre>
+
+    <h3>Build from Source</h3>
+
+    <pre><code class="language-bash">git clone https://github.com/TeideDB/teide-js.git
+cd teide-js
+npm install
+npm run build</code></pre>
+
+    <p>This runs <code>cmake</code> to compile the native addon (debug mode) and then compiles the TypeScript layer. For an optimized release build:</p>
+
+    <pre><code class="language-bash">npm run build:native:release</code></pre>
+
+    <p>To verify everything is working:</p>
+
+    <pre><code class="language-bash">npm test</code></pre>
+
+    <!-- Quick Start -->
+    <h2>Quick Start</h2>
+
+    <p>Create a new file called <code>demo.js</code> and add the following:</p>
+
+    <pre><code class="language-js">import { Context } from 'teidedb';
+
+// Create a context (initializes the Teide engine)
+const ctx = new Context();
+
+// Load a CSV file into a table
+ctx.executeSync("CREATE TABLE sales AS SELECT * FROM read_csv('sales.csv')");
+
+// Query with SQL
+const top = ctx.executeSync(`
+  SELECT region, SUM(revenue) AS total
+  FROM sales
+  GROUP BY region
+  ORDER BY total DESC
+  LIMIT 5
+`);
+
+console.log('Top regions by revenue:');
+console.log('Columns:', top.columns);
+console.log('Rows:', top.nRows);
+
+// Clean up
+ctx.destroy();</code></pre>
+
+    <p>Run it:</p>
+
+    <pre><code class="language-bash">node demo.js</code></pre>
+
+    <!-- Two APIs -->
+    <h2>Two Ways to Query</h2>
+
+    <p>Teide JS gives you two interfaces to work with data. Use whichever fits your use case &mdash; or mix them freely.</p>
+
+    <h3>SQL Interface</h3>
+
+    <p>Execute any SQL statement directly. Results come back as a <code>Table</code> object with typed column accessors.</p>
+
+    <pre><code class="language-js">const result = ctx.executeSync(`
+  SELECT name, age, department
+  FROM employees
+  WHERE age > 30
+  ORDER BY name
+`);
+
+console.log(result.columns);  // ['name', 'age', 'department']
+console.log(result.nRows);    // number of matching rows</code></pre>
+
+    <h3>Fluent API</h3>
+
+    <p>Build queries programmatically with a chainable, type-safe API. Operations are lazy &mdash; nothing executes until you call <code>collectSync()</code> or <code>collect()</code>.</p>
+
+    <pre><code class="language-js">import { Context, col, lit } from 'teidedb';
+
+const ctx = new Context();
+ctx.executeSync("CREATE TABLE t AS SELECT * FROM read_csv('data.csv')");
+const table = ctx.executeSync("SELECT * FROM t");
+
+const result = table
+  .filter(col('price').gt(10))
+  .sort('price')
+  .head(5)
+  .collectSync();
+
+console.log(result.columns, result.nRows);
+
+ctx.destroy();</code></pre>
+
+    <!-- What's Next -->
+    <h2>What's Next</h2>
+
+    <div class="card-grid">
+      <a href="../tutorial/" class="card" style="text-decoration:none;">
+        <h3>Tutorial</h3>
+        <p>Learn Teide JS in 10 minutes with a hands-on walkthrough covering SQL, aggregations, joins, and the fluent API.</p>
+      </a>
+      <a href="../sql/" class="card" style="text-decoration:none;">
+        <h3>SQL Reference</h3>
+        <p>Comprehensive reference for all supported SQL syntax, data types, functions, and query patterns.</p>
+      </a>
+    </div>
+
+    <!-- Navigation -->
+    <div class="page-nav">
+      <a href="../" class="prev">
+        <span class="nav-label">Previous</span>
+        <span class="nav-title">Home</span>
+      </a>
+      <a href="../tutorial/" class="next">
+        <span class="nav-label">Next</span>
+        <span class="nav-title">Tutorial</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<script defer src="../app.js"></script>
+</body>
+</html>

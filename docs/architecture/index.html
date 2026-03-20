@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Architecture - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="../sql/" class="sidebar-link">Overview</a>
+      <a href="../sql/data-types.html" class="sidebar-link">Data Types</a>
+      <a href="../sql/ddl.html" class="sidebar-link">DDL</a>
+      <a href="../sql/dml.html" class="sidebar-link">DML</a>
+      <a href="../sql/queries.html" class="sidebar-link">Queries</a>
+      <a href="../sql/filtering.html" class="sidebar-link">Filtering</a>
+      <a href="../sql/expressions.html" class="sidebar-link">Expressions</a>
+      <a href="../sql/aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="../sql/joins.html" class="sidebar-link">Joins</a>
+      <a href="../sql/window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="../sql/sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="../sql/set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="../sql/subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="../sql/functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link active">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="../sql/pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="../sql/graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="../sql/vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">DEVELOPER</div>
+    <h1>Architecture</h1>
+    <p>Teide JS is a three-layer system: a TypeScript API that developers interact with, a C++17 NAPI addon that bridges JavaScript and native code, and a vendored C17 columnar engine that performs all computation.</p>
+
+    <h2>Three-Layer Overview</h2>
+    <pre><code>┌─────────────────────────────────────────────┐
+│  TypeScript API  (lib/)                     │
+│  Context, Table, Query, Expr, Series        │
+├─────────────────────────────────────────────┤
+│  C++17 NAPI Addon  (src/)                   │
+│  NativeContext, NativeTable, NativeSeries    │
+│  TeideThread, SPSC queue, ExprNode compiler  │
+├─────────────────────────────────────────────┤
+│  C17 Core Engine  (vendor/teide/)           │
+│  Columnar storage, DAG executor, optimizer   │
+│  Buddy allocator, symbol table, graph ops    │
+└─────────────────────────────────────────────┘</code></pre>
+
+    <h2>Project Structure</h2>
+    <pre><code>teide-js/
+├── lib/                    # TypeScript API layer
+│   ├── context.ts          # Entry point; loads .node addon
+│   ├── query.ts            # Lazy query builder with operation stack
+│   ├── expr.ts             # Expression tree (col refs, literals, ops, aggs)
+│   ├── table.ts            # Table + GroupBy wrappers
+│   └── series.ts           # Column accessor with dtype-aware TypedArrays
+├── src/                    # C++17 NAPI addon layer
+│   ├── addon.cpp           # Module init, exports collectSync/collect
+│   ├── context.cpp         # NativeContext: CSV I/O, SQL dispatch
+│   ├── query.cpp           # Expression serialization, plan compilation
+│   ├── table.cpp           # NativeTable: column access, retain/release
+│   ├── series.cpp          # NativeSeries: zero-copy TypedArray creation
+│   ├── teide_thread.h      # Background thread + SPSC work queue
+│   └── compat.h            # C-atomic shim for C++/C17 interop
+├── vendor/teide/           # Vendored C17 core engine
+│   └── include/teide/td.h  # Public API + type/opcode definitions
+├── test/                   # Vitest test suite
+│   ├── smoke.test.ts
+│   ├── table.test.ts
+│   ├── expr.test.ts
+│   └── fixtures/           # CSV test data
+├── CMakeLists.txt          # Native build configuration
+├── binding.gyp             # node-gyp binding
+└── tsconfig.json           # TypeScript configuration</code></pre>
+
+    <h2>SQL Pipeline</h2>
+    <p>SQL statements go through a multi-stage pipeline before results reach JavaScript:</p>
+    <pre><code>SQL string
+  │
+  ▼
+┌──────────────────┐
+│ PGQ Pre-parse    │  Extracts GRAPH_TABLE / MATCH clauses
+└────────┬─────────┘  and rewrites them into internal form
+         │
+         ▼
+┌──────────────────┐
+│ Parse            │  node-sql-parser produces an AST
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Plan             │  AST → PlanStep vector (filter, project,
+└────────┬─────────┘  group, sort, limit, join, etc.)
+         │
+         ▼
+┌──────────────────┐
+│ Execute          │  PlanSteps run against the Teide engine
+└────────┬─────────┘  on the dedicated Teide thread
+         │
+         ▼
+  Table / null</code></pre>
+
+    <p>For the fluent query API (<code>table.filter().sort().collectSync()</code>), the pipeline skips the SQL parsing stage. Instead, the TypeScript <code>Expr</code> objects are serialized directly to C++ <code>ExprNode</code> trees, and the operation stack becomes the <code>PlanStep</code> vector.</p>
+
+    <h2>Threading Model</h2>
+    <p>A key design constraint: the V8 thread must never call Teide C APIs directly. All native operations run on a dedicated <strong>Teide thread</strong> that owns the C heap. Communication between the two threads uses a lock-free SPSC (single-producer, single-consumer) queue.</p>
+
+    <pre><code>┌──────────────┐     SPSC Queue     ┌──────────────┐
+│  V8 Thread   │ ──── work item ──▶ │ Teide Thread │
+│  (main)      │                    │ (background) │
+│              │ ◀── result ─────── │              │
+└──────────────┘   cond_var / tsfn  └──────────────┘</code></pre>
+
+    <h3>Synchronous Path: dispatch_sync()</h3>
+    <p>The V8 thread posts a work item to the SPSC queue, then blocks on a condition variable. The Teide thread picks up the item, executes the operation, writes the result, and signals the condition variable. The V8 thread wakes up and returns the result to JavaScript.</p>
+
+    <pre><code class="language-js">// This call blocks until the Teide thread completes
+const table = ctx.readCsvSync('data.csv');</code></pre>
+
+    <h3>Asynchronous Path: dispatch_async()</h3>
+    <p>The V8 thread posts a work item and immediately returns a Promise. The Teide thread picks up the item, executes the operation, and uses a <code>napi_threadsafe_function</code> to schedule the Promise resolution back on the V8 thread's event loop.</p>
+
+    <pre><code class="language-js">// This returns immediately; work happens on the Teide thread
+const table = await ctx.readCsv('data.csv');</code></pre>
+
+    <h3>Shutdown</h3>
+    <p>When <code>ctx.destroy()</code> is called (or <code>Symbol.dispose</code> triggers), the V8 thread posts a sentinel work item. The Teide thread recognizes the sentinel, cleans up all native resources (<code>td_pool_destroy</code>, <code>td_sym_destroy</code>, <code>td_heap_destroy</code>), and exits. This ensures deterministic cleanup even if JavaScript garbage collection hasn't run.</p>
+
+    <h2>Zero-Copy Data Access</h2>
+    <p>When you access a column via <code>table.col('name').data</code>, no data is copied. The <code>NativeSeries</code> C++ class uses <code>napi_create_external_typed_array</code> to expose the C heap memory directly as a JavaScript TypedArray.</p>
+
+    <pre><code>C Heap Memory          JavaScript
+┌──────────────┐      ┌──────────────────┐
+│ float64[1000]│ ───▶ │ Float64Array     │
+│ (td_col_t)   │      │ .buffer points   │
+│              │      │  to C heap       │
+└──────────────┘      └──────────────────┘
+      ▲
+      │ No copy — same memory</code></pre>
+
+    <h3>Use-After-Free Safety</h3>
+    <p>A subtle hazard: JavaScript garbage collection may run <code>Series</code> destructor code <em>after</em> the Teide heap has been torn down during shutdown. The <code>heap_alive_</code> atomic flag prevents this:</p>
+
+    <ul>
+      <li>When the context is alive, <code>heap_alive_</code> is <code>true</code>. Series destructors call <code>td_release()</code> normally.</li>
+      <li>During shutdown, <code>heap_alive_</code> is set to <code>false</code> before <code>td_heap_destroy()</code> runs.</li>
+      <li>If GC triggers a Series destructor after shutdown, it checks <code>heap_alive_</code> and skips the <code>td_release()</code> call, avoiding a use-after-free crash.</li>
+    </ul>
+
+    <h2>Operation Graph</h2>
+    <p>The Teide engine represents computations as a directed acyclic graph (DAG) of operations. Each node in the DAG produces a column of data. The graph structure enables:</p>
+
+    <ul>
+      <li><strong>Common subexpression elimination</strong>: If two expressions reference the same column with the same transform, the computation runs once.</li>
+      <li><strong>Operator fusion</strong>: Element-wise operations (add, multiply, compare) on adjacent nodes are fused into a single pass over the data, reducing memory bandwidth.</li>
+      <li><strong>Lazy evaluation</strong>: The graph is only executed when results are materialized (on <code>collectSync()</code> or <code>collect()</code>).</li>
+    </ul>
+
+    <pre><code>Example: col('price').mul(lit(1.1)).gt(lit(100))
+
+           gt
+          / \
+        mul  lit(100)
+       / \
+  col('price')  lit(1.1)
+
+Fused into a single vectorized pass:
+  for each row: result[i] = (price[i] * 1.1) > 100</code></pre>
+
+    <h2>Memory Model</h2>
+    <p>The C17 core engine uses a custom memory allocator designed for columnar workloads:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Buddy Allocator</strong></td>
+          <td>Manages large power-of-2 block allocations for column data. Minimizes external fragmentation.</td>
+        </tr>
+        <tr>
+          <td><strong>Slab Cache</strong></td>
+          <td>Fast fixed-size allocations for internal metadata structures (graph nodes, hash entries).</td>
+        </tr>
+        <tr>
+          <td><strong>Thread-Local Heaps</strong></td>
+          <td>Each thread gets its own heap for allocation-heavy paths, avoiding contention on a global lock.</td>
+        </tr>
+        <tr>
+          <td><strong>Reference Counting</strong></td>
+          <td><code>td_retain()</code> / <code>td_release()</code> manage object lifetimes. When the refcount hits zero, memory is returned to the allocator.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>The TypeScript layer never allocates or frees native memory directly. The NAPI addon calls <code>td_retain()</code> when wrapping C objects and <code>td_release()</code> when JavaScript garbage-collects the wrapper.</p>
+
+    <h2>Build Process</h2>
+    <p>Building teide-js involves two compilation stages:</p>
+
+    <pre><code>┌─────────────────────────────────────────────────┐
+│ 1. CMake compiles vendor/teide/ (C17)           │
+│    → static library libteide.a                  │
+├─────────────────────────────────────────────────┤
+│ 2. node-gyp links src/*.cpp (C++17) + libteide  │
+│    → build/Release/teidedb_addon.node           │
+├─────────────────────────────────────────────────┤
+│ 3. tsc compiles lib/*.ts                        │
+│    → dist/*.js + dist/*.d.ts                    │
+└─────────────────────────────────────────────────┘</code></pre>
+
+    <h3>C++ Header Inclusion Order</h3>
+    <p>The <code>src/compat.h</code> header provides a C-atomic shim so that C17 Teide headers (which use <code>_Atomic(T)</code>) compile in C++ mode. This shim redefines <code>_Atomic(T)</code> as <code>volatile T</code> with GCC builtins. To avoid conflicts with the C++ <code>&lt;atomic&gt;</code> header:</p>
+
+    <ul>
+      <li>NAPI headers (<code>&lt;napi.h&gt;</code>) must be included <strong>before</strong> <code>compat.h</code>.</li>
+      <li>C++ standard headers (<code>&lt;string&gt;</code>, <code>&lt;vector&gt;</code>, etc.) must be included <strong>before</strong> <code>compat.h</code>.</li>
+      <li><code>compat.h</code> is included last, immediately before any <code>#include &lt;teide/td.h&gt;</code>.</li>
+    </ul>
+
+    <h3>Build Commands</h3>
+    <pre><code class="language-bash"># Full build: native addon (debug) + TypeScript
+npm run build
+
+# Native addon only (debug)
+npm run build:native
+
+# Native addon with -O3 optimizations
+npm run build:native:release
+
+# TypeScript compilation only
+npm run build:ts
+
+# Clean build artifacts
+npm run clean</code></pre>
+
+    <p>Requirements: CMake 3.15 or later, a C17/C++17 capable compiler, and Node.js 18 or later.</p>
+
+    <div class="nav-footer">
+      <a href="../api/" class="nav-prev">&larr; TypeScript API</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

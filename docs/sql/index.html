@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQL Quick Reference - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link active">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>SQL Quick Reference</h1>
+    <p>Teide provides a comprehensive SQL dialect for querying columnar data. This reference covers all supported SQL features, from basic queries to advanced window functions and set operations.</p>
+
+    <h2>Feature Overview</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Features</th>
+          <th>Reference</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Data Types</strong></td>
+          <td>BOOLEAN, INTEGER, BIGINT, REAL, VARCHAR, DATE, TIME, TIMESTAMP, SYM</td>
+          <td><a href="data-types.html">Data Types</a></td>
+        </tr>
+        <tr>
+          <td><strong>DDL</strong></td>
+          <td>CREATE TABLE, CREATE TABLE AS SELECT, DROP TABLE</td>
+          <td><a href="ddl.html">DDL</a></td>
+        </tr>
+        <tr>
+          <td><strong>DML</strong></td>
+          <td>INSERT INTO, UPDATE, DELETE</td>
+          <td><a href="dml.html">DML</a></td>
+        </tr>
+        <tr>
+          <td><strong>Queries</strong></td>
+          <td>SELECT, column aliases, DISTINCT, constant expressions</td>
+          <td><a href="queries.html">Queries</a></td>
+        </tr>
+        <tr>
+          <td><strong>Filtering</strong></td>
+          <td>WHERE, comparison operators, AND/OR/NOT, BETWEEN, IN, LIKE, IS NULL</td>
+          <td><a href="filtering.html">Filtering</a></td>
+        </tr>
+        <tr>
+          <td><strong>Expressions</strong></td>
+          <td>Arithmetic, string concatenation, CASE WHEN, CAST, NULL handling</td>
+          <td><a href="expressions.html">Expressions</a></td>
+        </tr>
+        <tr>
+          <td><strong>Aggregation</strong></td>
+          <td>GROUP BY, SUM, AVG, MIN, MAX, COUNT, HAVING</td>
+          <td><a href="aggregation.html">Aggregation</a></td>
+        </tr>
+        <tr>
+          <td><strong>Joins</strong></td>
+          <td>INNER JOIN, LEFT JOIN, CROSS JOIN</td>
+          <td><a href="joins.html">Joins</a></td>
+        </tr>
+        <tr>
+          <td><strong>Window Functions</strong></td>
+          <td>ROW_NUMBER, RANK, DENSE_RANK, NTILE, windowed aggregates, frame specs</td>
+          <td><a href="window-functions.html">Window Functions</a></td>
+        </tr>
+        <tr>
+          <td><strong>Sorting &amp; Limits</strong></td>
+          <td>ORDER BY ASC/DESC, NULLS FIRST/LAST, LIMIT, OFFSET</td>
+          <td><a href="sorting.html">Sorting &amp; Limits</a></td>
+        </tr>
+        <tr>
+          <td><strong>Set Operations</strong></td>
+          <td>UNION, UNION ALL, INTERSECT, EXCEPT</td>
+          <td><a href="set-operations.html">Set Operations</a></td>
+        </tr>
+        <tr>
+          <td><strong>Subqueries</strong></td>
+          <td>IN/NOT IN subqueries, derived tables, scalar subqueries</td>
+          <td><a href="subqueries.html">Subqueries</a></td>
+        </tr>
+        <tr>
+          <td><strong>Scalar Functions</strong></td>
+          <td>Math, string, conditional, and type conversion functions</td>
+          <td><a href="functions.html">Scalar Functions</a></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Running SQL in Teide JS</h2>
+    <p>All SQL statements are executed through the <code>Context</code> object. You can run queries synchronously or asynchronously:</p>
+
+    <pre><code class="language-js">import { Context } from 'teide-js';
+
+const ctx = new Context();
+
+// Load data from CSV
+ctx.sqlSync(`CREATE TABLE sales AS SELECT * FROM read_csv('sales.csv')`);
+
+// Run a query synchronously
+const table = ctx.sqlSync(`
+  SELECT region, SUM(amount) AS total
+  FROM sales
+  GROUP BY region
+  ORDER BY total DESC
+`);
+
+// Run a query asynchronously
+const result = await ctx.sql(`
+  SELECT product, AVG(price) AS avg_price
+  FROM sales
+  GROUP BY product
+  HAVING AVG(price) > 100
+`);
+
+// Clean up
+ctx[Symbol.dispose]();</code></pre>
+
+    <h2>Conventions Used in This Reference</h2>
+    <ul>
+      <li>SQL keywords are shown in <code>UPPERCASE</code> for clarity, but Teide SQL is case-insensitive for keywords.</li>
+      <li>Identifiers (table and column names) are case-sensitive.</li>
+      <li>Optional syntax is enclosed in square brackets: <code>[OPTIONAL]</code>.</li>
+      <li>Alternatives are separated by pipes: <code>option1 | option2</code>.</li>
+      <li>Ellipsis (<code>...</code>) indicates repeatable elements.</li>
+    </ul>
+
+    <div class="nav-footer">
+      <a href="../tutorial/" class="nav-prev">&larr; Tutorial</a>
+      <a href="data-types.html" class="nav-next">Data Types &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tutorial - Teide JS</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<div class="sidebar-overlay"></div>
+<button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+<nav class="sidebar">
+  <a href="../" class="sidebar-logo">
+    <img src="../assets/teide-logo.svg" alt="Teide">
+    <span>Teide JS</span>
+    <span class="docs-badge">Docs</span>
+  </a>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Overview</div>
+    <a href="../" class="sidebar-link">Home</a>
+    <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+    <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Guides</div>
+    <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+    <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+    <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+    <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+    <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">SQL Reference</div>
+    <a href="../sql/" class="sidebar-link">Overview</a>
+    <a href="../sql/data-types.html" class="sidebar-link">Data Types</a>
+    <a href="../sql/ddl.html" class="sidebar-link">DDL</a>
+    <a href="../sql/dml.html" class="sidebar-link">DML</a>
+    <a href="../sql/queries.html" class="sidebar-link">Queries</a>
+    <a href="../sql/filtering.html" class="sidebar-link">Filtering</a>
+    <a href="../sql/expressions.html" class="sidebar-link">Expressions</a>
+    <a href="../sql/aggregation.html" class="sidebar-link">Aggregation</a>
+    <a href="../sql/joins.html" class="sidebar-link">Joins</a>
+    <a href="../sql/window-functions.html" class="sidebar-link">Window Functions</a>
+    <a href="../sql/sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+    <a href="../sql/set-operations.html" class="sidebar-link">Set Operations</a>
+    <a href="../sql/subqueries.html" class="sidebar-link">Subqueries</a>
+    <a href="../sql/functions.html" class="sidebar-link">Scalar Functions</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Developer</div>
+    <a href="../api/" class="sidebar-link">TypeScript API</a>
+    <a href="../architecture/" class="sidebar-link">Architecture</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Graph &amp; Vector</div>
+    <a href="../sql/pgq.html" class="sidebar-link">SQL/PGQ</a>
+    <a href="../sql/graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+    <a href="../sql/vector-search.html" class="sidebar-link">Vector Search</a>
+  </div>
+</nav>
+
+<div class="main">
+  <main class="content">
+
+    <p class="section-label">Overview</p>
+    <h1>Learn Teide JS in 10 Minutes</h1>
+    <p class="lead">A hands-on walkthrough that takes you from zero to productive. By the end, you'll know how to create tables, query data with SQL, aggregate, join, use window functions, load CSV files, and work with the fluent API.</p>
+
+    <!-- Step 1 -->
+    <h2>1. Install and Import</h2>
+
+    <pre><code class="language-bash">npm install teidedb</code></pre>
+
+    <pre><code class="language-js">import { Context, col, lit } from 'teidedb';
+
+const ctx = new Context();</code></pre>
+
+    <p>The <code>Context</code> is the entry point. It initializes the Teide engine and gives you a session to run queries against.</p>
+
+    <!-- Step 2 -->
+    <h2>2. Create Tables</h2>
+
+    <p>Use standard SQL <code>CREATE TABLE</code> and <code>INSERT INTO</code> to build tables from scratch:</p>
+
+    <pre><code class="language-sql">CREATE TABLE employees (
+  id INTEGER,
+  name VARCHAR,
+  department VARCHAR,
+  salary DOUBLE,
+  hire_year INTEGER
+)</code></pre>
+
+    <pre><code class="language-js">ctx.executeSync(`
+  CREATE TABLE employees (
+    id INTEGER,
+    name VARCHAR,
+    department VARCHAR,
+    salary DOUBLE,
+    hire_year INTEGER
+  )
+`);
+
+ctx.executeSync(`INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 95000, 2019)`);
+ctx.executeSync(`INSERT INTO employees VALUES (2, 'Bob', 'Marketing', 72000, 2020)`);
+ctx.executeSync(`INSERT INTO employees VALUES (3, 'Carol', 'Engineering', 105000, 2018)`);
+ctx.executeSync(`INSERT INTO employees VALUES (4, 'Dave', 'Marketing', 68000, 2021)`);
+ctx.executeSync(`INSERT INTO employees VALUES (5, 'Eve', 'Engineering', 112000, 2017)`);
+ctx.executeSync(`INSERT INTO employees VALUES (6, 'Frank', 'Sales', 78000, 2020)`);</code></pre>
+
+    <!-- Step 3 -->
+    <h2>3. Query Data</h2>
+
+    <p>Run <code>SELECT</code> queries to retrieve data. Results come back as <code>Table</code> objects.</p>
+
+    <pre><code class="language-js">const result = ctx.executeSync(`
+  SELECT name, department, salary
+  FROM employees
+  ORDER BY salary DESC
+  LIMIT 3
+`);
+
+console.log(result.columns);  // ['name', 'department', 'salary']
+console.log(result.nRows);    // 3</code></pre>
+
+    <div class="output">Columns: ['name', 'department', 'salary']
+Rows: 3
+  Eve        Engineering   112000
+  Carol      Engineering   105000
+  Alice      Engineering    95000</div>
+
+    <p>Use aliases with <code>AS</code> to rename output columns:</p>
+
+    <pre><code class="language-sql">SELECT name AS employee, salary AS annual_pay
+FROM employees
+ORDER BY annual_pay DESC
+LIMIT 3</code></pre>
+
+    <!-- Step 4 -->
+    <h2>4. Filter with WHERE</h2>
+
+    <p>The <code>WHERE</code> clause supports comparisons, <code>BETWEEN</code>, <code>IN</code>, and <code>LIKE</code>:</p>
+
+    <pre><code class="language-js">// Comparison
+ctx.executeSync(`SELECT name, salary FROM employees WHERE salary > 80000`);
+
+// BETWEEN
+ctx.executeSync(`SELECT name, hire_year FROM employees WHERE hire_year BETWEEN 2019 AND 2021`);
+
+// IN
+ctx.executeSync(`SELECT name, department FROM employees WHERE department IN ('Engineering', 'Sales')`);
+
+// LIKE
+ctx.executeSync(`SELECT name FROM employees WHERE name LIKE 'A%'`);</code></pre>
+
+    <div class="output">-- salary > 80000:
+  Alice   95000
+  Carol   105000
+  Eve     112000
+
+-- hire_year BETWEEN 2019 AND 2021:
+  Alice   2019
+  Bob     2020
+  Dave    2021
+  Frank   2020
+
+-- department IN ('Engineering', 'Sales'):
+  Alice   Engineering
+  Carol   Engineering
+  Eve     Engineering
+  Frank   Sales
+
+-- name LIKE 'A%':
+  Alice</div>
+
+    <!-- Step 5 -->
+    <h2>5. Aggregate with GROUP BY</h2>
+
+    <p>Use aggregate functions like <code>COUNT</code>, <code>AVG</code>, <code>MIN</code>, <code>MAX</code>, and <code>SUM</code>. Filter groups with <code>HAVING</code>.</p>
+
+    <pre><code class="language-js">const deptStats = ctx.executeSync(`
+  SELECT
+    department,
+    COUNT(*) AS headcount,
+    AVG(salary) AS avg_salary,
+    MIN(salary) AS min_salary,
+    MAX(salary) AS max_salary,
+    SUM(salary) AS total_salary
+  FROM employees
+  GROUP BY department
+  HAVING COUNT(*) > 1
+  ORDER BY avg_salary DESC
+`);
+
+console.log(deptStats.columns);
+console.log(deptStats.nRows);</code></pre>
+
+    <div class="output">department   headcount   avg_salary   min_salary   max_salary   total_salary
+Engineering  3           104000       95000        112000       312000
+Marketing    2            70000       68000         72000       140000</div>
+
+    <!-- Step 6 -->
+    <h2>6. Join Tables</h2>
+
+    <p>Create a second table and join it with the first:</p>
+
+    <pre><code class="language-js">ctx.executeSync(`
+  CREATE TABLE projects (
+    project_id INTEGER,
+    project_name VARCHAR,
+    department VARCHAR,
+    budget DOUBLE
+  )
+`);
+
+ctx.executeSync(`INSERT INTO projects VALUES (1, 'Backend Rewrite', 'Engineering', 500000)`);
+ctx.executeSync(`INSERT INTO projects VALUES (2, 'Brand Campaign', 'Marketing', 150000)`);
+ctx.executeSync(`INSERT INTO projects VALUES (3, 'ML Pipeline', 'Engineering', 300000)`);
+
+// INNER JOIN
+const joined = ctx.executeSync(`
+  SELECT e.name, e.department, p.project_name, p.budget
+  FROM employees e
+  INNER JOIN projects p ON e.department = p.department
+  ORDER BY e.name, p.project_name
+`);
+
+// LEFT JOIN (includes employees with no matching project)
+const leftJoined = ctx.executeSync(`
+  SELECT e.name, p.project_name
+  FROM employees e
+  LEFT JOIN projects p ON e.department = p.department
+  ORDER BY e.name
+`);</code></pre>
+
+    <div class="output">-- INNER JOIN:
+Alice   Engineering   Backend Rewrite   500000
+Alice   Engineering   ML Pipeline       300000
+Bob     Marketing     Brand Campaign    150000
+Carol   Engineering   Backend Rewrite   500000
+Carol   Engineering   ML Pipeline       300000
+...
+
+-- LEFT JOIN:
+Alice   Backend Rewrite
+Alice   ML Pipeline
+Bob     Brand Campaign
+Carol   Backend Rewrite
+Carol   ML Pipeline
+Dave    Brand Campaign
+Eve     Backend Rewrite
+Eve     ML Pipeline
+Frank   NULL</div>
+
+    <!-- Step 7 -->
+    <h2>7. Window Functions</h2>
+
+    <p>Window functions let you compute values across rows without collapsing them. Use <code>ROW_NUMBER()</code>, <code>RANK()</code>, and running totals with <code>SUM() OVER</code>.</p>
+
+    <pre><code class="language-js">// Row numbers within each department
+const ranked = ctx.executeSync(`
+  SELECT
+    name,
+    department,
+    salary,
+    ROW_NUMBER() OVER (
+      PARTITION BY department ORDER BY salary DESC
+    ) AS rank_in_dept
+  FROM employees
+`);
+
+// Running total of salary ordered by hire_year
+const running = ctx.executeSync(`
+  SELECT
+    name,
+    hire_year,
+    salary,
+    SUM(salary) OVER (
+      ORDER BY hire_year
+      ROWS UNBOUNDED PRECEDING
+    ) AS running_total
+  FROM employees
+`);</code></pre>
+
+    <div class="output">-- ROW_NUMBER:
+name    department    salary   rank_in_dept
+Eve     Engineering   112000   1
+Carol   Engineering   105000   2
+Alice   Engineering    95000   3
+Bob     Marketing      72000   1
+Dave    Marketing      68000   2
+Frank   Sales          78000   1
+
+-- Running total:
+name    hire_year   salary   running_total
+Eve     2017        112000   112000
+Carol   2018        105000   217000
+Alice   2019         95000   312000
+Bob     2020         72000   384000
+Frank   2020         78000   462000
+Dave    2021         68000   530000</div>
+
+    <!-- Step 8 -->
+    <h2>8. Subqueries</h2>
+
+    <p>Subqueries work in <code>WHERE</code> clauses, <code>FROM</code> clauses, and with <code>IN</code>:</p>
+
+    <pre><code class="language-js">// Employees earning above average
+const aboveAvg = ctx.executeSync(`
+  SELECT name, salary
+  FROM employees
+  WHERE salary > (SELECT AVG(salary) FROM employees)
+  ORDER BY salary DESC
+`);
+
+// Departments with total salary over 200k
+const bigDepts = ctx.executeSync(`
+  SELECT name, department
+  FROM employees
+  WHERE department IN (
+    SELECT department
+    FROM employees
+    GROUP BY department
+    HAVING SUM(salary) > 200000
+  )
+`);</code></pre>
+
+    <div class="output">-- Above average salary:
+Eve     112000
+Carol   105000
+Alice    95000
+
+-- Departments with total > 200k:
+Alice   Engineering
+Carol   Engineering
+Eve     Engineering</div>
+
+    <!-- Step 9 -->
+    <h2>9. Load CSV Files</h2>
+
+    <p>Load external CSV data directly into tables using <code>read_csv()</code>:</p>
+
+    <pre><code class="language-js">// Create a table from a CSV file
+ctx.executeSync("CREATE TABLE sales AS SELECT * FROM read_csv('sales.csv')");
+
+// Query the loaded data immediately
+const topSales = ctx.executeSync(`
+  SELECT product, SUM(amount) AS total
+  FROM sales
+  GROUP BY product
+  ORDER BY total DESC
+  LIMIT 10
+`);
+
+console.log(topSales.columns, topSales.nRows);</code></pre>
+
+    <div class="note">
+      <p><strong>Tip:</strong> The <code>read_csv()</code> function auto-detects column types, delimiters, and headers. Pass an absolute or relative file path as the argument.</p>
+    </div>
+
+    <!-- Step 10 -->
+    <h2>10. Use the Fluent API</h2>
+
+    <p>The fluent API lets you build queries programmatically. Operations are lazy &mdash; they only execute when you call <code>collectSync()</code> or <code>collect()</code>.</p>
+
+    <pre><code class="language-js">import { Context, col, lit } from 'teidedb';
+
+const ctx = new Context();
+ctx.executeSync("CREATE TABLE t AS SELECT * FROM read_csv('data.csv')");
+const table = ctx.executeSync("SELECT * FROM t");
+
+// Filter: rows where price > 50
+const expensive = table
+  .filter(col('price').gt(lit(50)))
+  .collectSync();
+
+// Sort and limit
+const topFive = table
+  .sort('price', { descending: true })
+  .head(5)
+  .collectSync();
+
+// Group by and aggregate
+const summary = table
+  .groupBy('category')
+  .agg(col('price').sum().alias('total'))
+  .sort('total', { descending: true })
+  .collectSync();
+
+console.log(summary.columns, summary.nRows);</code></pre>
+
+    <p>You can chain as many operations as you need. The query is compiled and executed in a single pass when you call <code>collectSync()</code>.</p>
+
+    <!-- Step 11 -->
+    <h2>11. Cleanup</h2>
+
+    <p>Always destroy the context when you are done. This tears down the background Teide thread and frees all C heap memory.</p>
+
+    <pre><code class="language-js">ctx.destroy();</code></pre>
+
+    <p>If you are using TypeScript with the <code>using</code> declaration (TC39 explicit resource management), cleanup is automatic:</p>
+
+    <pre><code class="language-js">// With Symbol.dispose support
+{
+  using ctx = new Context();
+  ctx.executeSync("SELECT 1 + 1 AS result");
+} // ctx.destroy() is called automatically</code></pre>
+
+    <!-- Next Steps -->
+    <h2>Next Steps</h2>
+
+    <div class="card-grid">
+      <a href="../sql/" class="card" style="text-decoration:none;">
+        <h3>SQL Reference</h3>
+        <p>Complete reference for all supported SQL syntax, data types, and built-in functions.</p>
+      </a>
+      <a href="../api/" class="card" style="text-decoration:none;">
+        <h3>TypeScript API</h3>
+        <p>Full API documentation for Context, Table, Query, Expr, and Series classes.</p>
+      </a>
+      <a href="../guides/graph-queries.html" class="card" style="text-decoration:none;">
+        <h3>Graph Queries</h3>
+        <p>Learn SQL/PGQ: property graphs, pattern matching, shortest paths, and graph algorithms.</p>
+      </a>
+      <a href="../guides/vector-search.html" class="card" style="text-decoration:none;">
+        <h3>Vector Search</h3>
+        <p>Embedding-based retrieval with cosine similarity, euclidean distance, and HNSW indexes.</p>
+      </a>
+    </div>
+
+    <!-- Navigation -->
+    <div class="page-nav">
+      <a href="../getting-started/" class="prev">
+        <span class="nav-label">Previous</span>
+        <span class="nav-title">Getting Started</span>
+      </a>
+      <a href="../sql/" class="next">
+        <span class="nav-label">Next</span>
+        <span class="nav-title">SQL Reference</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<script defer src="../app.js"></script>
+</body>
+</html>

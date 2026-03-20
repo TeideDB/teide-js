@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SELECT Queries - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link active">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>SELECT Queries</h1>
+    <p>The <code>SELECT</code> statement retrieves data from one or more tables. This page covers the fundamental query patterns.</p>
+
+    <h2>Basic SELECT</h2>
+    <p>Retrieve all columns or specific columns from a table.</p>
+    <pre><code class="language-sql">-- All columns
+SELECT * FROM employees;
+
+-- Specific columns
+SELECT name, department, salary FROM employees;
+
+-- Single column
+SELECT name FROM employees;</code></pre>
+
+    <h2>Column Aliases</h2>
+    <p>Use <code>AS</code> to rename columns in the result set. Aliases can be used in <code>ORDER BY</code> but not in <code>WHERE</code>.</p>
+    <pre><code class="language-sql">SELECT
+  name AS employee_name,
+  salary AS annual_salary,
+  salary / 12 AS monthly_salary
+FROM employees;
+
+-- AS keyword is optional
+SELECT name employee_name, salary annual_salary
+FROM employees;</code></pre>
+
+    <h2>DISTINCT</h2>
+    <p>Removes duplicate rows from the result set.</p>
+    <pre><code class="language-sql">-- Unique departments
+SELECT DISTINCT department FROM employees;
+
+-- Unique combinations
+SELECT DISTINCT department, active FROM employees;</code></pre>
+
+    <h2>SELECT Without FROM</h2>
+    <p>Evaluate constant expressions without referencing a table.</p>
+    <pre><code class="language-sql">-- Arithmetic
+SELECT 2 + 3;
+-- Result: 5
+
+-- String
+SELECT 'Hello, ' || 'world!';
+-- Result: Hello, world!
+
+-- Multiple expressions
+SELECT 42 AS answer, CAST('2024-06-15' AS DATE) AS today;
+
+-- Function calls
+SELECT ABS(-10), UPPER('hello'), ROUND(3.14159, 2);</code></pre>
+
+    <h2>Counting Rows</h2>
+    <pre><code class="language-sql">-- Total row count
+SELECT COUNT(*) FROM employees;
+
+-- Count non-NULL values in a column
+SELECT COUNT(department) FROM employees;
+
+-- Count distinct values
+SELECT COUNT(DISTINCT department) FROM employees;</code></pre>
+
+    <h2>ORDER BY with Expressions</h2>
+    <p>Sort results by column names, aliases, expressions, or ordinal positions.</p>
+    <pre><code class="language-sql">-- By column name
+SELECT name, salary FROM employees
+ORDER BY salary DESC;
+
+-- By alias
+SELECT name, salary * 12 AS annual
+FROM employees
+ORDER BY annual DESC;
+
+-- By expression
+SELECT name, salary FROM employees
+ORDER BY salary * 0.7 + 10000 DESC;
+
+-- By ordinal position (1-based)
+SELECT name, department, salary FROM employees
+ORDER BY 2, 3 DESC;
+
+-- Multiple keys
+SELECT name, department, salary
+FROM employees
+ORDER BY department ASC, salary DESC;</code></pre>
+
+    <h2>Complete SELECT Syntax</h2>
+    <p>The full <code>SELECT</code> statement follows this evaluation order:</p>
+    <pre><code class="language-sql">SELECT [DISTINCT] expr1 [AS alias1], expr2 [AS alias2], ...
+FROM table_name
+[WHERE condition]
+[GROUP BY col1, col2, ...]
+[HAVING condition]
+[ORDER BY col1 [ASC|DESC], ...]
+[LIMIT count]
+[OFFSET skip];</code></pre>
+
+    <p>Logical evaluation order:</p>
+    <ol>
+      <li><code>FROM</code> &mdash; source table(s)</li>
+      <li><code>WHERE</code> &mdash; row-level filtering</li>
+      <li><code>GROUP BY</code> &mdash; grouping</li>
+      <li><code>HAVING</code> &mdash; group-level filtering</li>
+      <li><code>SELECT</code> &mdash; expression evaluation and aliases</li>
+      <li><code>DISTINCT</code> &mdash; deduplication</li>
+      <li><code>ORDER BY</code> &mdash; sorting</li>
+      <li><code>LIMIT</code> / <code>OFFSET</code> &mdash; pagination</li>
+    </ol>
+
+    <h2>Using Queries from Node.js</h2>
+    <pre><code class="language-js">import { Context } from 'teide-js';
+
+const ctx = new Context();
+ctx.sqlSync(`CREATE TABLE sales AS SELECT * FROM read_csv('sales.csv')`);
+
+// Synchronous query
+const top5 = ctx.sqlSync(`
+  SELECT product, SUM(amount) AS total
+  FROM sales
+  GROUP BY product
+  ORDER BY total DESC
+  LIMIT 5
+`);
+
+// Access results
+for (let i = 0; i &lt; top5.height; i++) {
+  const product = top5.column('product').get(i);
+  const total = top5.column('total').get(i);
+  console.log(`${product}: ${total}`);
+}
+
+// Async query
+const result = await ctx.sql(`SELECT DISTINCT region FROM sales`);
+
+ctx[Symbol.dispose]();</code></pre>
+
+    <div class="nav-footer">
+      <a href="dml.html" class="nav-prev">&larr; DML</a>
+      <a href="filtering.html" class="nav-next">Filtering &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

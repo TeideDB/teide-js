@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DDL - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link active">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>Data Definition Language (DDL)</h1>
+    <p>DDL statements create and manage table structures in Teide. Tables are columnar and stored in-memory for high-performance analytical queries.</p>
+
+    <h2>CREATE TABLE</h2>
+    <p>Creates a new table with explicitly defined columns and types.</p>
+    <pre><code class="language-sql">CREATE TABLE table_name (
+  column1 type1,
+  column2 type2,
+  ...
+);</code></pre>
+
+    <h3>Example</h3>
+    <pre><code class="language-sql">CREATE TABLE employees (
+  id INTEGER,
+  name VARCHAR,
+  department SYM,
+  salary REAL,
+  hired DATE,
+  active BOOLEAN
+);</code></pre>
+
+    <h2>CREATE TABLE AS SELECT (CTAS)</h2>
+    <p>Creates a new table from the result of a query. Column names and types are inferred from the query output.</p>
+    <pre><code class="language-sql">CREATE TABLE table_name AS
+  SELECT ...;</code></pre>
+
+    <h3>Examples</h3>
+    <pre><code class="language-sql">-- Create from a query
+CREATE TABLE senior_employees AS
+  SELECT name, department, salary
+  FROM employees
+  WHERE salary > 100000;
+
+-- Create from CSV file
+CREATE TABLE sales AS
+  SELECT * FROM read_csv('data/sales.csv');
+
+-- Create with aggregation
+CREATE TABLE dept_stats AS
+  SELECT department,
+         COUNT(*) AS headcount,
+         AVG(salary) AS avg_salary
+  FROM employees
+  GROUP BY department;</code></pre>
+
+    <h2>CREATE OR REPLACE TABLE</h2>
+    <p>Creates a table, dropping any existing table with the same name first. This is useful for reloading data or rebuilding derived tables.</p>
+    <pre><code class="language-sql">CREATE OR REPLACE TABLE table_name (
+  column1 type1,
+  column2 type2,
+  ...
+);
+
+-- Also works with AS SELECT
+CREATE OR REPLACE TABLE daily_summary AS
+  SELECT date, SUM(amount) AS total
+  FROM transactions
+  GROUP BY date;</code></pre>
+
+    <h2>CREATE TABLE IF NOT EXISTS</h2>
+    <p>Creates a table only if no table with the same name already exists. If the table exists, the statement is a no-op (no error is raised).</p>
+    <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS config (
+  key VARCHAR,
+  value VARCHAR
+);</code></pre>
+
+    <h2>DROP TABLE</h2>
+    <p>Removes a table and all its data. Raises an error if the table does not exist.</p>
+    <pre><code class="language-sql">DROP TABLE table_name;</code></pre>
+
+    <h3>Example</h3>
+    <pre><code class="language-sql">DROP TABLE employees;</code></pre>
+
+    <h2>DROP TABLE IF EXISTS</h2>
+    <p>Removes a table if it exists. If the table does not exist, the statement is a no-op.</p>
+    <pre><code class="language-sql">DROP TABLE IF EXISTS table_name;</code></pre>
+
+    <h3>Example</h3>
+    <pre><code class="language-sql">-- Safe cleanup before reload
+DROP TABLE IF EXISTS sales;
+CREATE TABLE sales AS SELECT * FROM read_csv('sales.csv');</code></pre>
+
+    <h2>Using DDL from Node.js</h2>
+    <pre><code class="language-js">import { Context } from 'teide-js';
+
+const ctx = new Context();
+
+// Create a table with explicit schema
+ctx.sqlSync(`
+  CREATE TABLE sensors (
+    sensor_id INTEGER,
+    location SYM,
+    reading REAL,
+    ts TIMESTAMP
+  )
+`);
+
+// Load CSV into a table
+ctx.sqlSync(`CREATE TABLE logs AS SELECT * FROM read_csv('logs.csv')`);
+
+// Replace a table (idempotent reload)
+ctx.sqlSync(`CREATE OR REPLACE TABLE logs AS SELECT * FROM read_csv('logs.csv')`);
+
+// Drop when done
+ctx.sqlSync(`DROP TABLE IF EXISTS sensors`);
+
+ctx[Symbol.dispose]();</code></pre>
+
+    <div class="nav-footer">
+      <a href="data-types.html" class="nav-prev">&larr; Data Types</a>
+      <a href="dml.html" class="nav-next">DML &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

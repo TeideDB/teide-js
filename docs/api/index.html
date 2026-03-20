@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TypeScript API Reference - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="../sql/" class="sidebar-link">Overview</a>
+      <a href="../sql/data-types.html" class="sidebar-link">Data Types</a>
+      <a href="../sql/ddl.html" class="sidebar-link">DDL</a>
+      <a href="../sql/dml.html" class="sidebar-link">DML</a>
+      <a href="../sql/queries.html" class="sidebar-link">Queries</a>
+      <a href="../sql/filtering.html" class="sidebar-link">Filtering</a>
+      <a href="../sql/expressions.html" class="sidebar-link">Expressions</a>
+      <a href="../sql/aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="../sql/joins.html" class="sidebar-link">Joins</a>
+      <a href="../sql/window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="../sql/sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="../sql/set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="../sql/subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="../sql/functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link active">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="../sql/pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="../sql/graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="../sql/vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">DEVELOPER</div>
+    <h1>TypeScript API Reference</h1>
+    <p>The teide-js package exposes a fluent, chainable API for loading data, building queries, and accessing results. All heavy computation runs on a dedicated background thread, with both synchronous and asynchronous execution paths.</p>
+
+    <h2>Context</h2>
+    <p>The <code>Context</code> is the entry point for all Teide operations. It manages the native engine lifecycle, including the background Teide thread and the C heap.</p>
+
+    <pre><code class="language-ts">class Context {
+  constructor()
+  readCsvSync(path: string): Table
+  readCsv(path: string): Promise&lt;Table&gt;
+  executeSync(sql: string): Table | null  // Table for queries, null for DDL/DML
+  execute(sql: string): Promise&lt;Table | null&gt;
+  destroy(): void  // Also available via Symbol.dispose
+}</code></pre>
+
+    <h3>Creating and Disposing</h3>
+    <pre><code class="language-js">import { Context } from 'teide-js';
+
+// Create a new context
+const ctx = new Context();
+
+// Use it...
+
+// Option 1: explicit cleanup
+ctx.destroy();
+
+// Option 2: using Symbol.dispose (requires TypeScript 5.2+ or Node 20+)
+{
+  using ctx = new Context();
+  // ctx is automatically destroyed at end of block
+}</code></pre>
+
+    <h3>Loading CSV Data</h3>
+    <pre><code class="language-js">// Synchronous
+const table = ctx.readCsvSync('data/sales.csv');
+console.log(`Loaded ${table.nRows} rows, ${table.nCols} columns`);
+console.log('Columns:', table.columns);
+
+// Asynchronous
+const table = await ctx.readCsv('data/sales.csv');</code></pre>
+
+    <h3>Executing SQL</h3>
+    <pre><code class="language-js">// DDL returns null
+ctx.executeSync(`CREATE TABLE users (id INTEGER, name VARCHAR, age INTEGER)`);
+
+// DML returns null
+ctx.executeSync(`INSERT INTO users VALUES (1, 'Alice', 30), (2, 'Bob', 25)`);
+
+// Queries return a Table
+const result = ctx.executeSync(`SELECT * FROM users WHERE age > 20`);
+console.log(result.nRows); // 2
+
+// Async execution
+const result = await ctx.execute(`SELECT name, age FROM users ORDER BY age DESC`);</code></pre>
+
+    <h2>Table</h2>
+    <p>A <code>Table</code> represents a columnar result set. It provides metadata, column access, and serves as the starting point for the fluent query API.</p>
+
+    <pre><code class="language-ts">class Table {
+  readonly nRows: number
+  readonly nCols: number
+  readonly columns: string[]
+  col(name: string): Series
+  filter(expr: Expr): Query
+  groupBy(...cols: string[]): GroupBy
+  sort(col: string, opts?: { descending?: boolean }): Query
+  head(n: number): Query
+}</code></pre>
+
+    <h3>Inspecting Results</h3>
+    <pre><code class="language-js">const table = ctx.readCsvSync('sales.csv');
+
+console.log(`${table.nRows} rows x ${table.nCols} cols`);
+console.log('Column names:', table.columns);
+
+// Access individual columns
+const revenue = table.col('revenue');
+console.log('Revenue dtype:', revenue.dtype);
+console.log('First 5 values:', Array.from(revenue.data.slice(0, 5)));</code></pre>
+
+    <h3>Starting Queries from a Table</h3>
+    <pre><code class="language-js">import { col, lit } from 'teide-js';
+
+// Filter
+const expensive = table
+  .filter(col('price').gt(lit(100)))
+  .collectSync();
+
+// Sort
+const sorted = table
+  .sort('revenue', { descending: true })
+  .collectSync();
+
+// Head (first N rows)
+const preview = table.head(10).collectSync();
+
+// Group by
+const summary = table
+  .groupBy('region')
+  .agg(col('revenue').sum().alias('total_revenue'))
+  .collectSync();</code></pre>
+
+    <h2>Series</h2>
+    <p>A <code>Series</code> represents a single column of data. It provides zero-copy access to the underlying C heap memory via TypedArrays &mdash; no data is copied between the native engine and JavaScript.</p>
+
+    <pre><code class="language-ts">class Series {
+  readonly name: string
+  readonly dtype: string
+  readonly length: number
+  readonly data: TypedArray  // Float64Array, Int32Array, BigInt64Array, etc.
+  readonly nullBitmap: Uint8Array | null
+  readonly indices: Int32Array | null      // for SYM (dictionary) columns
+  readonly dictionary: string[] | null     // for SYM (dictionary) columns
+}</code></pre>
+
+    <h3>Numeric Columns</h3>
+    <pre><code class="language-js">const prices = table.col('price');
+console.log(prices.dtype);   // "F64"
+console.log(prices.length);  // 1000
+
+// Direct TypedArray access (zero-copy)
+const data = prices.data;    // Float64Array
+const sum = data.reduce((a, b) => a + b, 0);
+const avg = sum / data.length;</code></pre>
+
+    <h3>Dictionary (SYM) Columns</h3>
+    <pre><code class="language-js">const regions = table.col('region');
+console.log(regions.dtype);      // "SYM"
+console.log(regions.dictionary); // ["North", "South", "East", "West"]
+console.log(regions.indices);    // Int32Array [0, 1, 2, 0, 3, ...]
+
+// Resolve the i-th value
+const dict = regions.dictionary;
+const idx = regions.indices;
+for (let i = 0; i &lt; regions.length; i++) {
+  console.log(dict[idx[i]]);    // "North", "South", "East", ...
+}</code></pre>
+
+    <h3>Null Handling</h3>
+    <pre><code class="language-js">const ages = table.col('age');
+const bitmap = ages.nullBitmap; // Uint8Array or null
+
+if (bitmap) {
+  for (let i = 0; i &lt; ages.length; i++) {
+    const byteIdx = i >> 3;
+    const bitIdx = i & 7;
+    const isNull = (bitmap[byteIdx] & (1 &lt;&lt; bitIdx)) === 0;
+    if (!isNull) {
+      console.log(`Row ${i}: ${ages.data[i]}`);
+    }
+  }
+}</code></pre>
+
+    <h2>Expr (Expression Builder)</h2>
+    <p>Expressions represent computations that are evaluated lazily by the engine. Use the <code>col()</code> and <code>lit()</code> factory functions to create expression trees, then combine them with arithmetic, comparison, and logical operators.</p>
+
+    <pre><code class="language-ts">function col(name: string): Expr
+function lit(value: number | string | boolean): Expr
+
+class Expr {
+  // Arithmetic
+  add(other: Expr): Expr
+  sub(other: Expr): Expr
+  mul(other: Expr): Expr
+  div(other: Expr): Expr
+  mod(other: Expr): Expr
+
+  // Comparison
+  eq(other: Expr): Expr
+  ne(other: Expr): Expr
+  lt(other: Expr): Expr
+  le(other: Expr): Expr
+  gt(other: Expr): Expr
+  ge(other: Expr): Expr
+
+  // Logical
+  and(other: Expr): Expr
+  or(other: Expr): Expr
+  not(): Expr
+
+  // Math
+  abs(): Expr
+  sqrt(): Expr
+  log(): Expr
+  exp(): Expr
+  ceil(): Expr
+  floor(): Expr
+  neg(): Expr
+
+  // Null
+  isNull(): Expr
+
+  // Aggregation
+  sum(): Expr
+  avg(): Expr
+  mean(): Expr    // alias for avg()
+  min(): Expr
+  max(): Expr
+  count(): Expr
+  first(): Expr
+  last(): Expr
+
+  // Naming
+  alias(name: string): Expr
+}</code></pre>
+
+    <h3>Building Expressions</h3>
+    <pre><code class="language-js">import { col, lit } from 'teide-js';
+
+// Column reference
+const price = col('price');
+
+// Literal value
+const threshold = lit(100);
+
+// Arithmetic
+const margin = col('revenue').sub(col('cost'));
+const taxed = col('price').mul(lit(1.2));
+const perUnit = col('total').div(col('quantity'));
+
+// Comparison
+const isExpensive = col('price').gt(lit(100));
+const isInStock = col('quantity').gt(lit(0));
+
+// Logical combination
+const filter = isExpensive.and(isInStock);
+
+// Math functions
+const logPrice = col('price').log();
+const absChange = col('delta').abs();
+
+// Null check
+const hasMissing = col('email').isNull();
+
+// Aggregation with alias
+const totalRevenue = col('revenue').sum().alias('total_revenue');
+const avgPrice = col('price').avg().alias('avg_price');</code></pre>
+
+    <h3>Complete Example</h3>
+    <pre><code class="language-js">import { Context, col, lit } from 'teide-js';
+
+const ctx = new Context();
+const sales = ctx.readCsvSync('sales.csv');
+
+// Multi-step analysis pipeline
+const result = sales
+  .filter(col('quantity').gt(lit(0)))
+  .groupBy('region')
+  .agg(
+    col('revenue').sum().alias('total_revenue'),
+    col('revenue').avg().alias('avg_revenue'),
+    col('price').min().alias('min_price'),
+    col('price').max().alias('max_price'),
+    col('revenue').count().alias('num_sales')
+  )
+  .sort('total_revenue', { descending: true })
+  .head(10)
+  .collectSync();
+
+for (const name of result.columns) {
+  console.log(`${name}:`, Array.from(result.col(name).data));
+}
+
+ctx.destroy();</code></pre>
+
+    <h2>Query</h2>
+    <p>A <code>Query</code> represents a lazy chain of operations. No computation happens until you call <code>collectSync()</code> or <code>collect()</code>. Operations can be chained fluently.</p>
+
+    <pre><code class="language-ts">class Query {
+  filter(expr: Expr): Query
+  groupBy(...cols: string[]): GroupBy
+  sort(col: string, opts?: { descending?: boolean }): Query
+  head(n: number): Query
+  collectSync(): Table
+  collect(): Promise&lt;Table&gt;
+}</code></pre>
+
+    <h3>Chaining Operations</h3>
+    <pre><code class="language-js">// All operations are lazy until collect
+const query = table
+  .filter(col('status').eq(lit('active')))
+  .sort('created_at', { descending: true })
+  .head(100);
+
+// Execute synchronously
+const result = query.collectSync();
+
+// Or execute asynchronously
+const result = await query.collect();</code></pre>
+
+    <h3>Filter then Group</h3>
+    <pre><code class="language-js">const result = table
+  .filter(col('year').ge(lit(2020)))
+  .groupBy('category')
+  .agg(
+    col('sales').sum().alias('total'),
+    col('sales').avg().alias('average')
+  )
+  .sort('total', { descending: true })
+  .collectSync();</code></pre>
+
+    <h2>GroupBy</h2>
+    <p>A <code>GroupBy</code> is created from a <code>Table</code> or <code>Query</code> via <code>.groupBy()</code>. Call <code>.agg()</code> with aggregation expressions to produce a new <code>Query</code>.</p>
+
+    <pre><code class="language-ts">class GroupBy {
+  agg(...exprs: Expr[]): Query
+}</code></pre>
+
+    <h3>Aggregation Examples</h3>
+    <pre><code class="language-js">// Single group key, multiple aggregations
+const byRegion = table
+  .groupBy('region')
+  .agg(
+    col('revenue').sum().alias('total'),
+    col('revenue').avg().alias('avg'),
+    col('revenue').count().alias('n')
+  )
+  .collectSync();
+
+// Multiple group keys
+const byRegionYear = table
+  .groupBy('region', 'year')
+  .agg(
+    col('profit').sum().alias('total_profit'),
+    col('profit').first().alias('first_profit'),
+    col('profit').last().alias('last_profit')
+  )
+  .collectSync();</code></pre>
+
+    <div class="nav-footer">
+      <a href="../sql/vector-search.html" class="nav-prev">&larr; Vector Search</a>
+      <a href="../architecture/" class="nav-next">Architecture &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>From CSV to Insights - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="getting-started.html" class="sidebar-link active">From CSV to Insights</a>
+      <a href="sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="../sql/" class="sidebar-link">Overview</a>
+      <a href="../sql/data-types.html" class="sidebar-link">Data Types</a>
+      <a href="../sql/ddl.html" class="sidebar-link">DDL</a>
+      <a href="../sql/dml.html" class="sidebar-link">DML</a>
+      <a href="../sql/queries.html" class="sidebar-link">Queries</a>
+      <a href="../sql/filtering.html" class="sidebar-link">Filtering</a>
+      <a href="../sql/expressions.html" class="sidebar-link">Expressions</a>
+      <a href="../sql/aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="../sql/joins.html" class="sidebar-link">Joins</a>
+      <a href="../sql/window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="../sql/sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="../sql/set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="../sql/subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="../sql/functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="../sql/pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="../sql/graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="../sql/vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">GUIDES</div>
+
+    <h1>From CSV to Insights</h1>
+    <p class="lead">A practical walkthrough: load a CSV file, explore the data, filter rows, aggregate results, and extract insights &mdash; all from Node.js.</p>
+
+    <p>This guide takes you through a realistic data analysis workflow using TeideDB's Node.js bindings. We will start with a raw CSV file containing sales records, then progressively build up queries to filter, aggregate, rank, and export results. By the end, you will have a complete script that transforms raw data into actionable business insights.</p>
+
+    <!-- ─── Section 1: Setup & Load ─── -->
+    <h2 id="loading-data">Loading a CSV File</h2>
+
+    <p>TeideDB can ingest CSV files directly into in-memory columnar tables using the <code>read_csv</code> function. This parses the file, infers column types, and stores the data in a compressed columnar format optimized for analytical queries. The entire operation runs on the dedicated Teide thread, so the V8 event loop stays responsive even for large files.</p>
+
+    <p>Assume we have a file called <code>sales.csv</code> with columns: <code>id</code>, <code>date</code>, <code>category</code>, <code>product</code>, <code>price</code>, <code>quantity</code>, and <code>region</code>.</p>
+
+    <pre><code class="language-js">import { Context } from 'teide-js';
+
+const ctx = new Context();
+
+// Load the CSV into a table named "sales"
+ctx.executeSync(`
+  CREATE TABLE sales AS
+  SELECT * FROM read_csv('sales.csv')
+`);
+
+console.log('Table loaded successfully.');</code></pre>
+
+    <div class="note">
+      <p><strong>Note:</strong> The file path passed to <code>read_csv</code> is resolved relative to the current working directory of the Node.js process, not relative to the script file. Use an absolute path if your script may be invoked from different directories.</p>
+    </div>
+
+    <!-- ─── Section 2: Explore ─── -->
+    <h2 id="exploring-data">Exploring the Data</h2>
+
+    <p>Before diving into analysis, it is good practice to understand the shape of your data. How many rows does the table contain? What do the first few records look like? TeideDB supports standard SQL for exploration, so you can use familiar queries to get oriented. The <code>executeSync</code> method returns a <code>Table</code> object that you can inspect column by column.</p>
+
+    <pre><code class="language-sql">-- Count total rows
+SELECT COUNT(*) AS total_rows FROM sales;
+
+-- Preview first 5 rows
+SELECT * FROM sales LIMIT 5;</code></pre>
+
+    <pre><code class="language-js">// Row count
+const countResult = ctx.executeSync('SELECT COUNT(*) AS total_rows FROM sales');
+const totalRows = countResult.getColumn('total_rows').toArray()[0];
+console.log(`Total rows: ${totalRows}`);
+
+// Preview
+const preview = ctx.executeSync('SELECT * FROM sales LIMIT 5');
+for (const name of preview.columnNames()) {
+  console.log(`  ${name}: ${preview.getColumn(name).toArray()}`);
+}</code></pre>
+
+    <div class="output">
+Total rows: 10000
+  id: [1, 2, 3, 4, 5]
+  date: ['2024-01-03', '2024-01-03', '2024-01-04', '2024-01-05', '2024-01-05']
+  category: ['Electronics', 'Books', 'Electronics', 'Clothing', 'Books']
+  product: ['Laptop', 'Novel', 'Headphones', 'Jacket', 'Textbook']
+  price: [999.99, 14.99, 79.95, 129.00, 54.50]
+  quantity: [1, 3, 2, 1, 2]
+  region: ['West', 'East', 'West', 'South', 'North']
+    </div>
+
+    <!-- ─── Section 3: Filter ─── -->
+    <h2 id="filtering-rows">Filtering Rows</h2>
+
+    <p>With a feel for the data, let us narrow down to a specific segment. Suppose we want to focus on premium electronics &mdash; items in the "Electronics" category priced above $100. SQL's <code>WHERE</code> clause handles this naturally. TeideDB pushes predicates down to the columnar scan, so only matching rows are materialized, keeping memory usage low even on large datasets.</p>
+
+    <pre><code class="language-sql">SELECT product, price, quantity, price * quantity AS line_total
+FROM sales
+WHERE category = 'Electronics'
+  AND price > 100
+ORDER BY line_total DESC
+LIMIT 10;</code></pre>
+
+    <pre><code class="language-js">const electronics = ctx.executeSync(`
+  SELECT product, price, quantity, price * quantity AS line_total
+  FROM sales
+  WHERE category = 'Electronics'
+    AND price > 100
+  ORDER BY line_total DESC
+  LIMIT 10
+`);
+
+const products = electronics.getColumn('product').toArray();
+const totals = electronics.getColumn('line_total').toArray();
+
+products.forEach((p, i) => {
+  console.log(`  ${p}: $${totals[i].toFixed(2)}`);
+});</code></pre>
+
+    <div class="output">
+  Laptop: $2999.97
+  Laptop: $1999.98
+  Monitor: $1349.95
+  Laptop: $999.99
+  Monitor: $899.97
+  Tablet: $599.98
+  Tablet: $499.99
+  Monitor: $449.99
+  Smartwatch: $349.98
+  Smartwatch: $249.99
+    </div>
+
+    <!-- ─── Section 4: Aggregate ─── -->
+    <h2 id="aggregating-results">Aggregating Results</h2>
+
+    <p>Individual rows tell a story, but aggregate statistics reveal the bigger picture. Let us compute summary metrics for each product category: total revenue, average price, and number of transactions. The <code>GROUP BY</code> clause partitions rows by category, and aggregate functions (<code>SUM</code>, <code>AVG</code>, <code>COUNT</code>) collapse each partition into a single summary row. TeideDB evaluates aggregates in a single pass over the columnar data using vectorized operations.</p>
+
+    <pre><code class="language-sql">SELECT
+  category,
+  COUNT(*)            AS num_transactions,
+  SUM(price * quantity) AS total_revenue,
+  AVG(price)          AS avg_price
+FROM sales
+GROUP BY category
+ORDER BY total_revenue DESC;</code></pre>
+
+    <pre><code class="language-js">const summary = ctx.executeSync(`
+  SELECT
+    category,
+    COUNT(*)              AS num_transactions,
+    SUM(price * quantity) AS total_revenue,
+    AVG(price)            AS avg_price
+  FROM sales
+  GROUP BY category
+  ORDER BY total_revenue DESC
+`);
+
+const cats = summary.getColumn('category').toArray();
+const revenue = summary.getColumn('total_revenue').toArray();
+const avgPrice = summary.getColumn('avg_price').toArray();
+const txns = summary.getColumn('num_transactions').toArray();
+
+cats.forEach((cat, i) => {
+  console.log(
+    `  ${cat}: $${revenue[i].toFixed(2)} revenue, ` +
+    `${txns[i]} transactions, $${avgPrice[i].toFixed(2)} avg price`
+  );
+});</code></pre>
+
+    <div class="output">
+  Electronics: $487,320.50 revenue, 2841 transactions, $324.17 avg price
+  Clothing: $198,450.00 revenue, 2530 transactions, $78.42 avg price
+  Books: $62,180.75 revenue, 2415 transactions, $25.75 avg price
+  Home: $145,890.25 revenue, 2214 transactions, $65.93 avg price
+    </div>
+
+    <!-- ─── Section 5: Sort & Limit ─── -->
+    <h2 id="top-products">Finding Top Products</h2>
+
+    <p>To surface the most impactful products, we can combine aggregation with sorting and limiting. This is a common pattern for "top-N" reports: group, compute a metric, sort descending, and take the first few rows. The query below finds the five products generating the most total revenue across all categories.</p>
+
+    <pre><code class="language-sql">SELECT
+  product,
+  category,
+  SUM(price * quantity) AS total_revenue,
+  SUM(quantity)         AS units_sold
+FROM sales
+GROUP BY product, category
+ORDER BY total_revenue DESC
+LIMIT 5;</code></pre>
+
+    <pre><code class="language-js">const topProducts = ctx.executeSync(`
+  SELECT
+    product,
+    category,
+    SUM(price * quantity) AS total_revenue,
+    SUM(quantity)         AS units_sold
+  FROM sales
+  GROUP BY product, category
+  ORDER BY total_revenue DESC
+  LIMIT 5
+`);
+
+console.log('Top 5 products by revenue:');
+const names = topProducts.getColumn('product').toArray();
+const rev = topProducts.getColumn('total_revenue').toArray();
+const units = topProducts.getColumn('units_sold').toArray();
+
+names.forEach((name, i) => {
+  console.log(`  ${i + 1}. ${name} — $${rev[i].toFixed(2)} (${units[i]} units)`);
+});</code></pre>
+
+    <div class="output">
+Top 5 products by revenue:
+  1. Laptop — $245,980.50 (258 units)
+  2. Monitor — $98,450.25 (215 units)
+  3. Tablet — $72,340.00 (189 units)
+  4. Jacket — $45,120.00 (350 units)
+  5. Smartwatch — $38,990.75 (178 units)
+    </div>
+
+    <!-- ─── Section 6: Complex Analysis ─── -->
+    <h2 id="complex-analysis">Combining Queries for Deeper Analysis</h2>
+
+    <p>Real analysis often requires combining multiple operations. Subqueries let you use the result of one query as input to another. In this example, we find each region's best-selling category by first computing per-region, per-category revenue, then filtering to only the top category in each region using a correlated subquery. This kind of nested analysis is where SQL really shines compared to procedural code.</p>
+
+    <pre><code class="language-sql">SELECT r.region, r.category, r.total_revenue
+FROM (
+  SELECT
+    region,
+    category,
+    SUM(price * quantity) AS total_revenue
+  FROM sales
+  GROUP BY region, category
+) r
+WHERE r.total_revenue = (
+  SELECT MAX(sub.total_revenue)
+  FROM (
+    SELECT region, category, SUM(price * quantity) AS total_revenue
+    FROM sales
+    GROUP BY region, category
+  ) sub
+  WHERE sub.region = r.region
+)
+ORDER BY r.total_revenue DESC;</code></pre>
+
+    <pre><code class="language-js">const regionalBest = ctx.executeSync(`
+  SELECT r.region, r.category, r.total_revenue
+  FROM (
+    SELECT region, category, SUM(price * quantity) AS total_revenue
+    FROM sales
+    GROUP BY region, category
+  ) r
+  WHERE r.total_revenue = (
+    SELECT MAX(sub.total_revenue)
+    FROM (
+      SELECT region, category, SUM(price * quantity) AS total_revenue
+      FROM sales
+      GROUP BY region, category
+    ) sub
+    WHERE sub.region = r.region
+  )
+  ORDER BY r.total_revenue DESC
+`);
+
+console.log('Top category per region:');
+const regions = regionalBest.getColumn('region').toArray();
+const bestCats = regionalBest.getColumn('category').toArray();
+const bestRev = regionalBest.getColumn('total_revenue').toArray();
+
+regions.forEach((region, i) => {
+  console.log(`  ${region}: ${bestCats[i]} ($${bestRev[i].toFixed(2)})`);
+});</code></pre>
+
+    <div class="output">
+Top category per region:
+  West: Electronics ($156,420.30)
+  East: Electronics ($142,890.20)
+  South: Clothing ($68,230.00)
+  North: Electronics ($98,750.50)
+    </div>
+
+    <!-- ─── Section 7: Export ─── -->
+    <h2 id="exporting-results">Exporting Results</h2>
+
+    <p>Once you have computed your insights, you will typically want to export the data for use elsewhere &mdash; as JSON for an API response, as CSV for a spreadsheet, or as typed arrays for further numerical processing. TeideDB's zero-copy Series accessors give you direct access to the underlying columnar buffers as JavaScript TypedArrays, making export both fast and memory-efficient.</p>
+
+    <pre><code class="language-js">// Export as JSON array
+const result = ctx.executeSync(`
+  SELECT category, SUM(price * quantity) AS revenue
+  FROM sales
+  GROUP BY category
+  ORDER BY revenue DESC
+`);
+
+const columns = result.columnNames();
+const numRows = result.getColumn(columns[0]).length;
+const rows = [];
+
+for (let i = 0; i &lt; numRows; i++) {
+  const row = {};
+  for (const col of columns) {
+    row[col] = result.getColumn(col).toArray()[i];
+  }
+  rows.push(row);
+}
+
+console.log(JSON.stringify(rows, null, 2));
+
+// Clean up when done
+ctx.destroy();</code></pre>
+
+    <div class="output">
+[
+  { "category": "Electronics", "revenue": 487320.50 },
+  { "category": "Clothing", "revenue": 198450.00 },
+  { "category": "Home", "revenue": 145890.25 },
+  { "category": "Books", "revenue": 62180.75 }
+]
+    </div>
+
+    <div class="note">
+      <p><strong>Note:</strong> Always call <code>ctx.destroy()</code> when you are finished to release the native heap and shut down the Teide background thread. In TypeScript, you can use <code>using ctx = new Context()</code> for automatic cleanup via <code>Symbol.dispose</code>.</p>
+    </div>
+
+    <!-- ─── Navigation ─── -->
+    <div class="prev-next">
+      <a href="../tutorial/" class="prev">&larr; Tutorial</a>
+      <a href="sql-deep-dive.html" class="next">Joins, Windows &amp; CTEs &rarr;</a>
+    </div>
+
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

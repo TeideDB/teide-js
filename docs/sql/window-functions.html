@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Window Functions - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link active">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>Window Functions</h1>
+    <p>Window functions perform calculations across a set of rows related to the current row, without collapsing them into a single output row like aggregate functions do. Each row retains its identity in the result.</p>
+
+    <h2>Syntax</h2>
+    <pre><code class="language-sql">function_name(args) OVER (
+  [PARTITION BY col1, col2, ...]
+  [ORDER BY col3 [ASC|DESC], ...]
+  [frame_spec]
+)</code></pre>
+    <ul>
+      <li><code>PARTITION BY</code> divides rows into groups (partitions). The function is computed independently for each partition.</li>
+      <li><code>ORDER BY</code> defines the row ordering within each partition.</li>
+      <li><code>frame_spec</code> defines which rows around the current row are included in the computation.</li>
+    </ul>
+
+    <h2>Ranking Functions</h2>
+
+    <h3>ROW_NUMBER()</h3>
+    <p>Assigns a unique sequential integer to each row within its partition.</p>
+    <pre><code class="language-sql">SELECT
+  name, department, salary,
+  ROW_NUMBER() OVER (
+    PARTITION BY department
+    ORDER BY salary DESC
+  ) AS rank_in_dept
+FROM employees;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>name</th><th>department</th><th>salary</th><th>rank_in_dept</th></tr></thead>
+      <tbody>
+        <tr><td>Carol</td><td>Engineering</td><td>105000</td><td>1</td></tr>
+        <tr><td>Alice</td><td>Engineering</td><td>95000</td><td>2</td></tr>
+        <tr><td>Frank</td><td>Engineering</td><td>85000</td><td>3</td></tr>
+        <tr><td>Bob</td><td>Marketing</td><td>72000</td><td>1</td></tr>
+        <tr><td>Grace</td><td>Marketing</td><td>65000</td><td>2</td></tr>
+      </tbody>
+    </table>
+
+    <h3>RANK()</h3>
+    <p>Like <code>ROW_NUMBER()</code> but assigns the same rank to ties and leaves gaps.</p>
+    <pre><code class="language-sql">SELECT
+  name, score,
+  RANK() OVER (ORDER BY score DESC) AS rank
+FROM contestants;</code></pre>
+    <p>Result (with ties):</p>
+    <table>
+      <thead><tr><th>name</th><th>score</th><th>rank</th></tr></thead>
+      <tbody>
+        <tr><td>Alice</td><td>95</td><td>1</td></tr>
+        <tr><td>Bob</td><td>95</td><td>1</td></tr>
+        <tr><td>Carol</td><td>88</td><td>3</td></tr>
+        <tr><td>Dave</td><td>82</td><td>4</td></tr>
+      </tbody>
+    </table>
+
+    <h3>DENSE_RANK()</h3>
+    <p>Like <code>RANK()</code> but without gaps in the ranking sequence.</p>
+    <pre><code class="language-sql">SELECT
+  name, score,
+  DENSE_RANK() OVER (ORDER BY score DESC) AS dense_rank
+FROM contestants;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>name</th><th>score</th><th>dense_rank</th></tr></thead>
+      <tbody>
+        <tr><td>Alice</td><td>95</td><td>1</td></tr>
+        <tr><td>Bob</td><td>95</td><td>1</td></tr>
+        <tr><td>Carol</td><td>88</td><td>2</td></tr>
+        <tr><td>Dave</td><td>82</td><td>3</td></tr>
+      </tbody>
+    </table>
+
+    <h3>NTILE(n)</h3>
+    <p>Distributes rows into <code>n</code> roughly equal-sized buckets.</p>
+    <pre><code class="language-sql">-- Divide employees into 4 salary quartiles
+SELECT
+  name, salary,
+  NTILE(4) OVER (ORDER BY salary DESC) AS quartile
+FROM employees;</code></pre>
+
+    <h2>Windowed Aggregates</h2>
+    <p>Standard aggregate functions can be used as window functions by adding an <code>OVER</code> clause.</p>
+
+    <h3>Running Totals</h3>
+    <pre><code class="language-sql">SELECT
+  order_date,
+  amount,
+  SUM(amount) OVER (ORDER BY order_date) AS running_total
+FROM orders;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>order_date</th><th>amount</th><th>running_total</th></tr></thead>
+      <tbody>
+        <tr><td>2024-01-01</td><td>100</td><td>100</td></tr>
+        <tr><td>2024-01-02</td><td>250</td><td>350</td></tr>
+        <tr><td>2024-01-03</td><td>75</td><td>425</td></tr>
+        <tr><td>2024-01-04</td><td>300</td><td>725</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Partition Aggregates</h3>
+    <pre><code class="language-sql">-- Each row shows the department average alongside individual salary
+SELECT
+  name, department, salary,
+  AVG(salary) OVER (PARTITION BY department) AS dept_avg,
+  salary - AVG(salary) OVER (PARTITION BY department) AS diff_from_avg
+FROM employees;</code></pre>
+
+    <h3>All Windowed Aggregates</h3>
+    <pre><code class="language-sql">SELECT
+  name, department, salary,
+  SUM(salary)   OVER (PARTITION BY department) AS dept_total,
+  AVG(salary)   OVER (PARTITION BY department) AS dept_avg,
+  MIN(salary)   OVER (PARTITION BY department) AS dept_min,
+  MAX(salary)   OVER (PARTITION BY department) AS dept_max,
+  COUNT(*)      OVER (PARTITION BY department) AS dept_count
+FROM employees;</code></pre>
+
+    <h2>Frame Specifications</h2>
+    <p>Frame specs define which rows relative to the current row are included in the window computation.</p>
+    <pre><code class="language-sql">ROWS BETWEEN start AND end</code></pre>
+
+    <p>Where <code>start</code> and <code>end</code> can be:</p>
+    <table>
+      <thead>
+        <tr><th>Bound</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>UNBOUNDED PRECEDING</code></td><td>First row of the partition</td></tr>
+        <tr><td><code>n PRECEDING</code></td><td>n rows before current row</td></tr>
+        <tr><td><code>CURRENT ROW</code></td><td>The current row</td></tr>
+        <tr><td><code>n FOLLOWING</code></td><td>n rows after current row</td></tr>
+        <tr><td><code>UNBOUNDED FOLLOWING</code></td><td>Last row of the partition</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Moving Average</h3>
+    <pre><code class="language-sql">-- 3-day moving average
+SELECT
+  trade_date,
+  close_price,
+  AVG(close_price) OVER (
+    ORDER BY trade_date
+    ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+  ) AS moving_avg_3d
+FROM stock_prices;</code></pre>
+
+    <h3>Running Total (Explicit Frame)</h3>
+    <pre><code class="language-sql">SELECT
+  order_date,
+  amount,
+  SUM(amount) OVER (
+    ORDER BY order_date
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+  ) AS running_total
+FROM orders;</code></pre>
+
+    <h3>Centered Window</h3>
+    <pre><code class="language-sql">-- Smoothing with a 5-row centered window
+SELECT
+  ts,
+  value,
+  AVG(value) OVER (
+    ORDER BY ts
+    ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING
+  ) AS smoothed
+FROM sensor_readings;</code></pre>
+
+    <h2>Combining Multiple Windows</h2>
+    <pre><code class="language-sql">SELECT
+  name,
+  department,
+  salary,
+  ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) AS dept_rank,
+  RANK()       OVER (ORDER BY salary DESC) AS overall_rank,
+  salary - AVG(salary) OVER (PARTITION BY department) AS diff_from_dept_avg
+FROM employees
+ORDER BY department, salary DESC;</code></pre>
+
+    <div class="nav-footer">
+      <a href="joins.html" class="nav-prev">&larr; Joins</a>
+      <a href="sorting.html" class="nav-next">Sorting &amp; Limits &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

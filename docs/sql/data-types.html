@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Types - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link active">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>Data Types</h1>
+    <p>Teide uses a columnar storage engine with fixed-width types optimized for analytical workloads. Each column stores values of a single type, enabling efficient compression and vectorized operations.</p>
+
+    <h2>Supported Types</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Aliases</th>
+          <th>Description</th>
+          <th>Internal Storage</th>
+          <th>JS Typed Array</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>BOOLEAN</code></td>
+          <td><code>BOOL</code></td>
+          <td>Logical true/false</td>
+          <td>1 byte (0 or 1)</td>
+          <td><code>Uint8Array</code></td>
+        </tr>
+        <tr>
+          <td><code>INTEGER</code></td>
+          <td><code>INT</code></td>
+          <td>Signed 32-bit integer</td>
+          <td>4 bytes, little-endian</td>
+          <td><code>Int32Array</code></td>
+        </tr>
+        <tr>
+          <td><code>BIGINT</code></td>
+          <td><code>INT64</code></td>
+          <td>Signed 64-bit integer</td>
+          <td>8 bytes, little-endian</td>
+          <td><code>BigInt64Array</code></td>
+        </tr>
+        <tr>
+          <td><code>REAL</code></td>
+          <td><code>DOUBLE</code>, <code>FLOAT</code></td>
+          <td>64-bit IEEE 754 floating point</td>
+          <td>8 bytes, IEEE 754</td>
+          <td><code>Float64Array</code></td>
+        </tr>
+        <tr>
+          <td><code>VARCHAR</code></td>
+          <td><code>TEXT</code></td>
+          <td>Variable-length UTF-8 string</td>
+          <td>Pointer + length</td>
+          <td><code>string[]</code></td>
+        </tr>
+        <tr>
+          <td><code>DATE</code></td>
+          <td>&mdash;</td>
+          <td>Calendar date (year, month, day)</td>
+          <td>4 bytes: days since 2000-01-01</td>
+          <td><code>Int32Array</code></td>
+        </tr>
+        <tr>
+          <td><code>TIME</code></td>
+          <td>&mdash;</td>
+          <td>Time of day</td>
+          <td>4 bytes: milliseconds since midnight</td>
+          <td><code>Int32Array</code></td>
+        </tr>
+        <tr>
+          <td><code>TIMESTAMP</code></td>
+          <td>&mdash;</td>
+          <td>Date and time combined</td>
+          <td>8 bytes: microseconds since 2000-01-01</td>
+          <td><code>BigInt64Array</code></td>
+        </tr>
+        <tr>
+          <td><code>SYM</code></td>
+          <td>&mdash;</td>
+          <td>Dictionary-encoded string (symbol)</td>
+          <td>4 bytes: index into global symbol table</td>
+          <td><code>Int32Array</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Internal Storage Details</h2>
+
+    <h3>DATE</h3>
+    <p>Stored as a signed 32-bit integer representing the number of days since the epoch <strong>2000-01-01</strong>. Dates before the epoch are negative values.</p>
+    <pre><code class="language-sql">-- 2000-01-01 is stored as 0
+-- 2024-06-15 is stored as 8932
+-- 1999-12-31 is stored as -1
+SELECT DATE '2024-06-15';
+SELECT CAST('2024-06-15' AS DATE);</code></pre>
+
+    <h3>TIME</h3>
+    <p>Stored as a signed 32-bit integer representing <strong>milliseconds since midnight</strong>. Valid range: 0 to 86,399,999.</p>
+    <pre><code class="language-sql">-- 00:00:00 is stored as 0
+-- 12:30:00 is stored as 45000000
+-- 23:59:59.999 is stored as 86399999
+SELECT TIME '12:30:00';
+SELECT CAST('14:30:00' AS TIME);</code></pre>
+
+    <h3>TIMESTAMP</h3>
+    <p>Stored as a signed 64-bit integer representing <strong>microseconds since 2000-01-01 00:00:00</strong>. This provides microsecond precision over a range of approximately +/- 292,000 years.</p>
+    <pre><code class="language-sql">SELECT TIMESTAMP '2024-06-15 12:30:00';
+SELECT CAST('2024-06-15 14:30:00' AS TIMESTAMP);</code></pre>
+
+    <h3>SYM (Dictionary-Encoded Strings)</h3>
+    <p>The <code>SYM</code> type stores strings using dictionary encoding. Each unique string is assigned an integer index in a global symbol table. Columns store the integer index rather than the full string, making equality checks and GROUP BY operations extremely fast.</p>
+    <pre><code class="language-sql">CREATE TABLE events (
+  id INTEGER,
+  category SYM,
+  status SYM
+);
+
+-- SYM columns are ideal for low-cardinality string columns
+-- like status codes, categories, region names, etc.</code></pre>
+
+    <h2>Type Casting</h2>
+    <p>Use <code>CAST</code> to convert between types:</p>
+    <pre><code class="language-sql">-- String to numeric
+SELECT CAST('42' AS INTEGER);
+SELECT CAST('3.14' AS REAL);
+
+-- Numeric to string
+SELECT CAST(42 AS VARCHAR);
+
+-- String to date/time
+SELECT CAST('2024-06-15' AS DATE);
+SELECT CAST('12:30:00' AS TIME);
+SELECT CAST('2024-06-15 12:30:00' AS TIMESTAMP);
+
+-- Integer to boolean
+SELECT CAST(1 AS BOOLEAN);   -- true
+SELECT CAST(0 AS BOOLEAN);   -- false
+
+-- Boolean to integer
+SELECT CAST(TRUE AS INTEGER);  -- 1
+SELECT CAST(FALSE AS INTEGER); -- 0</code></pre>
+
+    <h2>NULL Values</h2>
+    <p>All types support <code>NULL</code> values. A NULL represents a missing or unknown value. NULL propagates through expressions: any arithmetic or comparison involving NULL yields NULL (with specific exceptions like <code>IS NULL</code> and <code>COALESCE</code>).</p>
+    <pre><code class="language-sql">SELECT NULL;
+SELECT 1 + NULL;          -- NULL
+SELECT NULL = NULL;        -- NULL (not TRUE)
+SELECT NULL IS NULL;       -- TRUE
+SELECT COALESCE(NULL, 42); -- 42</code></pre>
+
+    <h2>Literals</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Literal Syntax</th>
+          <th>Examples</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>BOOLEAN</td>
+          <td><code>TRUE</code>, <code>FALSE</code></td>
+          <td><code>TRUE</code>, <code>FALSE</code></td>
+        </tr>
+        <tr>
+          <td>INTEGER</td>
+          <td>Unquoted digits</td>
+          <td><code>42</code>, <code>-7</code>, <code>0</code></td>
+        </tr>
+        <tr>
+          <td>BIGINT</td>
+          <td>Large integers (auto-promoted)</td>
+          <td><code>9999999999</code></td>
+        </tr>
+        <tr>
+          <td>REAL</td>
+          <td>Digits with decimal point</td>
+          <td><code>3.14</code>, <code>-0.5</code>, <code>1e10</code></td>
+        </tr>
+        <tr>
+          <td>VARCHAR</td>
+          <td>Single-quoted strings</td>
+          <td><code>'hello'</code>, <code>'it''s'</code></td>
+        </tr>
+        <tr>
+          <td>DATE</td>
+          <td><code>DATE 'YYYY-MM-DD'</code></td>
+          <td><code>DATE '2024-06-15'</code></td>
+        </tr>
+        <tr>
+          <td>TIME</td>
+          <td><code>TIME 'HH:MM:SS'</code></td>
+          <td><code>TIME '12:30:00'</code></td>
+        </tr>
+        <tr>
+          <td>TIMESTAMP</td>
+          <td><code>TIMESTAMP 'YYYY-MM-DD HH:MM:SS'</code></td>
+          <td><code>TIMESTAMP '2024-06-15 12:30:00'</code></td>
+        </tr>
+        <tr>
+          <td>NULL</td>
+          <td><code>NULL</code></td>
+          <td><code>NULL</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="nav-footer">
+      <a href="./" class="nav-prev">&larr; Overview</a>
+      <a href="ddl.html" class="nav-next">DDL &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

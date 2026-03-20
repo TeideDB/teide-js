@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Subqueries - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link active">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>Subqueries</h1>
+    <p>A subquery is a <code>SELECT</code> statement nested inside another statement. Subqueries can appear in <code>WHERE</code>, <code>FROM</code>, and <code>SELECT</code> clauses.</p>
+
+    <h2>IN (Subquery)</h2>
+    <p>Tests whether a value matches any row returned by a subquery. The subquery must return exactly one column.</p>
+    <pre><code class="language-sql">-- Employees in departments located in Building A
+SELECT name, salary
+FROM employees
+WHERE dept_id IN (
+  SELECT id FROM departments
+  WHERE location = 'Building A'
+);</code></pre>
+
+    <pre><code class="language-sql">-- Products that have been ordered
+SELECT name, price
+FROM products
+WHERE id IN (
+  SELECT DISTINCT product_id FROM order_items
+);</code></pre>
+
+    <h2>NOT IN (Subquery)</h2>
+    <p>Tests whether a value does not match any row returned by a subquery.</p>
+    <pre><code class="language-sql">-- Employees NOT in any department
+SELECT name, salary
+FROM employees
+WHERE dept_id NOT IN (
+  SELECT id FROM departments
+);
+
+-- Products that have never been ordered
+SELECT name, price
+FROM products
+WHERE id NOT IN (
+  SELECT DISTINCT product_id FROM order_items
+);</code></pre>
+    <p><strong>Warning:</strong> If the subquery returns any NULL values, <code>NOT IN</code> will return no rows. Filter NULLs in the subquery to avoid this:</p>
+    <pre><code class="language-sql">SELECT name FROM employees
+WHERE dept_id NOT IN (
+  SELECT id FROM departments WHERE id IS NOT NULL
+);</code></pre>
+
+    <h2>FROM Clause Subqueries (Derived Tables)</h2>
+    <p>A subquery in the <code>FROM</code> clause acts as a virtual table. It must be given an alias.</p>
+    <pre><code class="language-sql">-- Use a derived table to filter on aggregated values
+SELECT dept, avg_salary
+FROM (
+  SELECT department AS dept, AVG(salary) AS avg_salary
+  FROM employees
+  GROUP BY department
+) AS dept_stats
+WHERE avg_salary > 80000
+ORDER BY avg_salary DESC;</code></pre>
+
+    <pre><code class="language-sql">-- Top earner per department using derived table + window function
+SELECT name, department, salary
+FROM (
+  SELECT
+    name, department, salary,
+    ROW_NUMBER() OVER (
+      PARTITION BY department ORDER BY salary DESC
+    ) AS rn
+  FROM employees
+) AS ranked
+WHERE rn = 1
+ORDER BY salary DESC;</code></pre>
+
+    <h2>Scalar Subqueries</h2>
+    <p>A subquery that returns exactly one row and one column can be used wherever a single value is expected.</p>
+    <pre><code class="language-sql">-- Compare each salary to the company average
+SELECT
+  name,
+  salary,
+  salary - (SELECT AVG(salary) FROM employees) AS diff_from_avg
+FROM employees
+ORDER BY diff_from_avg DESC;</code></pre>
+
+    <pre><code class="language-sql">-- Find the highest-paid employee
+SELECT name, salary
+FROM employees
+WHERE salary = (SELECT MAX(salary) FROM employees);</code></pre>
+
+    <pre><code class="language-sql">-- Use scalar subquery in CASE
+SELECT
+  name,
+  salary,
+  CASE
+    WHEN salary > (SELECT AVG(salary) FROM employees) THEN 'Above Average'
+    ELSE 'At or Below Average'
+  END AS salary_band
+FROM employees;</code></pre>
+
+    <h2>Nested Subqueries</h2>
+    <p>Subqueries can be nested to arbitrary depth.</p>
+    <pre><code class="language-sql">-- Employees in departments with above-average headcount
+SELECT name, department
+FROM employees
+WHERE department IN (
+  SELECT department
+  FROM employees
+  GROUP BY department
+  HAVING COUNT(*) > (
+    SELECT AVG(dept_count) FROM (
+      SELECT COUNT(*) AS dept_count
+      FROM employees
+      GROUP BY department
+    ) AS counts
+  )
+);</code></pre>
+
+    <h2>Subqueries with Aggregation</h2>
+    <pre><code class="language-sql">-- Departments where total salary exceeds 500k
+SELECT department, total_salary
+FROM (
+  SELECT department, SUM(salary) AS total_salary
+  FROM employees
+  GROUP BY department
+) AS dept_totals
+WHERE total_salary > 500000
+ORDER BY total_salary DESC;</code></pre>
+
+    <h2>Subqueries in INSERT</h2>
+    <pre><code class="language-sql">-- Archive high-salary employees
+INSERT INTO high_earners (name, department, salary)
+SELECT name, department, salary
+FROM employees
+WHERE salary > (SELECT AVG(salary) * 1.5 FROM employees);</code></pre>
+
+    <h2>Subquery vs. JOIN</h2>
+    <p>Many subqueries can be rewritten as joins. Choose based on readability:</p>
+    <pre><code class="language-sql">-- Subquery approach
+SELECT name FROM employees
+WHERE dept_id IN (SELECT id FROM departments WHERE location = 'Building A');
+
+-- Equivalent JOIN approach
+SELECT e.name
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.id
+WHERE d.location = 'Building A';</code></pre>
+
+    <div class="nav-footer">
+      <a href="set-operations.html" class="nav-prev">&larr; Set Operations</a>
+      <a href="functions.html" class="nav-next">Scalar Functions &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

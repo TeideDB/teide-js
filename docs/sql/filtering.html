@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Filtering - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link active">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>Filtering</h1>
+    <p>The <code>WHERE</code> clause filters rows based on conditions. Only rows where the condition evaluates to <code>TRUE</code> are included in the result.</p>
+
+    <h2>Comparison Operators</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Operator</th>
+          <th>Description</th>
+          <th>Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>=</code></td><td>Equal to</td><td><code>salary = 50000</code></td></tr>
+        <tr><td><code>!=</code> or <code>&lt;&gt;</code></td><td>Not equal to</td><td><code>status != 'active'</code></td></tr>
+        <tr><td><code>&lt;</code></td><td>Less than</td><td><code>age &lt; 30</code></td></tr>
+        <tr><td><code>&lt;=</code></td><td>Less than or equal</td><td><code>price &lt;= 99.99</code></td></tr>
+        <tr><td><code>&gt;</code></td><td>Greater than</td><td><code>quantity &gt; 0</code></td></tr>
+        <tr><td><code>&gt;=</code></td><td>Greater than or equal</td><td><code>score &gt;= 80</code></td></tr>
+      </tbody>
+    </table>
+
+    <pre><code class="language-sql">SELECT name, salary FROM employees WHERE salary > 80000;
+
+SELECT * FROM orders WHERE status = 'shipped';
+
+SELECT * FROM products WHERE price <= 9.99;</code></pre>
+
+    <h2>Logical Operators: AND, OR, NOT</h2>
+    <p>Combine multiple conditions with logical operators. Use parentheses to control precedence.</p>
+    <pre><code class="language-sql">-- AND: both conditions must be true
+SELECT * FROM employees
+WHERE department = 'Engineering' AND salary > 90000;
+
+-- OR: at least one condition must be true
+SELECT * FROM employees
+WHERE department = 'Engineering' OR department = 'Research';
+
+-- NOT: negates a condition
+SELECT * FROM employees
+WHERE NOT active;
+
+-- Combining with parentheses
+SELECT * FROM employees
+WHERE (department = 'Engineering' OR department = 'Research')
+  AND salary > 80000;</code></pre>
+
+    <h2>BETWEEN</h2>
+    <p>Tests whether a value falls within an inclusive range. Equivalent to <code>col &gt;= low AND col &lt;= high</code>.</p>
+    <pre><code class="language-sql">-- Numeric range
+SELECT * FROM employees
+WHERE salary BETWEEN 50000 AND 100000;
+
+-- Date range
+SELECT * FROM orders
+WHERE order_date BETWEEN DATE '2024-01-01' AND DATE '2024-12-31';
+
+-- NOT BETWEEN
+SELECT * FROM products
+WHERE price NOT BETWEEN 10 AND 50;</code></pre>
+
+    <h2>IN (List)</h2>
+    <p>Tests whether a value matches any value in a list.</p>
+    <pre><code class="language-sql">-- Match against a list of values
+SELECT * FROM employees
+WHERE department IN ('Engineering', 'Research', 'Design');
+
+-- Numeric list
+SELECT * FROM orders
+WHERE status_code IN (1, 2, 5);
+
+-- NOT IN
+SELECT * FROM employees
+WHERE department NOT IN ('Sales', 'Marketing');</code></pre>
+
+    <h2>LIKE and ILIKE</h2>
+    <p>Pattern matching on string columns. <code>LIKE</code> is case-sensitive; <code>ILIKE</code> is case-insensitive.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Pattern</th>
+          <th>Matches</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>%</code></td><td>Any sequence of zero or more characters</td></tr>
+        <tr><td><code>_</code></td><td>Any single character</td></tr>
+      </tbody>
+    </table>
+
+    <pre><code class="language-sql">-- Starts with 'A'
+SELECT * FROM employees WHERE name LIKE 'A%';
+
+-- Ends with 'son'
+SELECT * FROM employees WHERE name LIKE '%son';
+
+-- Contains 'eng'
+SELECT * FROM employees WHERE department LIKE '%eng%';
+
+-- Exactly 5 characters
+SELECT * FROM products WHERE code LIKE '_____';
+
+-- Case-insensitive match
+SELECT * FROM employees WHERE name ILIKE '%alice%';
+
+-- NOT LIKE
+SELECT * FROM files WHERE path NOT LIKE '%.tmp';</code></pre>
+
+    <h2>IS NULL / IS NOT NULL</h2>
+    <p>Tests whether a value is NULL. Note that <code>= NULL</code> does not work as expected &mdash; always use <code>IS NULL</code>.</p>
+    <pre><code class="language-sql">-- Find rows with missing values
+SELECT * FROM employees WHERE department IS NULL;
+
+-- Find rows with non-missing values
+SELECT * FROM employees WHERE department IS NOT NULL;
+
+-- Common pattern: filter then coalesce
+SELECT name, COALESCE(department, 'Unassigned') AS dept
+FROM employees
+WHERE salary IS NOT NULL;</code></pre>
+
+    <h2>Combining Multiple Filters</h2>
+    <pre><code class="language-sql">SELECT name, department, salary
+FROM employees
+WHERE department IN ('Engineering', 'Research')
+  AND salary BETWEEN 80000 AND 150000
+  AND name LIKE 'A%'
+  AND manager_id IS NOT NULL
+ORDER BY salary DESC;</code></pre>
+
+    <div class="nav-footer">
+      <a href="queries.html" class="nav-prev">&larr; Queries</a>
+      <a href="expressions.html" class="nav-next">Expressions &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

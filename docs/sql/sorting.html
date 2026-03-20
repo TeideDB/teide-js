@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sorting &amp; Limits - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link active">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>Sorting &amp; Limits</h1>
+    <p>Control the order and number of rows returned by a query using <code>ORDER BY</code>, <code>LIMIT</code>, and <code>OFFSET</code>.</p>
+
+    <h2>ORDER BY</h2>
+    <p>Sorts the result set by one or more columns or expressions.</p>
+    <pre><code class="language-sql">SELECT columns FROM table
+ORDER BY expr1 [ASC|DESC], expr2 [ASC|DESC], ...;</code></pre>
+    <ul>
+      <li><code>ASC</code> (ascending) is the default sort direction.</li>
+      <li><code>DESC</code> sorts in descending order.</li>
+    </ul>
+
+    <h3>Single-Key Sort</h3>
+    <pre><code class="language-sql">-- Ascending (default)
+SELECT name, salary FROM employees
+ORDER BY salary;
+
+-- Descending
+SELECT name, salary FROM employees
+ORDER BY salary DESC;</code></pre>
+
+    <h3>Multi-Key Sort</h3>
+    <p>When two rows have the same value for the first key, the second key breaks the tie, and so on.</p>
+    <pre><code class="language-sql">-- Sort by department ascending, then salary descending within each department
+SELECT name, department, salary
+FROM employees
+ORDER BY department ASC, salary DESC;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>name</th><th>department</th><th>salary</th></tr></thead>
+      <tbody>
+        <tr><td>Carol</td><td>Engineering</td><td>105000</td></tr>
+        <tr><td>Alice</td><td>Engineering</td><td>95000</td></tr>
+        <tr><td>Frank</td><td>Engineering</td><td>85000</td></tr>
+        <tr><td>Bob</td><td>Marketing</td><td>72000</td></tr>
+        <tr><td>Grace</td><td>Marketing</td><td>65000</td></tr>
+        <tr><td>Dave</td><td>Sales</td><td>68000</td></tr>
+      </tbody>
+    </table>
+
+    <h2>NULLS FIRST / NULLS LAST</h2>
+    <p>Controls where NULL values appear in the sorted output.</p>
+    <pre><code class="language-sql">-- NULLs at the top
+SELECT name, manager_id
+FROM employees
+ORDER BY manager_id ASC NULLS FIRST;
+
+-- NULLs at the bottom (default for ASC)
+SELECT name, manager_id
+FROM employees
+ORDER BY manager_id ASC NULLS LAST;
+
+-- With DESC: NULLs at the bottom
+SELECT name, bonus
+FROM employees
+ORDER BY bonus DESC NULLS LAST;</code></pre>
+
+    <table>
+      <thead>
+        <tr><th>Direction</th><th>Default NULL Position</th><th>Override</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>ASC</code></td><td>NULLs last</td><td><code>NULLS FIRST</code></td></tr>
+        <tr><td><code>DESC</code></td><td>NULLs first</td><td><code>NULLS LAST</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>Sorting by Expressions</h2>
+    <pre><code class="language-sql">-- Sort by computed value
+SELECT name, salary, salary * 12 AS annual
+FROM employees
+ORDER BY salary * 12 DESC;
+
+-- Sort by alias
+SELECT name, salary * 12 AS annual
+FROM employees
+ORDER BY annual DESC;
+
+-- Sort by ordinal position (1-based column index)
+SELECT name, department, salary
+FROM employees
+ORDER BY 2 ASC, 3 DESC;</code></pre>
+
+    <h2>LIMIT</h2>
+    <p>Restricts the number of rows returned.</p>
+    <pre><code class="language-sql">-- Top 5 earners
+SELECT name, salary
+FROM employees
+ORDER BY salary DESC
+LIMIT 5;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>name</th><th>salary</th></tr></thead>
+      <tbody>
+        <tr><td>Carol</td><td>105000</td></tr>
+        <tr><td>Alice</td><td>95000</td></tr>
+        <tr><td>Eve</td><td>88000</td></tr>
+        <tr><td>Frank</td><td>85000</td></tr>
+        <tr><td>Bob</td><td>72000</td></tr>
+      </tbody>
+    </table>
+
+    <h2>OFFSET</h2>
+    <p>Skips a number of rows before returning results. Typically combined with <code>LIMIT</code> for pagination.</p>
+    <pre><code class="language-sql">-- Skip first 10 rows, return next 10 (page 2)
+SELECT name, salary
+FROM employees
+ORDER BY salary DESC
+LIMIT 10 OFFSET 10;
+
+-- Skip first 20 rows, return next 10 (page 3)
+SELECT name, salary
+FROM employees
+ORDER BY salary DESC
+LIMIT 10 OFFSET 20;</code></pre>
+
+    <h2>Pagination Pattern</h2>
+    <pre><code class="language-js">import { Context } from 'teide-js';
+
+const ctx = new Context();
+ctx.sqlSync(`CREATE TABLE products AS SELECT * FROM read_csv('products.csv')`);
+
+const pageSize = 25;
+
+async function getPage(page: number) {
+  const offset = (page - 1) * pageSize;
+  return ctx.sql(`
+    SELECT id, name, price
+    FROM products
+    ORDER BY price DESC
+    LIMIT ${pageSize} OFFSET ${offset}
+  `);
+}
+
+// Get page 1
+const page1 = await getPage(1);
+// Get page 2
+const page2 = await getPage(2);</code></pre>
+
+    <h2>LIMIT Without ORDER BY</h2>
+    <p>Using <code>LIMIT</code> without <code>ORDER BY</code> returns an arbitrary subset of rows. The specific rows returned are not guaranteed to be consistent.</p>
+    <pre><code class="language-sql">-- Get any 10 rows (useful for sampling / previewing)
+SELECT * FROM large_table LIMIT 10;</code></pre>
+
+    <h2>Combined Example</h2>
+    <pre><code class="language-sql">-- Top 3 highest-paid employees per department
+SELECT * FROM (
+  SELECT
+    name,
+    department,
+    salary,
+    ROW_NUMBER() OVER (
+      PARTITION BY department
+      ORDER BY salary DESC
+    ) AS rn
+  FROM employees
+)
+WHERE rn <= 3
+ORDER BY department ASC, salary DESC;</code></pre>
+
+    <div class="nav-footer">
+      <a href="window-functions.html" class="nav-prev">&larr; Window Functions</a>
+      <a href="set-operations.html" class="nav-next">Set Operations &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

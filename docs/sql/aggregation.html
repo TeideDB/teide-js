@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aggregation - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link active">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>Aggregation</h1>
+    <p>Aggregate functions compute a single result from a set of rows. Combined with <code>GROUP BY</code>, they produce one result per group.</p>
+
+    <h2>Aggregate Functions</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Function</th>
+          <th>Description</th>
+          <th>NULL Handling</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>COUNT(*)</code></td><td>Number of rows</td><td>Counts all rows including NULLs</td></tr>
+        <tr><td><code>COUNT(col)</code></td><td>Number of non-NULL values</td><td>Ignores NULLs</td></tr>
+        <tr><td><code>SUM(col)</code></td><td>Sum of values</td><td>Ignores NULLs</td></tr>
+        <tr><td><code>AVG(col)</code></td><td>Arithmetic mean</td><td>Ignores NULLs</td></tr>
+        <tr><td><code>MIN(col)</code></td><td>Minimum value</td><td>Ignores NULLs</td></tr>
+        <tr><td><code>MAX(col)</code></td><td>Maximum value</td><td>Ignores NULLs</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Basic Aggregation (No GROUP BY)</h2>
+    <p>Without <code>GROUP BY</code>, aggregates operate on all rows and return a single-row result.</p>
+    <pre><code class="language-sql">SELECT
+  COUNT(*) AS total_employees,
+  SUM(salary) AS total_payroll,
+  AVG(salary) AS avg_salary,
+  MIN(salary) AS min_salary,
+  MAX(salary) AS max_salary
+FROM employees;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>total_employees</th><th>total_payroll</th><th>avg_salary</th><th>min_salary</th><th>max_salary</th></tr></thead>
+      <tbody><tr><td>150</td><td>12750000</td><td>85000.00</td><td>42000</td><td>195000</td></tr></tbody>
+    </table>
+
+    <h2>GROUP BY (Single Key)</h2>
+    <p>Groups rows by a column and computes aggregates per group.</p>
+    <pre><code class="language-sql">SELECT
+  department,
+  COUNT(*) AS headcount,
+  AVG(salary) AS avg_salary
+FROM employees
+GROUP BY department;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>department</th><th>headcount</th><th>avg_salary</th></tr></thead>
+      <tbody>
+        <tr><td>Engineering</td><td>45</td><td>105000.00</td></tr>
+        <tr><td>Marketing</td><td>30</td><td>72000.00</td></tr>
+        <tr><td>Sales</td><td>40</td><td>68000.00</td></tr>
+        <tr><td>Research</td><td>35</td><td>95000.00</td></tr>
+      </tbody>
+    </table>
+
+    <h2>GROUP BY (Multiple Keys)</h2>
+    <p>Group by multiple columns to produce finer-grained aggregates.</p>
+    <pre><code class="language-sql">SELECT
+  department,
+  active,
+  COUNT(*) AS headcount,
+  SUM(salary) AS total_salary
+FROM employees
+GROUP BY department, active
+ORDER BY department, active;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>department</th><th>active</th><th>headcount</th><th>total_salary</th></tr></thead>
+      <tbody>
+        <tr><td>Engineering</td><td>false</td><td>5</td><td>475000</td></tr>
+        <tr><td>Engineering</td><td>true</td><td>40</td><td>4225000</td></tr>
+        <tr><td>Marketing</td><td>false</td><td>3</td><td>198000</td></tr>
+        <tr><td>Marketing</td><td>true</td><td>27</td><td>1962000</td></tr>
+      </tbody>
+    </table>
+
+    <h2>COUNT Variations</h2>
+    <pre><code class="language-sql">-- Count all rows
+SELECT COUNT(*) FROM employees;
+
+-- Count non-NULL values
+SELECT COUNT(manager_id) FROM employees;
+
+-- Count distinct values
+SELECT COUNT(DISTINCT department) FROM employees;</code></pre>
+
+    <h2>HAVING</h2>
+    <p>The <code>HAVING</code> clause filters groups after aggregation. It is to <code>GROUP BY</code> what <code>WHERE</code> is to <code>FROM</code>.</p>
+    <pre><code class="language-sql">-- Departments with average salary above 80k
+SELECT
+  department,
+  AVG(salary) AS avg_salary,
+  COUNT(*) AS headcount
+FROM employees
+GROUP BY department
+HAVING AVG(salary) > 80000;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>department</th><th>avg_salary</th><th>headcount</th></tr></thead>
+      <tbody>
+        <tr><td>Engineering</td><td>105000.00</td><td>45</td></tr>
+        <tr><td>Research</td><td>95000.00</td><td>35</td></tr>
+      </tbody>
+    </table>
+
+    <pre><code class="language-sql">-- Departments with more than 10 active employees
+SELECT department, COUNT(*) AS active_count
+FROM employees
+WHERE active = TRUE
+GROUP BY department
+HAVING COUNT(*) > 10
+ORDER BY active_count DESC;</code></pre>
+
+    <h2>WHERE vs. HAVING</h2>
+    <table>
+      <thead>
+        <tr><th>Aspect</th><th>WHERE</th><th>HAVING</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Filters</td><td>Individual rows</td><td>Groups (after aggregation)</td></tr>
+        <tr><td>Evaluated</td><td>Before GROUP BY</td><td>After GROUP BY</td></tr>
+        <tr><td>Can use aggregates?</td><td>No</td><td>Yes</td></tr>
+      </tbody>
+    </table>
+
+    <pre><code class="language-sql">-- WHERE filters rows before grouping,
+-- HAVING filters groups after aggregation
+SELECT department, AVG(salary) AS avg_salary
+FROM employees
+WHERE active = TRUE              -- filter rows first
+GROUP BY department
+HAVING AVG(salary) > 80000       -- then filter groups
+ORDER BY avg_salary DESC;</code></pre>
+
+    <h2>Aggregation with Expressions</h2>
+    <pre><code class="language-sql">-- Aggregate computed values
+SELECT
+  department,
+  SUM(salary * 12) AS annual_payroll,
+  AVG(salary * (1 + bonus_pct / 100)) AS avg_total_comp
+FROM employees
+GROUP BY department;
+
+-- Conditional aggregation
+SELECT
+  department,
+  SUM(CASE WHEN active THEN salary ELSE 0 END) AS active_payroll,
+  SUM(CASE WHEN NOT active THEN salary ELSE 0 END) AS inactive_payroll
+FROM employees
+GROUP BY department;</code></pre>
+
+    <div class="nav-footer">
+      <a href="expressions.html" class="nav-prev">&larr; Expressions</a>
+      <a href="joins.html" class="nav-next">Joins &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

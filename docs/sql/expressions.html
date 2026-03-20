@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Expressions - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link active">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>Expressions</h1>
+    <p>Expressions are computations that produce a value. They can appear in <code>SELECT</code> lists, <code>WHERE</code> clauses, <code>ORDER BY</code>, and anywhere a value is expected.</p>
+
+    <h2>Arithmetic Operators</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Operator</th>
+          <th>Description</th>
+          <th>Example</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>+</code></td><td>Addition</td><td><code>10 + 3</code></td><td><code>13</code></td></tr>
+        <tr><td><code>-</code></td><td>Subtraction</td><td><code>10 - 3</code></td><td><code>7</code></td></tr>
+        <tr><td><code>*</code></td><td>Multiplication</td><td><code>10 * 3</code></td><td><code>30</code></td></tr>
+        <tr><td><code>/</code></td><td>Division</td><td><code>10 / 3</code></td><td><code>3.333...</code></td></tr>
+        <tr><td><code>%</code></td><td>Modulo (remainder)</td><td><code>10 % 3</code></td><td><code>1</code></td></tr>
+        <tr><td><code>-</code></td><td>Unary negation</td><td><code>-salary</code></td><td>&mdash;</td></tr>
+      </tbody>
+    </table>
+
+    <pre><code class="language-sql">-- Computed columns
+SELECT
+  name,
+  salary,
+  salary * 12 AS annual_salary,
+  salary * 0.30 AS tax,
+  salary - (salary * 0.30) AS net_salary
+FROM employees;
+
+-- Arithmetic in WHERE
+SELECT * FROM products
+WHERE (price * quantity) > 1000;</code></pre>
+
+    <h2>String Concatenation</h2>
+    <p>Use the <code>||</code> operator to concatenate strings.</p>
+    <pre><code class="language-sql">SELECT first_name || ' ' || last_name AS full_name
+FROM employees;
+
+SELECT 'Order #' || CAST(id AS VARCHAR) AS order_label
+FROM orders;
+
+-- Concatenation with NULL yields NULL
+SELECT 'Hello' || NULL;  -- NULL</code></pre>
+
+    <h2>CASE WHEN ... THEN ... ELSE ... END</h2>
+    <p>Conditional expressions that return different values based on conditions.</p>
+
+    <h3>Searched CASE</h3>
+    <pre><code class="language-sql">SELECT
+  name,
+  salary,
+  CASE
+    WHEN salary >= 120000 THEN 'Senior'
+    WHEN salary >= 80000  THEN 'Mid-level'
+    WHEN salary >= 50000  THEN 'Junior'
+    ELSE 'Entry'
+  END AS level
+FROM employees;</code></pre>
+
+    <h3>Simple CASE</h3>
+    <pre><code class="language-sql">SELECT
+  name,
+  department,
+  CASE department
+    WHEN 'Engineering' THEN 'Tech'
+    WHEN 'Research'    THEN 'Tech'
+    WHEN 'Sales'       THEN 'Business'
+    WHEN 'Marketing'   THEN 'Business'
+    ELSE 'Other'
+  END AS division
+FROM employees;</code></pre>
+
+    <h3>CASE in Aggregation</h3>
+    <pre><code class="language-sql">-- Conditional counting
+SELECT
+  COUNT(CASE WHEN salary > 100000 THEN 1 END) AS high_earners,
+  COUNT(CASE WHEN salary <= 100000 THEN 1 END) AS standard_earners
+FROM employees;
+
+-- Conditional sum
+SELECT
+  department,
+  SUM(CASE WHEN active THEN salary ELSE 0 END) AS active_payroll
+FROM employees
+GROUP BY department;</code></pre>
+
+    <h2>CAST</h2>
+    <p>Explicit type conversion.</p>
+    <pre><code class="language-sql">CAST(expression AS target_type)</code></pre>
+
+    <pre><code class="language-sql">-- Numeric to string
+SELECT 'Total: ' || CAST(SUM(amount) AS VARCHAR) FROM orders;
+
+-- String to numeric
+SELECT CAST('42' AS INTEGER) + 8;   -- 50
+
+-- String to date
+SELECT CAST('2024-06-15' AS DATE);
+
+-- Integer to real for precise division
+SELECT CAST(count AS REAL) / total AS ratio FROM stats;</code></pre>
+
+    <h2>NULL Handling</h2>
+    <p>NULL represents a missing or unknown value. Most operations involving NULL produce NULL.</p>
+    <pre><code class="language-sql">-- Arithmetic with NULL
+SELECT 10 + NULL;       -- NULL
+SELECT 10 * NULL;       -- NULL
+
+-- Comparison with NULL
+SELECT NULL = NULL;     -- NULL (not TRUE!)
+SELECT NULL != NULL;    -- NULL (not TRUE!)
+SELECT 1 > NULL;        -- NULL
+
+-- Use IS NULL / IS NOT NULL for null checks
+SELECT * FROM employees WHERE manager_id IS NULL;
+
+-- COALESCE: returns first non-NULL argument
+SELECT COALESCE(nickname, first_name, 'Unknown') AS display_name
+FROM users;
+
+-- NULLIF: returns NULL if two values are equal
+SELECT NULLIF(denominator, 0);  -- returns NULL instead of 0
+SELECT numerator / NULLIF(denominator, 0) AS safe_ratio;</code></pre>
+
+    <h2>Operator Precedence</h2>
+    <p>From highest to lowest precedence:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Precedence</th>
+          <th>Operator</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1 (highest)</td><td><code>-</code> (unary)</td><td>Negation</td></tr>
+        <tr><td>2</td><td><code>*</code>, <code>/</code>, <code>%</code></td><td>Multiplication, division, modulo</td></tr>
+        <tr><td>3</td><td><code>+</code>, <code>-</code></td><td>Addition, subtraction</td></tr>
+        <tr><td>4</td><td><code>||</code></td><td>String concatenation</td></tr>
+        <tr><td>5</td><td><code>=</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>Comparison</td></tr>
+        <tr><td>6</td><td><code>IS NULL</code>, <code>LIKE</code>, <code>IN</code>, <code>BETWEEN</code></td><td>Special predicates</td></tr>
+        <tr><td>7</td><td><code>NOT</code></td><td>Logical negation</td></tr>
+        <tr><td>8</td><td><code>AND</code></td><td>Logical conjunction</td></tr>
+        <tr><td>9 (lowest)</td><td><code>OR</code></td><td>Logical disjunction</td></tr>
+      </tbody>
+    </table>
+
+    <p>Use parentheses to override the default precedence:</p>
+    <pre><code class="language-sql">-- Without parentheses: AND binds tighter than OR
+SELECT * FROM employees
+WHERE department = 'Engineering' OR department = 'Research'
+  AND salary > 100000;
+-- Means: Engineering (any salary) OR (Research AND salary > 100k)
+
+-- With parentheses: explicit grouping
+SELECT * FROM employees
+WHERE (department = 'Engineering' OR department = 'Research')
+  AND salary > 100000;
+-- Means: (Engineering OR Research) AND salary > 100k</code></pre>
+
+    <div class="nav-footer">
+      <a href="filtering.html" class="nav-prev">&larr; Filtering</a>
+      <a href="aggregation.html" class="nav-next">Aggregation &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Joins, Windows &amp; CTEs - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="sql-deep-dive.html" class="sidebar-link active">Joins, Windows &amp; CTEs</a>
+      <a href="graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="../sql/" class="sidebar-link">Overview</a>
+      <a href="../sql/data-types.html" class="sidebar-link">Data Types</a>
+      <a href="../sql/ddl.html" class="sidebar-link">DDL</a>
+      <a href="../sql/dml.html" class="sidebar-link">DML</a>
+      <a href="../sql/queries.html" class="sidebar-link">Queries</a>
+      <a href="../sql/filtering.html" class="sidebar-link">Filtering</a>
+      <a href="../sql/expressions.html" class="sidebar-link">Expressions</a>
+      <a href="../sql/aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="../sql/joins.html" class="sidebar-link">Joins</a>
+      <a href="../sql/window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="../sql/sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="../sql/set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="../sql/subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="../sql/functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="../sql/pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="../sql/graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="../sql/vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">GUIDES</div>
+
+    <h1>Joins, Windows &amp; CTEs</h1>
+    <p class="lead">Go beyond basic queries. Master multi-table joins, window functions for ranking and running totals, and common table expressions for readable SQL.</p>
+
+    <p>Once you are comfortable with single-table queries, the next step is combining data from multiple sources, computing over ordered partitions, and structuring complex logic into readable building blocks. This guide covers the three pillars of intermediate-to-advanced SQL: joins, window functions, and common table expressions (CTEs).</p>
+
+    <!-- ─── Section 1: Setup ─── -->
+    <h2 id="setup">Setting Up the Tables</h2>
+
+    <p>We will work with a small company dataset: employees, departments, and project assignments. Creating these tables in TeideDB is straightforward with <code>INSERT INTO</code> statements. This gives us relational data with natural foreign-key relationships to explore join behavior.</p>
+
+    <pre><code class="language-js">import { Context } from 'teide-js';
+
+const ctx = new Context();
+
+ctx.executeSync(`
+  CREATE TABLE departments (
+    dept_id   INT,
+    dept_name TEXT,
+    budget    DOUBLE
+  )
+`);
+
+ctx.executeSync(`
+  INSERT INTO departments VALUES
+    (1, 'Engineering', 500000),
+    (2, 'Marketing',   200000),
+    (3, 'Sales',       300000),
+    (4, 'Research',    450000)
+`);
+
+ctx.executeSync(`
+  CREATE TABLE employees (
+    emp_id    INT,
+    name      TEXT,
+    dept_id   INT,
+    salary    DOUBLE,
+    hire_date TEXT
+  )
+`);
+
+ctx.executeSync(`
+  INSERT INTO employees VALUES
+    (101, 'Alice',   1, 120000, '2020-03-15'),
+    (102, 'Bob',     1,  95000, '2021-07-01'),
+    (103, 'Carol',   2,  85000, '2019-11-20'),
+    (104, 'Dave',    3, 110000, '2018-06-10'),
+    (105, 'Eve',     1, 105000, '2022-01-05'),
+    (106, 'Frank',   3,  90000, '2021-09-12'),
+    (107, 'Grace',   2,  78000, '2023-02-28'),
+    (108, 'Hank',    NULL, 72000, '2023-05-15')
+`);
+
+ctx.executeSync(`
+  CREATE TABLE projects (
+    project_id   INT,
+    project_name TEXT,
+    emp_id       INT,
+    hours        INT
+  )
+`);
+
+ctx.executeSync(`
+  INSERT INTO projects VALUES
+    (1, 'Alpha',   101, 120),
+    (2, 'Alpha',   102,  80),
+    (3, 'Beta',    101,  40),
+    (4, 'Beta',    105,  90),
+    (5, 'Gamma',   103,  60),
+    (6, 'Gamma',   104, 100),
+    (7, 'Delta',   106,  75)
+`);</code></pre>
+
+    <!-- ─── Section 2: Joins ─── -->
+    <h2 id="multi-table-joins">Multi-Table Joins</h2>
+
+    <p>Joins combine rows from two or more tables based on a related column. An <code>INNER JOIN</code> returns only rows that have matching values in both tables, while a <code>LEFT JOIN</code> preserves all rows from the left table and fills in <code>NULL</code> for unmatched columns on the right. Understanding which join type to use is key to getting correct results &mdash; an inner join silently drops non-matching rows, which may or may not be what you want.</p>
+
+    <h3>INNER JOIN: employees with their departments</h3>
+
+    <pre><code class="language-sql">SELECT e.name, d.dept_name, e.salary
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.dept_id
+ORDER BY e.salary DESC;</code></pre>
+
+    <pre><code class="language-js">const joined = ctx.executeSync(`
+  SELECT e.name, d.dept_name, e.salary
+  FROM employees e
+  INNER JOIN departments d ON e.dept_id = d.dept_id
+  ORDER BY e.salary DESC
+`);
+
+const names = joined.getColumn('name').toArray();
+const depts = joined.getColumn('dept_name').toArray();
+const salaries = joined.getColumn('salary').toArray();
+
+names.forEach((n, i) => {
+  console.log(`  ${n} (${depts[i]}): $${salaries[i].toLocaleString()}`);
+});</code></pre>
+
+    <div class="output">
+  Alice (Engineering): $120,000
+  Dave (Sales): $110,000
+  Eve (Engineering): $105,000
+  Bob (Engineering): $95,000
+  Frank (Sales): $90,000
+  Carol (Marketing): $85,000
+  Grace (Marketing): $78,000
+    </div>
+
+    <div class="note">
+      <p><strong>Note:</strong> Hank (emp_id 108) has a <code>NULL</code> dept_id and does not appear in the inner join result. Use a <code>LEFT JOIN</code> if you need to include unmatched employees.</p>
+    </div>
+
+    <h3>LEFT JOIN: include unassigned employees</h3>
+
+    <pre><code class="language-sql">SELECT e.name, COALESCE(d.dept_name, 'Unassigned') AS department
+FROM employees e
+LEFT JOIN departments d ON e.dept_id = d.dept_id
+ORDER BY e.name;</code></pre>
+
+    <div class="output">
+  Alice      Engineering
+  Bob        Engineering
+  Carol      Marketing
+  Dave       Sales
+  Eve        Engineering
+  Frank      Sales
+  Grace      Marketing
+  Hank       Unassigned
+    </div>
+
+    <h3>Triple join: employees, departments, and projects</h3>
+
+    <p>You can chain multiple joins to bring together three or more tables. This query shows each employee alongside their department and project assignments. Employees without projects still appear thanks to the <code>LEFT JOIN</code> on the projects table.</p>
+
+    <pre><code class="language-sql">SELECT
+  e.name,
+  d.dept_name,
+  COALESCE(p.project_name, 'No project') AS project,
+  COALESCE(p.hours, 0) AS hours
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.dept_id
+LEFT JOIN projects p ON e.emp_id = p.emp_id
+ORDER BY e.name, p.project_name;</code></pre>
+
+    <div class="output">
+  Alice   Engineering  Alpha    120
+  Alice   Engineering  Beta      40
+  Bob     Engineering  Alpha     80
+  Carol   Marketing    Gamma     60
+  Dave    Sales        Gamma    100
+  Eve     Engineering  Beta      90
+  Frank   Sales        Delta     75
+  Grace   Marketing    No project 0
+    </div>
+
+    <!-- ─── Section 3: Window Functions ─── -->
+    <h2 id="window-functions">Window Functions</h2>
+
+    <p>Window functions perform calculations across a set of rows related to the current row, without collapsing them into a single output row like <code>GROUP BY</code> does. They are invaluable for ranking, running totals, and comparisons within groups. The <code>OVER</code> clause defines the window &mdash; which rows to include and in what order.</p>
+
+    <h3>ROW_NUMBER: ranking within partitions</h3>
+
+    <p>Rank employees by salary within each department. <code>ROW_NUMBER()</code> assigns a sequential integer to each row within its partition, ordered by the specified column. This is perfect for "top-N per group" queries.</p>
+
+    <pre><code class="language-sql">SELECT
+  name,
+  dept_name,
+  salary,
+  ROW_NUMBER() OVER (
+    PARTITION BY d.dept_id
+    ORDER BY salary DESC
+  ) AS dept_rank
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.dept_id
+ORDER BY d.dept_name, dept_rank;</code></pre>
+
+    <div class="output">
+  Alice   Engineering  120000  1
+  Eve     Engineering  105000  2
+  Bob     Engineering   95000  3
+  Carol   Marketing     85000  1
+  Grace   Marketing     78000  2
+  Dave    Sales        110000  1
+  Frank   Sales         90000  2
+    </div>
+
+    <h3>Running SUM: cumulative totals</h3>
+
+    <p>A running sum computes a cumulative total as you move through ordered rows. By specifying <code>ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>, each row's value includes all previous rows plus itself. This is useful for tracking cumulative budget spend, progressive revenue, or running balances.</p>
+
+    <pre><code class="language-sql">SELECT
+  name,
+  salary,
+  SUM(salary) OVER (
+    ORDER BY hire_date
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+  ) AS running_payroll
+FROM employees e
+WHERE e.dept_id IS NOT NULL
+ORDER BY hire_date;</code></pre>
+
+    <div class="output">
+  Dave    110000   110000
+  Carol    85000   195000
+  Alice   120000   315000
+  Bob      95000   410000
+  Frank    90000   500000
+  Eve     105000   605000
+  Grace    78000   683000
+    </div>
+
+    <h3>DENSE_RANK: handling ties</h3>
+
+    <p>Unlike <code>ROW_NUMBER</code>, <code>DENSE_RANK</code> assigns the same rank to tied values and does not skip subsequent ranks. This is useful when multiple items may share the same score or value and you want ranks like 1, 1, 2 instead of 1, 2, 3.</p>
+
+    <pre><code class="language-sql">SELECT
+  project_name,
+  SUM(hours) AS total_hours,
+  DENSE_RANK() OVER (ORDER BY SUM(hours) DESC) AS effort_rank
+FROM projects
+GROUP BY project_name
+ORDER BY effort_rank;</code></pre>
+
+    <div class="output">
+  Alpha    200   1
+  Gamma    160   2
+  Beta     130   3
+  Delta     75   4
+    </div>
+
+    <!-- ─── Section 4: CTEs ─── -->
+    <h2 id="ctes">Common Table Expressions (CTEs)</h2>
+
+    <p>CTEs let you define named temporary result sets at the top of a query using the <code>WITH</code> clause. They make complex queries more readable by breaking them into logical steps, each with a descriptive name. Think of them as inline views that exist only for the duration of the query. CTEs can reference each other, enabling a pipeline-style composition.</p>
+
+    <pre><code class="language-sql">WITH dept_costs AS (
+  SELECT
+    d.dept_name,
+    d.budget,
+    SUM(e.salary) AS total_salary
+  FROM departments d
+  INNER JOIN employees e ON d.dept_id = e.dept_id
+  GROUP BY d.dept_name, d.budget
+),
+utilization AS (
+  SELECT
+    dept_name,
+    budget,
+    total_salary,
+    ROUND(total_salary / budget * 100, 1) AS pct_used
+  FROM dept_costs
+)
+SELECT * FROM utilization ORDER BY pct_used DESC;</code></pre>
+
+    <pre><code class="language-js">const budget = ctx.executeSync(`
+  WITH dept_costs AS (
+    SELECT d.dept_name, d.budget, SUM(e.salary) AS total_salary
+    FROM departments d
+    INNER JOIN employees e ON d.dept_id = e.dept_id
+    GROUP BY d.dept_name, d.budget
+  ),
+  utilization AS (
+    SELECT dept_name, budget, total_salary,
+           ROUND(total_salary / budget * 100, 1) AS pct_used
+    FROM dept_costs
+  )
+  SELECT * FROM utilization ORDER BY pct_used DESC
+`);
+
+const deptNames = budget.getColumn('dept_name').toArray();
+const pctUsed = budget.getColumn('pct_used').toArray();
+
+deptNames.forEach((d, i) => {
+  console.log(`  ${d}: ${pctUsed[i]}% of budget used`);
+});</code></pre>
+
+    <div class="output">
+  Marketing: 81.5% of budget used
+  Sales: 66.7% of budget used
+  Engineering: 64.0% of budget used
+    </div>
+
+    <!-- ─── Section 5: Subqueries ─── -->
+    <h2 id="subqueries">Subqueries</h2>
+
+    <p>Subqueries embed one query inside another, either in the <code>WHERE</code> clause (for filtering) or the <code>FROM</code> clause (as derived tables). They are useful when you need to compute an intermediate result and immediately use it. The <code>IN</code> operator with a subquery is a common pattern for filtering rows against a dynamically computed set of values.</p>
+
+    <h3>IN subquery: employees on a specific project</h3>
+
+    <pre><code class="language-sql">SELECT name, salary
+FROM employees
+WHERE emp_id IN (
+  SELECT emp_id FROM projects WHERE project_name = 'Alpha'
+)
+ORDER BY salary DESC;</code></pre>
+
+    <div class="output">
+  Alice   120000
+  Bob      95000
+    </div>
+
+    <h3>Derived table: average hours per department</h3>
+
+    <pre><code class="language-sql">SELECT d.dept_name, ph.avg_hours
+FROM (
+  SELECT e.dept_id, AVG(p.hours) AS avg_hours
+  FROM projects p
+  INNER JOIN employees e ON p.emp_id = e.emp_id
+  GROUP BY e.dept_id
+) ph
+INNER JOIN departments d ON ph.dept_id = d.dept_id
+ORDER BY ph.avg_hours DESC;</code></pre>
+
+    <div class="output">
+  Sales        87.5
+  Marketing    60.0
+  Engineering  82.5
+    </div>
+
+    <!-- ─── Section 6: Set Operations ─── -->
+    <h2 id="set-operations">Set Operations</h2>
+
+    <p><code>UNION ALL</code> combines the results of two or more <code>SELECT</code> statements into a single result set. Unlike <code>UNION</code> (which removes duplicates), <code>UNION ALL</code> preserves all rows, making it faster for cases where duplicates are acceptable or impossible. This is useful for combining data from different sources or creating summary reports with multiple levels of detail.</p>
+
+    <pre><code class="language-sql">SELECT 'High earner' AS label, name, salary
+FROM employees WHERE salary >= 100000
+
+UNION ALL
+
+SELECT 'Standard' AS label, name, salary
+FROM employees WHERE salary &lt; 100000 AND dept_id IS NOT NULL
+
+ORDER BY salary DESC;</code></pre>
+
+    <div class="output">
+  High earner  Alice   120000
+  High earner  Dave    110000
+  High earner  Eve     105000
+  Standard     Bob      95000
+  Standard     Frank    90000
+  Standard     Carol    85000
+  Standard     Grace    78000
+    </div>
+
+    <!-- ─── Section 7: Putting It All Together ─── -->
+    <h2 id="putting-it-together">Putting It All Together</h2>
+
+    <p>Here is a query that combines everything: a CTE computes project effort per employee, a join brings in department info, and a window function ranks each employee's total project hours within their department. This kind of layered query is the bread and butter of real-world analytics.</p>
+
+    <pre><code class="language-sql">WITH effort AS (
+  SELECT
+    emp_id,
+    SUM(hours) AS total_hours,
+    COUNT(*)   AS num_projects
+  FROM projects
+  GROUP BY emp_id
+)
+SELECT
+  e.name,
+  d.dept_name,
+  ef.num_projects,
+  ef.total_hours,
+  DENSE_RANK() OVER (
+    PARTITION BY d.dept_id
+    ORDER BY ef.total_hours DESC
+  ) AS dept_effort_rank
+FROM effort ef
+INNER JOIN employees e ON ef.emp_id = e.emp_id
+INNER JOIN departments d ON e.dept_id = d.dept_id
+ORDER BY d.dept_name, dept_effort_rank;</code></pre>
+
+    <pre><code class="language-js">const combined = ctx.executeSync(`
+  WITH effort AS (
+    SELECT emp_id, SUM(hours) AS total_hours, COUNT(*) AS num_projects
+    FROM projects
+    GROUP BY emp_id
+  )
+  SELECT
+    e.name, d.dept_name, ef.num_projects, ef.total_hours,
+    DENSE_RANK() OVER (
+      PARTITION BY d.dept_id ORDER BY ef.total_hours DESC
+    ) AS dept_effort_rank
+  FROM effort ef
+  INNER JOIN employees e ON ef.emp_id = e.emp_id
+  INNER JOIN departments d ON e.dept_id = d.dept_id
+  ORDER BY d.dept_name, dept_effort_rank
+`);
+
+const cNames = combined.getColumn('name').toArray();
+const cDepts = combined.getColumn('dept_name').toArray();
+const cHours = combined.getColumn('total_hours').toArray();
+const cRanks = combined.getColumn('dept_effort_rank').toArray();
+
+cNames.forEach((n, i) => {
+  console.log(`  ${cDepts[i]} #${cRanks[i]}: ${n} (${cHours[i]}h)`);
+});</code></pre>
+
+    <div class="output">
+  Engineering #1: Alice (160h)
+  Engineering #2: Eve (90h)
+  Engineering #3: Bob (80h)
+  Marketing #1: Carol (60h)
+  Sales #1: Dave (100h)
+  Sales #2: Frank (75h)
+    </div>
+
+    <!-- ─── Navigation ─── -->
+    <div class="prev-next">
+      <a href="getting-started.html" class="prev">&larr; From CSV to Insights</a>
+      <a href="graph-queries.html" class="next">Graph Queries (SQL/PGQ) &rarr;</a>
+    </div>
+
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

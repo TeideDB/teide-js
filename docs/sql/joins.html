@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Joins - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="../guides/getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="../guides/sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="../guides/graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="../guides/vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="../guides/node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="./" class="sidebar-link">Overview</a>
+      <a href="data-types.html" class="sidebar-link">Data Types</a>
+      <a href="ddl.html" class="sidebar-link">DDL</a>
+      <a href="dml.html" class="sidebar-link">DML</a>
+      <a href="queries.html" class="sidebar-link">Queries</a>
+      <a href="filtering.html" class="sidebar-link">Filtering</a>
+      <a href="expressions.html" class="sidebar-link">Expressions</a>
+      <a href="aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="joins.html" class="sidebar-link active">Joins</a>
+      <a href="window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">SQL REFERENCE</div>
+    <h1>Joins</h1>
+    <p>Joins combine rows from two or more tables based on related columns. Teide supports inner joins, left joins, and cross joins.</p>
+
+    <h2>Sample Data</h2>
+    <p>The examples on this page use these two tables:</p>
+    <pre><code class="language-sql">CREATE TABLE employees (
+  id INTEGER, name VARCHAR, dept_id INTEGER, salary REAL
+);
+INSERT INTO employees VALUES
+  (1, 'Alice',   10, 95000),
+  (2, 'Bob',     20, 72000),
+  (3, 'Carol',   10, 105000),
+  (4, 'Dave',    30, 68000),
+  (5, 'Eve',     NULL, 88000);
+
+CREATE TABLE departments (
+  id INTEGER, name VARCHAR, location VARCHAR
+);
+INSERT INTO departments VALUES
+  (10, 'Engineering', 'Building A'),
+  (20, 'Marketing',   'Building B'),
+  (40, 'Research',     'Building C');</code></pre>
+
+    <h2>INNER JOIN</h2>
+    <p>Returns only rows that have matching values in both tables. Rows without a match are excluded.</p>
+    <pre><code class="language-sql">SELECT e.name, e.salary, d.name AS department, d.location
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.id;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>name</th><th>salary</th><th>department</th><th>location</th></tr></thead>
+      <tbody>
+        <tr><td>Alice</td><td>95000</td><td>Engineering</td><td>Building A</td></tr>
+        <tr><td>Bob</td><td>72000</td><td>Marketing</td><td>Building B</td></tr>
+        <tr><td>Carol</td><td>105000</td><td>Engineering</td><td>Building A</td></tr>
+      </tbody>
+    </table>
+    <p>Dave (dept_id=30, no matching department) and Eve (dept_id=NULL) are excluded. Research (id=40, no matching employees) is also excluded.</p>
+
+    <h2>LEFT JOIN</h2>
+    <p>Returns all rows from the left table, with matching rows from the right table. If there is no match, the right-side columns are filled with NULL.</p>
+    <pre><code class="language-sql">SELECT e.name, e.salary, d.name AS department, d.location
+FROM employees e
+LEFT JOIN departments d ON e.dept_id = d.id;</code></pre>
+    <p>Result:</p>
+    <table>
+      <thead><tr><th>name</th><th>salary</th><th>department</th><th>location</th></tr></thead>
+      <tbody>
+        <tr><td>Alice</td><td>95000</td><td>Engineering</td><td>Building A</td></tr>
+        <tr><td>Bob</td><td>72000</td><td>Marketing</td><td>Building B</td></tr>
+        <tr><td>Carol</td><td>105000</td><td>Engineering</td><td>Building A</td></tr>
+        <tr><td>Dave</td><td>68000</td><td>NULL</td><td>NULL</td></tr>
+        <tr><td>Eve</td><td>88000</td><td>NULL</td><td>NULL</td></tr>
+      </tbody>
+    </table>
+
+    <h2>CROSS JOIN</h2>
+    <p>Returns the Cartesian product of two tables: every row from the left table paired with every row from the right table. No <code>ON</code> clause is used.</p>
+    <pre><code class="language-sql">SELECT e.name, d.name AS department
+FROM employees e
+CROSS JOIN departments d;</code></pre>
+    <p>With 5 employees and 3 departments, this produces 15 rows.</p>
+
+    <h2>Table Aliases</h2>
+    <p>Use short aliases to make join queries more readable. The <code>AS</code> keyword is optional.</p>
+    <pre><code class="language-sql">-- With AS
+SELECT e.name, d.name
+FROM employees AS e
+INNER JOIN departments AS d ON e.dept_id = d.id;
+
+-- Without AS (equivalent)
+SELECT e.name, d.name
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.id;</code></pre>
+
+    <h2>Multi-Table Joins</h2>
+    <p>Chain multiple joins to combine data from several tables.</p>
+    <pre><code class="language-sql">CREATE TABLE projects (
+  id INTEGER, name VARCHAR, dept_id INTEGER, budget REAL
+);
+
+SELECT
+  e.name AS employee,
+  d.name AS department,
+  p.name AS project,
+  p.budget
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.id
+INNER JOIN projects p ON d.id = p.dept_id
+ORDER BY e.name;</code></pre>
+
+    <h2>Joining with Aggregation</h2>
+    <pre><code class="language-sql">-- Department headcount and total salary
+SELECT
+  d.name AS department,
+  d.location,
+  COUNT(*) AS headcount,
+  SUM(e.salary) AS total_salary,
+  AVG(e.salary) AS avg_salary
+FROM departments d
+LEFT JOIN employees e ON d.id = e.dept_id
+GROUP BY d.name, d.location
+ORDER BY total_salary DESC;</code></pre>
+
+    <h2>Self Joins</h2>
+    <p>A table joined with itself, useful for hierarchical data.</p>
+    <pre><code class="language-sql">-- Find employees and their managers
+SELECT
+  e.name AS employee,
+  m.name AS manager
+FROM employees e
+LEFT JOIN employees m ON e.manager_id = m.id;</code></pre>
+
+    <h2>Join with Filtering</h2>
+    <pre><code class="language-sql">-- Combine WHERE with JOIN
+SELECT e.name, e.salary, d.name AS department
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.id
+WHERE e.salary > 80000
+  AND d.location = 'Building A'
+ORDER BY e.salary DESC;</code></pre>
+
+    <div class="nav-footer">
+      <a href="aggregation.html" class="nav-prev">&larr; Aggregation</a>
+      <a href="window-functions.html" class="nav-next">Window Functions &rarr;</a>
+    </div>
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

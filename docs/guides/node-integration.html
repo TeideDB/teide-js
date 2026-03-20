@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Node.js Integration - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="node-integration.html" class="sidebar-link active">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="../sql/" class="sidebar-link">Overview</a>
+      <a href="../sql/data-types.html" class="sidebar-link">Data Types</a>
+      <a href="../sql/ddl.html" class="sidebar-link">DDL</a>
+      <a href="../sql/dml.html" class="sidebar-link">DML</a>
+      <a href="../sql/queries.html" class="sidebar-link">Queries</a>
+      <a href="../sql/filtering.html" class="sidebar-link">Filtering</a>
+      <a href="../sql/expressions.html" class="sidebar-link">Expressions</a>
+      <a href="../sql/aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="../sql/joins.html" class="sidebar-link">Joins</a>
+      <a href="../sql/window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="../sql/sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="../sql/set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="../sql/subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="../sql/functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="../sql/pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="../sql/graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="../sql/vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">GUIDES</div>
+
+    <h1>Node.js Integration</h1>
+    <p class="lead">Embed TeideDB in your Node.js application. Use the fluent query API, access zero-copy TypedArrays, handle async operations, and manage resources.</p>
+
+    <p>TeideDB is designed to be embedded directly in Node.js applications as a native addon. This guide covers the practical details of integrating TeideDB into real applications: the fluent query builder API, zero-copy data access, async vs sync patterns, resource management, Express.js integration, error handling, and performance optimization.</p>
+
+    <!-- ─── Section 1: Fluent API ─── -->
+    <h2 id="fluent-api">The Fluent Query API</h2>
+
+    <p>While TeideDB supports raw SQL via <code>executeSync</code> and <code>execute</code>, the fluent API lets you build queries programmatically using chainable method calls. This approach offers better composability (build queries conditionally), type safety (TypeScript catches method name typos), and readability (no string concatenation for dynamic queries). Under the hood, the fluent API constructs the same expression trees and operation stacks that SQL compilation produces.</p>
+
+    <pre><code class="language-js">import { Context, col, lit } from 'teide-js';
+
+const ctx = new Context();
+
+// Load data
+ctx.executeSync(`
+  CREATE TABLE users AS SELECT * FROM read_csv('users.csv')
+`);
+
+const table = ctx.table('users');
+
+// Fluent query: filter, sort, limit
+const result = table
+  .filter(col('age').gt(25))
+  .filter(col('city').eq('Seattle'))
+  .sort('name')
+  .head(10)
+  .collectSync();
+
+console.log('Names:', result.getColumn('name').toArray());
+console.log('Ages:', result.getColumn('age').toArray());</code></pre>
+
+    <p>The fluent API methods map directly to SQL operations:</p>
+
+    <ul>
+      <li><code>filter(expr)</code> &rarr; <code>WHERE</code> clause</li>
+      <li><code>select(col('a'), col('b'))</code> &rarr; <code>SELECT a, b</code></li>
+      <li><code>groupBy('category')</code> &rarr; <code>GROUP BY category</code></li>
+      <li><code>sort('name')</code> or <code>sort('name', { descending: true })</code> &rarr; <code>ORDER BY</code></li>
+      <li><code>head(n)</code> &rarr; <code>LIMIT n</code></li>
+      <li><code>collectSync()</code> / <code>collect()</code> &rarr; execute and return a <code>Table</code></li>
+    </ul>
+
+    <h3>Building expressions</h3>
+
+    <p>The <code>col()</code> and <code>lit()</code> functions create expression nodes that you compose with operators. Expressions are lazy &mdash; they describe a computation without executing it. Only when you call <code>collectSync()</code> or <code>collect()</code> does the expression tree get serialized and sent to the Teide thread for execution.</p>
+
+    <pre><code class="language-js">// Comparison operators
+col('price').gt(100)           // price > 100
+col('price').gte(100)          // price >= 100
+col('price').lt(50)            // price < 50
+col('price').eq('Electronics') // price = 'Electronics'
+col('price').neq(0)            // price != 0
+
+// Arithmetic
+col('price').mul(col('quantity'))  // price * quantity
+col('salary').add(lit(5000))      // salary + 5000
+
+// Aggregations (used with groupBy)
+col('price').sum()      // SUM(price)
+col('price').avg()      // AVG(price)
+col('price').min()      // MIN(price)
+col('price').max()      // MAX(price)
+col('id').count()       // COUNT(id)
+
+// Aliasing
+col('price').mul(col('quantity')).alias('total')  // AS total</code></pre>
+
+    <h3>GroupBy with aggregations</h3>
+
+    <pre><code class="language-js">const summary = table
+  .groupBy('category')
+  .agg(
+    col('price').sum().alias('total_revenue'),
+    col('price').avg().alias('avg_price'),
+    col('id').count().alias('num_items')
+  )
+  .sort('total_revenue', { descending: true })
+  .collectSync();
+
+const cats = summary.getColumn('category').toArray();
+const revenue = summary.getColumn('total_revenue').toArray();
+
+cats.forEach((cat, i) => {
+  console.log(`  ${cat}: $${revenue[i].toFixed(2)}`);
+});</code></pre>
+
+    <!-- ─── Section 2: Zero-Copy Series ─── -->
+    <h2 id="zero-copy-series">Zero-Copy Series Access</h2>
+
+    <p>When TeideDB returns query results, column data is exposed directly as JavaScript TypedArrays that point into the native C heap &mdash; no data is copied. This means accessing a 10-million-row numeric column is instantaneous: the TypedArray is a view over the existing memory. This is one of TeideDB's core performance advantages over approaches that serialize data to JSON or copy it into JS arrays.</p>
+
+    <h3>Numeric columns</h3>
+
+    <pre><code class="language-js">const result = ctx.executeSync('SELECT id, price, quantity FROM sales LIMIT 5');
+
+// Each Series exposes a TypedArray matching the column's dtype
+const ids = result.getColumn('id');
+const prices = result.getColumn('price');
+
+console.log('dtype:', prices.dtype);        // 'float64'
+console.log('length:', prices.length);      // 5
+
+// toArray() returns the zero-copy TypedArray
+const priceArr = prices.toArray();          // Float64Array
+console.log(priceArr instanceof Float64Array); // true
+console.log(priceArr[0]);                   // 999.99
+
+// Type mapping:
+//   INT     -> Int32Array
+//   BIGINT  -> BigInt64Array
+//   FLOAT   -> Float32Array
+//   DOUBLE  -> Float64Array</code></pre>
+
+    <h3>Dictionary (string) columns</h3>
+
+    <p>String columns use dictionary encoding for memory efficiency. Instead of storing each string value inline, TeideDB stores a dictionary of unique strings and an array of integer indices. The <code>Series</code> object provides access to both the indices and the dictionary, as well as a convenience <code>toArray()</code> that resolves indices to string values.</p>
+
+    <pre><code class="language-js">const strResult = ctx.executeSync('SELECT category FROM sales LIMIT 5');
+const catSeries = strResult.getColumn('category');
+
+console.log('dtype:', catSeries.dtype);  // 'dictionary'
+
+// Access the raw components
+const indices = catSeries.indices;        // Int32Array (e.g., [0, 1, 0, 2, 1])
+const dictionary = catSeries.dictionary;  // ['Electronics', 'Books', 'Clothing']
+
+// Or use toArray() for resolved values
+const values = catSeries.toArray();
+// ['Electronics', 'Books', 'Electronics', 'Clothing', 'Books']</code></pre>
+
+    <h3>Null handling</h3>
+
+    <p>Nullable columns include a null bitmap &mdash; a compact bit array where each bit indicates whether the corresponding row is null (0) or valid (1). The <code>nullBitmap</code> property exposes this as a <code>Uint8Array</code>, and <code>isNull(index)</code> provides a convenience check for individual rows.</p>
+
+    <pre><code class="language-js">const nullable = ctx.executeSync(`
+  SELECT name, dept_id FROM employees
+`);
+
+const deptSeries = nullable.getColumn('dept_id');
+
+// Check individual values
+for (let i = 0; i &lt; deptSeries.length; i++) {
+  if (deptSeries.isNull(i)) {
+    console.log(`  Row ${i}: NULL`);
+  } else {
+    console.log(`  Row ${i}: ${deptSeries.toArray()[i]}`);
+  }
+}
+
+// Access the raw bitmap
+const bitmap = deptSeries.nullBitmap;  // Uint8Array</code></pre>
+
+    <!-- ─── Section 3: Async Operations ─── -->
+    <h2 id="async-operations">Async Operations</h2>
+
+    <p>TeideDB provides both synchronous and asynchronous versions of key operations. Sync methods (<code>executeSync</code>, <code>collectSync</code>, <code>readCsvSync</code>) block the V8 thread until the Teide thread finishes. Async methods (<code>execute</code>, <code>collect</code>, <code>readCsv</code>) return Promises and keep the event loop running, making them essential for server applications where blocking would stall all request handling.</p>
+
+    <pre><code class="language-js">// Synchronous — blocks until complete
+const syncResult = ctx.executeSync('SELECT * FROM sales LIMIT 10');
+
+// Asynchronous — returns a Promise
+const asyncResult = await ctx.execute('SELECT * FROM sales LIMIT 10');
+
+// Async CSV loading
+await ctx.readCsv('large_dataset.csv', 'big_table');
+
+// Async fluent query
+const asyncFluent = await ctx.table('sales')
+  .filter(col('price').gt(100))
+  .sort('price', { descending: true })
+  .head(20)
+  .collect();  // Note: collect(), not collectSync()</code></pre>
+
+    <div class="note">
+      <p><strong>Note:</strong> Use sync methods for scripts, CLI tools, and tests where simplicity matters. Use async methods for HTTP servers, real-time applications, and any context where you must not block the event loop. Both methods dispatch work to the same Teide background thread &mdash; the only difference is whether the V8 thread waits or continues.</p>
+    </div>
+
+    <h3>When to use async vs sync</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Recommended</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Express/Fastify request handler</td>
+          <td><code>execute()</code> / <code>collect()</code></td>
+          <td>Must not block other requests</td>
+        </tr>
+        <tr>
+          <td>CLI data analysis script</td>
+          <td><code>executeSync()</code> / <code>collectSync()</code></td>
+          <td>Simpler code, no concurrency needed</td>
+        </tr>
+        <tr>
+          <td>Loading large CSV at startup</td>
+          <td><code>readCsv()</code> (async)</td>
+          <td>May take seconds; don't block startup</td>
+        </tr>
+        <tr>
+          <td>Unit tests</td>
+          <td><code>executeSync()</code></td>
+          <td>Easier to assert on direct return values</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- ─── Section 4: Resource Management ─── -->
+    <h2 id="resource-management">Resource Management</h2>
+
+    <p>Each <code>Context</code> owns a native C heap and a background thread. You must destroy it when finished to free memory and stop the thread. TeideDB supports three patterns for resource cleanup, from manual to fully automatic.</p>
+
+    <h3>Manual cleanup</h3>
+
+    <pre><code class="language-js">const ctx = new Context();
+try {
+  // ... use ctx ...
+} finally {
+  ctx.destroy();
+}</code></pre>
+
+    <h3>Symbol.dispose (TypeScript / Node.js 20+)</h3>
+
+    <pre><code class="language-js">// Automatic cleanup when `ctx` goes out of scope
+{
+  using ctx = new Context();
+  ctx.executeSync('SELECT 1');
+  // ctx.destroy() called automatically at end of block
+}</code></pre>
+
+    <h3>Process exit handling</h3>
+
+    <pre><code class="language-js">const ctx = new Context();
+
+process.on('SIGINT', () => {
+  ctx.destroy();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  ctx.destroy();
+  process.exit(0);
+});</code></pre>
+
+    <div class="note">
+      <p><strong>Note:</strong> Calling <code>destroy()</code> posts a shutdown sentinel to the Teide thread, which then tears down <code>td_pool</code>, <code>td_sym</code>, and <code>td_heap</code>. After <code>destroy()</code>, any attempt to use the context will throw. The <code>heap_alive_</code> atomic flag prevents use-after-free in Series destructors that may run later during GC.</p>
+    </div>
+
+    <!-- ─── Section 5: Express.js Integration ─── -->
+    <h2 id="express-integration">Express.js Integration</h2>
+
+    <p>Here is a complete example of embedding TeideDB in an Express.js API server. The context is created once at startup and shared across requests. Each request handler runs an async query and returns JSON results. This pattern works equally well with Fastify, Koa, or any Node.js HTTP framework.</p>
+
+    <pre><code class="language-js">import express from 'express';
+import { Context, col } from 'teide-js';
+
+const app = express();
+const ctx = new Context();
+
+// Load data at startup
+await ctx.readCsv('products.csv', 'products');
+
+// Query endpoint
+app.get('/api/products', async (req, res) => {
+  try {
+    const { category, minPrice, limit = 20 } = req.query;
+
+    let sql = 'SELECT id, name, category, price FROM products WHERE 1=1';
+    if (category) sql += ` AND category = '${category}'`;
+    if (minPrice) sql += ` AND price >= ${Number(minPrice)}`;
+    sql += ` ORDER BY price DESC LIMIT ${Number(limit)}`;
+
+    const result = await ctx.execute(sql);
+
+    // Convert to JSON array
+    const columns = result.columnNames();
+    const numRows = result.getColumn(columns[0]).length;
+    const rows = [];
+
+    for (let i = 0; i &lt; numRows; i++) {
+      const row = {};
+      for (const c of columns) {
+        row[c] = result.getColumn(c).toArray()[i];
+      }
+      rows.push(row);
+    }
+
+    res.json({ data: rows, count: numRows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Fluent API endpoint
+app.get('/api/products/summary', async (req, res) => {
+  try {
+    const summary = await ctx.table('products')
+      .groupBy('category')
+      .agg(
+        col('price').avg().alias('avg_price'),
+        col('id').count().alias('count')
+      )
+      .sort('avg_price', { descending: true })
+      .collect();
+
+    const cats = summary.getColumn('category').toArray();
+    const avgPrices = summary.getColumn('avg_price').toArray();
+    const counts = summary.getColumn('count').toArray();
+
+    const data = cats.map((cat, i) => ({
+      category: cat,
+      avgPrice: avgPrices[i],
+      count: counts[i],
+    }));
+
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  ctx.destroy();
+  process.exit(0);
+});
+
+app.listen(3000, () => console.log('Listening on :3000'));</code></pre>
+
+    <div class="note">
+      <p><strong>Note:</strong> In production, parameterize SQL queries to prevent injection. The example above uses string interpolation for clarity, but you should validate and sanitize all user inputs before including them in SQL strings.</p>
+    </div>
+
+    <!-- ─── Section 6: Error Handling ─── -->
+    <h2 id="error-handling">Error Handling</h2>
+
+    <p>TeideDB throws JavaScript errors for SQL syntax errors, missing tables, type mismatches, and other problems. Both sync and async methods can throw, so always wrap calls in try/catch. The error message includes the underlying Teide engine error text, which is usually descriptive enough to diagnose the problem.</p>
+
+    <pre><code class="language-js">// SQL syntax error
+try {
+  ctx.executeSync('SELCT * FROM sales');  // typo
+} catch (err) {
+  console.error('SQL error:', err.message);
+  // "SQL error: Parse error: expected SELECT, INSERT, CREATE, ..."
+}
+
+// Missing table
+try {
+  ctx.executeSync('SELECT * FROM nonexistent');
+} catch (err) {
+  console.error('Table error:', err.message);
+  // "Table error: table 'nonexistent' does not exist"
+}
+
+// Type mismatch
+try {
+  ctx.executeSync(`SELECT * FROM sales WHERE price = 'not_a_number'`);
+} catch (err) {
+  console.error('Type error:', err.message);
+}
+
+// Async error handling
+try {
+  await ctx.execute('SELECT * FROM missing_table');
+} catch (err) {
+  console.error('Async error:', err.message);
+}
+
+// Fluent API errors
+try {
+  await ctx.table('sales')
+    .filter(col('nonexistent_column').gt(0))
+    .collect();
+} catch (err) {
+  console.error('Column error:', err.message);
+  // "Column error: column 'nonexistent_column' not found in table 'sales'"
+}</code></pre>
+
+    <!-- ─── Section 7: Performance Tips ─── -->
+    <h2 id="performance-tips">Performance Tips</h2>
+
+    <p>TeideDB is designed for analytical performance, but how you use it from Node.js matters. Here are practical tips for getting the best throughput and lowest latency from the bindings.</p>
+
+    <h3>1. Reuse the Context</h3>
+
+    <p>Creating a <code>Context</code> allocates a native heap and spawns a background thread. Do this once at application startup, not per-request. Context creation is on the order of milliseconds, but it adds up under load.</p>
+
+    <pre><code class="language-js">// Good: singleton context
+const ctx = new Context();
+app.get('/query', (req, res) => { /* use ctx */ });
+
+// Bad: context per request
+app.get('/query', (req, res) => {
+  const ctx = new Context();   // Expensive!
+  // ... query ...
+  ctx.destroy();
+});</code></pre>
+
+    <h3>2. Batch related queries</h3>
+
+    <p>Each call to <code>executeSync</code> or <code>execute</code> crosses the thread boundary (V8 &rarr; Teide thread &rarr; V8). If you need to run multiple setup statements, combine them into fewer calls where possible. Multi-statement SQL is supported.</p>
+
+    <pre><code class="language-js">// Good: batch DDL
+ctx.executeSync(`
+  CREATE TABLE a (id INT, val DOUBLE);
+  CREATE TABLE b (id INT, label TEXT);
+`);
+
+// Acceptable but slower: separate calls
+ctx.executeSync('CREATE TABLE a (id INT, val DOUBLE)');
+ctx.executeSync('CREATE TABLE b (id INT, label TEXT)');</code></pre>
+
+    <h3>3. Prefer zero-copy access</h3>
+
+    <p>Avoid converting TypedArrays to regular JavaScript arrays unless you need to. TypedArrays are already iterable and indexable. Converting a 10-million-element Float64Array to a regular array copies 80 MB of data needlessly.</p>
+
+    <pre><code class="language-js">const series = result.getColumn('price');
+
+// Good: use the TypedArray directly
+const typedArr = series.toArray();  // Float64Array, zero-copy
+let sum = 0;
+for (let i = 0; i &lt; typedArr.length; i++) sum += typedArr[i];
+
+// Bad: convert to JS array (copies all data)
+const jsArray = Array.from(series.toArray());  // Copies everything</code></pre>
+
+    <h3>4. Use async for I/O-bound workloads</h3>
+
+    <p>If your server handles concurrent requests, use async methods so the event loop can process other requests while TeideDB works. The Teide thread runs independently, so async dispatch has near-zero overhead compared to sync.</p>
+
+    <h3>5. Profile with column statistics</h3>
+
+    <p>For query optimization, check how much data you are actually scanning. Use <code>LIMIT</code> generously in exploratory queries, and push filters as early as possible to reduce the working set.</p>
+
+    <pre><code class="language-js">// Good: filter then aggregate
+ctx.executeSync(`
+  SELECT category, AVG(price)
+  FROM sales
+  WHERE date >= '2024-01-01'
+  GROUP BY category
+`);
+
+// Slower: aggregate everything, then filter
+ctx.executeSync(`
+  SELECT category, avg_price
+  FROM (SELECT category, AVG(price) AS avg_price FROM sales GROUP BY category)
+  WHERE category IN ('Electronics', 'Books')
+`);</code></pre>
+
+    <!-- ─── Navigation ─── -->
+    <div class="prev-next">
+      <a href="vector-search.html" class="prev">&larr; Vector Search</a>
+    </div>
+
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>

@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vector Search - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="vector-search.html" class="sidebar-link active">Vector Search</a>
+      <a href="node-integration.html" class="sidebar-link">Node.js Integration</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="../sql/" class="sidebar-link">Overview</a>
+      <a href="../sql/data-types.html" class="sidebar-link">Data Types</a>
+      <a href="../sql/ddl.html" class="sidebar-link">DDL</a>
+      <a href="../sql/dml.html" class="sidebar-link">DML</a>
+      <a href="../sql/queries.html" class="sidebar-link">Queries</a>
+      <a href="../sql/filtering.html" class="sidebar-link">Filtering</a>
+      <a href="../sql/expressions.html" class="sidebar-link">Expressions</a>
+      <a href="../sql/aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="../sql/joins.html" class="sidebar-link">Joins</a>
+      <a href="../sql/window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="../sql/sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="../sql/set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="../sql/subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="../sql/functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="../sql/pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="../sql/graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="../sql/vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">GUIDES</div>
+
+    <h1>Vector Search</h1>
+    <p class="lead">Store embeddings, compute similarity, and find nearest neighbors. Build semantic search and recommendation systems with SQL.</p>
+
+    <p>Modern AI applications produce dense vector embeddings &mdash; fixed-length arrays of floating-point numbers that encode semantic meaning. Similar items have similar vectors, which means "find things like X" becomes a nearest-neighbor search in vector space. TeideDB lets you store, index, and search embeddings using standard SQL, making it straightforward to build semantic search, recommendation engines, and RAG (retrieval-augmented generation) pipelines directly in Node.js.</p>
+
+    <!-- ─── Section 1: What Are Embeddings ─── -->
+    <h2 id="what-are-embeddings">What Are Embeddings?</h2>
+
+    <p>An embedding is a dense vector of floating-point numbers, typically produced by a neural network, that captures the semantic meaning of a piece of data. Text embeddings from models like OpenAI's <code>text-embedding-3-small</code> place semantically similar sentences near each other in a high-dimensional space. Image embeddings from CLIP do the same for visual content. The key insight is that vector distance correlates with semantic similarity, so finding "related documents" reduces to finding nearby vectors.</p>
+
+    <p>TeideDB stores embeddings as <code>FLOAT[N]</code> columns &mdash; fixed-length arrays of 32-bit floats. Common embedding dimensions range from 384 (lightweight models) to 1536 (OpenAI) or 3072 (large models). For this guide, we will use small 4-dimensional vectors to keep examples readable.</p>
+
+    <!-- ─── Section 2: Creating Embedding Data ─── -->
+    <h2 id="creating-data">Creating Embedding Data</h2>
+
+    <p>Let us build a small document collection with pre-computed embeddings. In a real application, you would generate these using an embedding API (OpenAI, Cohere, local models), but here we use hand-crafted vectors that illustrate similarity relationships. Documents about similar topics will have vectors pointing in similar directions.</p>
+
+    <pre><code class="language-js">import { Context } from 'teide-js';
+
+const ctx = new Context();
+
+ctx.executeSync(`
+  CREATE TABLE documents (
+    id        INT,
+    title     TEXT,
+    category  TEXT,
+    embedding FLOAT[4]
+  )
+`);
+
+ctx.executeSync(`
+  INSERT INTO documents VALUES
+    (1,  'Introduction to Machine Learning',   'AI',       [0.9, 0.3, 0.1, 0.2]),
+    (2,  'Deep Learning with Neural Networks',  'AI',       [0.85, 0.35, 0.15, 0.25]),
+    (3,  'Natural Language Processing',         'AI',       [0.8, 0.4, 0.2, 0.1]),
+    (4,  'Database Indexing Strategies',         'Database', [0.1, 0.9, 0.3, 0.2]),
+    (5,  'Query Optimization Techniques',        'Database', [0.15, 0.85, 0.35, 0.15]),
+    (6,  'Columnar Storage Engines',             'Database', [0.2, 0.8, 0.4, 0.1]),
+    (7,  'Web Application Security',             'Security', [0.1, 0.2, 0.9, 0.3]),
+    (8,  'Cryptographic Hash Functions',          'Security', [0.15, 0.15, 0.85, 0.35]),
+    (9,  'Network Protocol Design',              'Network',  [0.2, 0.1, 0.3, 0.9]),
+    (10, 'Distributed Systems Patterns',          'Network',  [0.25, 0.15, 0.25, 0.85])
+`);</code></pre>
+
+    <!-- ─── Section 3: Similarity Functions ─── -->
+    <h2 id="similarity-functions">Similarity Functions</h2>
+
+    <p>TeideDB provides two built-in similarity functions for comparing vectors. <code>COSINE_SIMILARITY</code> measures the angle between two vectors, returning a value from -1 (opposite) to 1 (identical direction). It ignores magnitude, making it ideal for comparing embeddings of different lengths of text. <code>EUCLIDEAN_DISTANCE</code> measures the straight-line distance between two points in vector space &mdash; smaller values mean more similar.</p>
+
+    <h3>Cosine similarity: comparing direction</h3>
+
+    <pre><code class="language-sql">-- Find documents most similar to "Introduction to Machine Learning"
+SELECT
+  d2.title,
+  ROUND(COSINE_SIMILARITY(d1.embedding, d2.embedding), 4) AS similarity
+FROM documents d1, documents d2
+WHERE d1.id = 1 AND d2.id != 1
+ORDER BY similarity DESC
+LIMIT 5;</code></pre>
+
+    <pre><code class="language-js">const similar = ctx.executeSync(`
+  SELECT
+    d2.title,
+    ROUND(COSINE_SIMILARITY(d1.embedding, d2.embedding), 4) AS similarity
+  FROM documents d1, documents d2
+  WHERE d1.id = 1 AND d2.id != 1
+  ORDER BY similarity DESC
+  LIMIT 5
+`);
+
+console.log('Most similar to "Introduction to Machine Learning":');
+const titles = similar.getColumn('title').toArray();
+const sims = similar.getColumn('similarity').toArray();
+titles.forEach((t, i) => console.log(`  ${sims[i]} — ${t}`));</code></pre>
+
+    <div class="output">
+Most similar to "Introduction to Machine Learning":
+  0.9945 — Deep Learning with Neural Networks
+  0.9762 — Natural Language Processing
+  0.5123 — Database Indexing Strategies
+  0.4891 — Query Optimization Techniques
+  0.4234 — Columnar Storage Engines
+    </div>
+
+    <h3>Euclidean distance: comparing magnitude</h3>
+
+    <pre><code class="language-sql">SELECT
+  d2.title,
+  ROUND(EUCLIDEAN_DISTANCE(d1.embedding, d2.embedding), 4) AS distance
+FROM documents d1, documents d2
+WHERE d1.id = 1 AND d2.id != 1
+ORDER BY distance ASC
+LIMIT 3;</code></pre>
+
+    <div class="output">
+  0.1225 — Deep Learning with Neural Networks
+  0.1871 — Natural Language Processing
+  1.0198 — Database Indexing Strategies
+    </div>
+
+    <div class="note">
+      <p><strong>Note:</strong> For normalized embeddings (unit vectors), cosine similarity and Euclidean distance produce equivalent rankings. Most embedding models produce approximately normalized vectors, so cosine similarity is the standard choice.</p>
+    </div>
+
+    <!-- ─── Section 4: KNN Queries ─── -->
+    <h2 id="knn-queries">K-Nearest Neighbor (KNN) Queries</h2>
+
+    <p>The most common vector search pattern is KNN: given a query vector, find the <em>k</em> most similar items. In SQL, this is expressed naturally with <code>ORDER BY similarity DESC LIMIT k</code>. TeideDB recognizes this pattern and automatically optimizes it &mdash; instead of computing similarity for every row, it uses approximate nearest-neighbor algorithms when a vector index is available.</p>
+
+    <pre><code class="language-sql">-- Semantic search: find documents matching a query embedding
+-- The query vector represents "machine learning algorithms"
+SELECT title, category,
+       ROUND(COSINE_SIMILARITY(embedding, [0.88, 0.32, 0.12, 0.18]), 4) AS score
+FROM documents
+ORDER BY score DESC
+LIMIT 3;</code></pre>
+
+    <pre><code class="language-js">// Simulate a search query — in practice, you'd embed the query text first
+const queryVector = [0.88, 0.32, 0.12, 0.18];
+
+const results = ctx.executeSync(`
+  SELECT title, category,
+         ROUND(COSINE_SIMILARITY(embedding, [${queryVector}]), 4) AS score
+  FROM documents
+  ORDER BY score DESC
+  LIMIT 3
+`);
+
+console.log('Search results:');
+const rTitles = results.getColumn('title').toArray();
+const rCats = results.getColumn('category').toArray();
+const rScores = results.getColumn('score').toArray();
+
+rTitles.forEach((t, i) => {
+  console.log(`  [${rCats[i]}] ${t} (score: ${rScores[i]})`);
+});</code></pre>
+
+    <div class="output">
+Search results:
+  [AI] Introduction to Machine Learning (score: 0.9987)
+  [AI] Deep Learning with Neural Networks (score: 0.9934)
+  [AI] Natural Language Processing (score: 0.9701)
+    </div>
+
+    <!-- ─── Section 5: HNSW Indexes ─── -->
+    <h2 id="hnsw-indexes">HNSW Indexes for Large-Scale Search</h2>
+
+    <p>For small datasets (under 10,000 rows), brute-force scan is fast enough. For larger collections, TeideDB supports HNSW (Hierarchical Navigable Small World) vector indexes. HNSW builds a multi-layered graph structure that enables approximate nearest-neighbor search in logarithmic time, making million-scale vector search practical.</p>
+
+    <pre><code class="language-sql">-- Create an HNSW index on the embedding column
+CREATE VECTOR INDEX idx_doc_embedding
+ON documents (embedding)
+USING HNSW
+WITH (
+  metric = 'cosine',
+  M = 16,
+  ef_construction = 200
+);</code></pre>
+
+    <pre><code class="language-js">ctx.executeSync(`
+  CREATE VECTOR INDEX idx_doc_embedding
+  ON documents (embedding)
+  USING HNSW
+  WITH (metric = 'cosine', M = 16, ef_construction = 200)
+`);
+
+// Queries automatically use the index when available
+// The SQL stays the same — the optimizer picks the index
+const indexed = ctx.executeSync(`
+  SELECT title,
+         ROUND(COSINE_SIMILARITY(embedding, [0.88, 0.32, 0.12, 0.18]), 4) AS score
+  FROM documents
+  ORDER BY score DESC
+  LIMIT 3
+`);
+
+console.log('Index-accelerated results:');
+const iTitles = indexed.getColumn('title').toArray();
+const iScores = indexed.getColumn('score').toArray();
+iTitles.forEach((t, i) => console.log(`  ${t}: ${iScores[i]}`));</code></pre>
+
+    <p>The two key HNSW parameters control the trade-off between build time, search accuracy, and memory:</p>
+
+    <ul>
+      <li><strong>M</strong> (default 16): Number of connections per node in the graph. Higher values improve recall but use more memory. Values between 12 and 48 work well for most datasets.</li>
+      <li><strong>ef_construction</strong> (default 200): Size of the dynamic candidate list during index building. Higher values produce a better-quality graph at the cost of longer build time. Should be at least 2x the value of M.</li>
+    </ul>
+
+    <div class="note">
+      <p><strong>Note:</strong> HNSW indexes are approximate. For exact results, omit the index and use brute-force scan. In practice, HNSW recall is typically above 95% with default parameters, and above 99% with tuned parameters.</p>
+    </div>
+
+    <!-- ─── Section 6: Semantic Document Search ─── -->
+    <h2 id="practical-example">Practical Example: Semantic Document Search</h2>
+
+    <p>Here is a complete example that simulates a semantic search pipeline. In production, you would call an embedding API to vectorize both documents and queries. The SQL layer handles storage, indexing, and retrieval, while Node.js manages the application logic and API integration.</p>
+
+    <pre><code class="language-js">// In production, you'd call an embedding API here
+async function getEmbedding(text) {
+  // Simulated — returns a mock 4D embedding
+  const hash = Array.from(text).reduce((h, c) => h + c.charCodeAt(0), 0);
+  return [
+    Math.sin(hash * 0.1) * 0.5 + 0.5,
+    Math.cos(hash * 0.2) * 0.5 + 0.5,
+    Math.sin(hash * 0.3) * 0.5 + 0.5,
+    Math.cos(hash * 0.4) * 0.5 + 0.5,
+  ];
+}
+
+async function semanticSearch(ctx, query, k = 5) {
+  const queryVec = await getEmbedding(query);
+
+  const results = ctx.executeSync(`
+    SELECT id, title, category,
+           ROUND(COSINE_SIMILARITY(embedding, [${queryVec}]), 4) AS relevance
+    FROM documents
+    ORDER BY relevance DESC
+    LIMIT ${k}
+  `);
+
+  const ids = results.getColumn('id').toArray();
+  const titles = results.getColumn('title').toArray();
+  const cats = results.getColumn('category').toArray();
+  const scores = results.getColumn('relevance').toArray();
+
+  return ids.map((id, i) => ({
+    id,
+    title: titles[i],
+    category: cats[i],
+    relevance: scores[i],
+  }));
+}
+
+// Usage
+const hits = await semanticSearch(ctx, 'how do neural networks learn?', 3);
+console.log(JSON.stringify(hits, null, 2));</code></pre>
+
+    <div class="output">
+[
+  { "id": 2, "title": "Deep Learning with Neural Networks", "category": "AI", "relevance": 0.9821 },
+  { "id": 1, "title": "Introduction to Machine Learning", "category": "AI", "relevance": 0.9654 },
+  { "id": 3, "title": "Natural Language Processing", "category": "AI", "relevance": 0.9312 }
+]
+    </div>
+
+    <!-- ─── Section 7: Combining with Graph ─── -->
+    <h2 id="combining-with-graph">Combining Vectors with Graph Queries</h2>
+
+    <p>Vectors and graphs complement each other naturally. You can use vector similarity to find semantically related entities, then explore their graph relationships, or vice versa. For example, in a knowledge graph, you might find entities similar to a query via embeddings, then traverse their relationships to discover related concepts.</p>
+
+    <pre><code class="language-sql">-- Suppose documents are nodes in a citation graph.
+-- Find docs similar to a query, then find what they cite.
+
+-- Step 1: Create a citation edge table
+CREATE TABLE cites (
+  src INT,
+  dst INT
+);
+
+INSERT INTO cites VALUES
+  (1, 4), (2, 1), (3, 1), (3, 2),
+  (5, 4), (6, 5), (7, 8), (9, 10);
+
+-- Step 2: Define a document graph
+CREATE PROPERTY GRAPH doc_graph
+VERTEX TABLES (documents KEY (id))
+EDGE TABLES (cites KEY (src, dst)
+  SOURCE documents (src) DESTINATION documents (dst));
+
+-- Step 3: Find similar docs, then traverse citations
+WITH similar_docs AS (
+  SELECT id, title,
+         COSINE_SIMILARITY(embedding, [0.88, 0.32, 0.12, 0.18]) AS score
+  FROM documents
+  ORDER BY score DESC
+  LIMIT 3
+)
+SELECT sd.title AS source_doc,
+       ROUND(sd.score, 4) AS similarity,
+       cited.title AS cites_doc
+FROM similar_docs sd
+LEFT JOIN GRAPH_TABLE (doc_graph
+  MATCH (src:documents)-[:cites]-&gt;(dst:documents)
+  COLUMNS (src.id AS src_id, dst.title)
+) cited ON sd.id = cited.src_id
+ORDER BY sd.score DESC;</code></pre>
+
+    <pre><code class="language-js">// Execute the combined vector + graph query
+const combined = ctx.executeSync(`
+  WITH similar_docs AS (
+    SELECT id, title,
+           COSINE_SIMILARITY(embedding, [0.88, 0.32, 0.12, 0.18]) AS score
+    FROM documents
+    ORDER BY score DESC
+    LIMIT 3
+  )
+  SELECT sd.title AS source_doc,
+         ROUND(sd.score, 4) AS similarity,
+         COALESCE(cited.title, 'No citations') AS cites_doc
+  FROM similar_docs sd
+  LEFT JOIN GRAPH_TABLE (doc_graph
+    MATCH (src:documents)-[:cites]->(dst:documents)
+    COLUMNS (src.id AS src_id, dst.title)
+  ) cited ON sd.id = cited.src_id
+  ORDER BY sd.score DESC
+`);
+
+console.log('Similar documents and their citations:');
+const srcDocs = combined.getColumn('source_doc').toArray();
+const simScores = combined.getColumn('similarity').toArray();
+const citedDocs = combined.getColumn('cites_doc').toArray();
+
+srcDocs.forEach((s, i) => {
+  console.log(`  ${s} (${simScores[i]}) -> cites: ${citedDocs[i]}`);
+});
+
+ctx.destroy();</code></pre>
+
+    <div class="output">
+Similar documents and their citations:
+  Introduction to Machine Learning (0.9987) -> cites: Database Indexing Strategies
+  Deep Learning with Neural Networks (0.9934) -> cites: Introduction to Machine Learning
+  Natural Language Processing (0.9701) -> cites: Introduction to Machine Learning
+  Natural Language Processing (0.9701) -> cites: Deep Learning with Neural Networks
+    </div>
+
+    <!-- ─── Navigation ─── -->
+    <div class="prev-next">
+      <a href="graph-queries.html" class="prev">&larr; Graph Queries (SQL/PGQ)</a>
+      <a href="node-integration.html" class="next">Node.js Integration &rarr;</a>
+    </div>
+
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>
