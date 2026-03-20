@@ -776,10 +776,15 @@ td_t* ExecutePlan(td_t* tbl, const std::vector<PlanStep>& plan) {
                 }
             }
 
-            current = td_window_join(g, left_table_node, right_table_node,
-                                     time_key, sym_key,
-                                     step.wjoin_lo, step.wjoin_hi,
-                                     agg_ops.data(), agg_ins.data(), n_aggs);
+            // td_window_join is not yet available in the vendored C core.
+            // When it lands, replace this with the real call:
+            // current = td_window_join(g, left_table_node, right_table_node,
+            //                          time_key, sym_key,
+            //                          step.wjoin_lo, step.wjoin_hi,
+            //                          agg_ops.data(), agg_ins.data(), n_aggs);
+            (void)left_table_node; (void)right_table_node;
+            (void)time_key; (void)sym_key;
+            Napi::Error::Fatal("ExecutePlan", "windowJoin not yet supported in vendored Teide core");
         }
         else if (step.type == "window") {
             td_op_t* table_node = current ? current : td_const_table(g, tbl);
