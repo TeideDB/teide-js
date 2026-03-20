@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Web REPL - Teide JS Docs</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="sidebar-overlay"></div>
+  <button class="hamburger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <nav class="sidebar">
+    <a href="../" class="sidebar-logo">
+      <img src="../assets/teide-logo.svg" alt="Teide">
+      <span>Teide JS</span>
+      <span class="docs-badge">Docs</span>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="../" class="sidebar-link">Home</a>
+      <a href="../getting-started/" class="sidebar-link">Getting Started</a>
+      <a href="../tutorial/" class="sidebar-link">Tutorial</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Guides</div>
+      <a href="getting-started.html" class="sidebar-link">From CSV to Insights</a>
+      <a href="sql-deep-dive.html" class="sidebar-link">Joins, Windows &amp; CTEs</a>
+      <a href="graph-queries.html" class="sidebar-link">Graph Queries (SQL/PGQ)</a>
+      <a href="vector-search.html" class="sidebar-link">Vector Search</a>
+      <a href="node-integration.html" class="sidebar-link">Node.js Integration</a>
+      <a href="web-repl.html" class="sidebar-link active">Web REPL</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">SQL Reference</div>
+      <a href="../sql/" class="sidebar-link">Overview</a>
+      <a href="../sql/data-types.html" class="sidebar-link">Data Types</a>
+      <a href="../sql/ddl.html" class="sidebar-link">DDL</a>
+      <a href="../sql/dml.html" class="sidebar-link">DML</a>
+      <a href="../sql/queries.html" class="sidebar-link">Queries</a>
+      <a href="../sql/filtering.html" class="sidebar-link">Filtering</a>
+      <a href="../sql/expressions.html" class="sidebar-link">Expressions</a>
+      <a href="../sql/aggregation.html" class="sidebar-link">Aggregation</a>
+      <a href="../sql/joins.html" class="sidebar-link">Joins</a>
+      <a href="../sql/window-functions.html" class="sidebar-link">Window Functions</a>
+      <a href="../sql/sorting.html" class="sidebar-link">Sorting &amp; Limits</a>
+      <a href="../sql/set-operations.html" class="sidebar-link">Set Operations</a>
+      <a href="../sql/subqueries.html" class="sidebar-link">Subqueries</a>
+      <a href="../sql/functions.html" class="sidebar-link">Scalar Functions</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Developer</div>
+      <a href="../api/" class="sidebar-link">TypeScript API</a>
+      <a href="../architecture/" class="sidebar-link">Architecture</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Graph &amp; Vector</div>
+      <a href="../sql/pgq.html" class="sidebar-link">SQL/PGQ</a>
+      <a href="../sql/graph-algorithms.html" class="sidebar-link">Graph Algorithms</a>
+      <a href="../sql/vector-search.html" class="sidebar-link">Vector Search</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="section-label">GUIDES</div>
+
+    <h1>Web REPL</h1>
+    <p class="lead">Browser-based SQL console for interactive data exploration and prototyping.</p>
+
+    <!-- ─── Section 1: Starting the REPL ─── -->
+    <h2 id="starting-the-repl">Starting the REPL</h2>
+
+    <p>The Web REPL launches a local HTTP server and opens a browser-based SQL console connected to the TeideDB engine via WebSocket.</p>
+
+    <pre><code class="language-bash">npm run build    # first time only
+npm run repl     # start server (open browser manually)
+node bin/teide.js  # start server + auto-open browser</code></pre>
+
+    <p>The REPL opens at <code>http://127.0.0.1:3141</code>. If port 3141 is busy, the server automatically increments to the next available port. Stop the server with <strong>Ctrl+C</strong>.</p>
+
+    <!-- ─── Section 2: Interface Overview ─── -->
+    <h2 id="interface-overview">Interface Overview</h2>
+
+    <p>The REPL interface is organized into several regions:</p>
+
+    <ul>
+      <li><strong>Top bar:</strong> Teide logo, Help and Clear buttons.</li>
+      <li><strong>Left sidebar:</strong> An icon rail that toggles the Tables panel (with a filter input and expandable column tree) and the History panel.</li>
+      <li><strong>Editor:</strong> A CodeMirror 6 editor with SQL syntax highlighting, autocomplete, and <strong>Ctrl+Enter</strong> to execute the current query.</li>
+      <li><strong>Bottom pane:</strong> Tabbed area with Output (result table), Log (query history), and Console (JavaScript eval).</li>
+      <li><strong>Footer:</strong> Connection status indicator showing the WebSocket state.</li>
+    </ul>
+
+    <!-- ─── Section 3: Loading Data ─── -->
+    <h2 id="loading-data">Loading Data</h2>
+
+    <p>Use the <code>.load</code> dot-command to import CSV files. The table name defaults to the file&rsquo;s base name, or you can specify one explicitly with <code>as</code>:</p>
+
+    <pre><code class="language-text">.load /path/to/sales.csv
+.load /path/to/data.csv as mydata</code></pre>
+
+    <p>You can also load data using SQL:</p>
+
+    <pre><code class="language-sql">CREATE TABLE sales AS SELECT * FROM read_csv('/path/to/sales.csv');</code></pre>
+
+    <!-- ─── Section 4: Running Queries ─── -->
+    <h2 id="running-queries">Running Queries</h2>
+
+    <p>Type SQL in the editor and press <strong>Ctrl+Enter</strong> to execute. Results appear in the Output tab below the editor.</p>
+
+    <pre><code class="language-sql">SELECT * FROM sales;
+
+SELECT category, SUM(price) AS total
+FROM sales
+GROUP BY category;
+
+SELECT * FROM sales
+WHERE price > 100
+ORDER BY price DESC
+LIMIT 10;</code></pre>
+
+    <!-- ─── Section 5: Dot-Commands ─── -->
+    <h2 id="dot-commands">Dot-Commands</h2>
+
+    <p>Dot-commands are special directives that control the REPL environment. They are not SQL statements and do not require a semicolon.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Command</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>.help</code></td><td>Show available dot-commands and usage information.</td></tr>
+        <tr><td><code>.tables</code></td><td>List all tables currently loaded in the session.</td></tr>
+        <tr><td><code>.schema [table]</code></td><td>Show the column names and types for a table, or all tables if no argument is given.</td></tr>
+        <tr><td><code>.load &lt;path&gt; [as name]</code></td><td>Load a CSV file into a table.</td></tr>
+        <tr><td><code>.save &lt;table&gt; &lt;path&gt;</code></td><td>Export a table to a CSV file on disk.</td></tr>
+        <tr><td><code>.timer</code></td><td>Toggle query execution timing display.</td></tr>
+        <tr><td><code>.clear</code></td><td>Clear the output pane.</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ─── Section 6: Autocomplete ─── -->
+    <h2 id="autocomplete">Autocomplete</h2>
+
+    <p>The editor provides context-aware SQL autocomplete powered by the server:</p>
+
+    <ul>
+      <li>Triggers automatically after typing 2 or more characters.</li>
+      <li>Press <strong>Tab</strong> to accept the selected suggestion, or <strong>Escape</strong> to dismiss the popup.</li>
+      <li>After <code>FROM</code> or <code>JOIN</code>, suggests table names from the current session.</li>
+      <li>After <code>SELECT</code>, <code>WHERE</code>, <code>ORDER BY</code>, and other column contexts, suggests column names from referenced tables.</li>
+    </ul>
+
+    <!-- ─── Section 7: Bottom Pane Tabs ─── -->
+    <h2 id="bottom-pane-tabs">Bottom Pane Tabs</h2>
+
+    <h3 id="output">Output</h3>
+
+    <p>Displays query results as a formatted table with virtual scrolling for large result sets. Column headers show the column name and data type. Dashed separators divide the header from the data rows. Use the toolbar buttons to <strong>Download CSV</strong>, <strong>Download JSON</strong>, or <strong>Copy</strong> the results to the clipboard.</p>
+
+    <h3 id="log">Log</h3>
+
+    <p>An append-only query log that records every executed statement with its timestamp, success/error status, and execution time in milliseconds.</p>
+
+    <h3 id="console">Console</h3>
+
+    <p>A JavaScript REPL for ad-hoc scripting. Type any JavaScript expression and press <strong>Enter</strong> to evaluate it. Use the <strong>Up</strong> and <strong>Down</strong> arrow keys to navigate through command history.</p>
+
+    <!-- ─── Section 8: Keyboard Shortcuts ─── -->
+    <h2 id="keyboard-shortcuts">Keyboard Shortcuts</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Shortcut</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><kbd>Ctrl+Enter</kbd></td><td>Execute the current query in the editor.</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Accept the selected autocomplete suggestion.</td></tr>
+        <tr><td><kbd>Escape</kbd></td><td>Dismiss the autocomplete popup.</td></tr>
+        <tr><td>Double-click tab</td><td>Rename a bottom pane tab.</td></tr>
+        <tr><td><kbd>Up</kbd> / <kbd>Down</kbd> (in Console)</td><td>Navigate through Console command history.</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ─── Navigation ─── -->
+    <div class="prev-next">
+      <a href="node-integration.html" class="prev">&larr; Node.js Integration</a>
+    </div>
+
+  </main>
+
+  <script defer src="../app.js"></script>
+</body>
+</html>
