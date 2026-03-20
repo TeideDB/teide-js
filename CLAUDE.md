@@ -138,7 +138,7 @@ These classes own their `td_t*` pointers and follow the same `td_retain()`/`td_r
 | SQL Engine | `lib/sql/vector.ts` | Vector similarity, HNSW index, KNN fast-path |
 | SQL Engine | `lib/sql/index.ts` | SQL module barrel exports |
 | Web REPL | `lib/repl/server.ts` | HTTP + WebSocket server: query execution, autocomplete, dot-commands, metadata |
-| Web REPL | `lib/repl/ui.html` | Self-contained HTML UI: CodeMirror 6, virtual-scroll table, QuestDB-style layout |
+| Web REPL | `lib/repl/ui.html` | Self-contained HTML UI: CodeMirror 6, virtual-scroll table, database console layout |
 | Web REPL | `lib/repl/protocol.ts` | WebSocket message types (client↔server) |
 | Web REPL | `lib/repl/serialize.ts` | Table → JSON serialization for WebSocket results |
 | Web REPL | `lib/repl/autocomplete.ts` | Server-side SQL autocomplete with fuzzy matching |

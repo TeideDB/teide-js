@@ -2,7 +2,7 @@
 
 ## Overview
 
-A browser-based SQL console for teide-js, inspired by QuestDB's web console. Single self-contained HTML page served by a lightweight Node.js HTTP server. CodeMirror 6 for SQL editing with autocomplete, WebSocket for query execution, virtual-scrolling HTML tables for results.
+A browser-based SQL console for teide-js. Single self-contained HTML page served by a lightweight Node.js HTTP server. CodeMirror 6 for SQL editing with autocomplete, WebSocket for query execution, virtual-scrolling HTML tables for results.
 
 Replaces the terminal REPL entirely. Invoked via `teide` or `npx teidedb`.
 
@@ -67,7 +67,7 @@ Where `Column = { name: string, dtype: string }`.
 
 Single self-contained HTML page with all CSS and JS inlined. No build step. CDN imports for CodeMirror 6 and Font Awesome 6.
 
-### Layout (QuestDB-inspired)
+### Layout
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
